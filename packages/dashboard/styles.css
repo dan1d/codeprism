@@ -1,0 +1,71 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: #0f1117;
+  color: #e1e4e8;
+  padding: 2rem;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+header { margin-bottom: 2rem; }
+header h1 { font-size: 1.8rem; font-weight: 700; color: #58a6ff; }
+header .subtitle { color: #8b949e; font-size: 0.9rem; margin-top: 0.25rem; }
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.stat-card {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 1.25rem;
+}
+.stat-card .value { font-size: 2rem; font-weight: 700; color: #58a6ff; }
+.stat-card .label { font-size: 0.8rem; color: #8b949e; margin-top: 0.25rem; }
+.stat-card.green .value { color: #3fb950; }
+.stat-card.yellow .value { color: #d29922; }
+
+.panel {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.panel h2 { font-size: 1.1rem; margin-bottom: 1rem; color: #c9d1d9; }
+
+.flow-list { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+.flow-tag {
+  background: #1c2333;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+}
+.flow-tag .name { color: #58a6ff; font-weight: 600; }
+.flow-tag .count { color: #8b949e; margin-left: 0.5rem; }
+
+.query-list, .card-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.query-item, .card-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #21262d;
+  font-size: 0.85rem;
+}
+.query-item:last-child, .card-item:last-child { border-bottom: none; }
+.query-item .text, .card-item .text { color: #c9d1d9; }
+.query-item .badge, .card-item .badge {
+  background: #1c2333;
+  padding: 0.2rem 0.6rem;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  color: #58a6ff;
+}
+
+.empty { color: #484f58; font-style: italic; font-size: 0.85rem; }

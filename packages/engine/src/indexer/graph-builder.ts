@@ -1,0 +1,315 @@
+import type { ParsedFile } from "./tree-sitter.js";
+
+export interface GraphEdge {
+  sourceFile: string;
+  targetFile: string;
+  relation:
+    | "model_association"
+    | "controller_model"
+    | "api_endpoint"
+    | "store_api"
+    | "import"
+    | "route_controller"
+    | "job_model";
+  metadata: Record<string, string>;
+  repo: string;
+  weight?: number;
+}
+
+const EDGE_WEIGHTS: Record<GraphEdge["relation"], number> = {
+  model_association: 5,
+  controller_model: 4,
+  route_controller: 4,
+  api_endpoint: 3,
+  store_api: 3,
+  job_model: 3,
+  import: 1,
+};
+
+/**
+ * Builds a dependency graph from parsed source files across one or more repos.
+ * Returns a deduplicated list of edges representing relationships between files.
+ */
+export function buildGraph(parsedFiles: ParsedFile[]): GraphEdge[] {
+  const edges: GraphEdge[] = [];
+  const seen = new Set<string>();
+  const classIndex = buildClassIndex(parsedFiles);
+
+  function addEdge(edge: GraphEdge): void {
+    const key = `${edge.sourceFile}|${edge.targetFile}|${edge.relation}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    edges.push({ ...edge, weight: edge.weight ?? EDGE_WEIGHTS[edge.relation] ?? 1 });
+  }
+
+  for (const pf of parsedFiles) {
+    addModelAssociationEdges(pf, classIndex, addEdge);
+    addRouteControllerEdges(pf, parsedFiles, addEdge);
+    addControllerModelEdges(pf, classIndex, addEdge);
+    addCrossRepoApiEdges(pf, parsedFiles, addEdge);
+    addStoreApiEdges(pf, parsedFiles, addEdge);
+    addImportEdges(pf, parsedFiles, addEdge);
+  }
+
+  return edges;
+}
+
+// ---------------------------------------------------------------------------
+// Edge producers
+// ---------------------------------------------------------------------------
+
+function addModelAssociationEdges(
+  pf: ParsedFile,
+  classIndex: Map<string, ParsedFile>,
+  addEdge: (e: GraphEdge) => void,
+): void {
+  if (pf.language !== "ruby" || pf.associations.length === 0) return;
+
+  for (const assoc of pf.associations) {
+    const targetClass =
+      assoc.target_model ?? associationToClassName(assoc.name, assoc.type);
+    const target = classIndex.get(targetClass);
+    if (!target || target.path === pf.path) continue;
+
+    addEdge({
+      sourceFile: pf.path,
+      targetFile: target.path,
+      relation: "model_association",
+      metadata: {
+        associationType: assoc.type,
+        associationName: assoc.name,
+        targetClass,
+      },
+      repo: pf.repo,
+    });
+  }
+}
+
+function addRouteControllerEdges(
+  pf: ParsedFile,
+  parsedFiles: ParsedFile[],
+  addEdge: (e: GraphEdge) => void,
+): void {
+  if (pf.routes.length === 0) return;
+
+  for (const route of pf.routes) {
+    const controller = parsedFiles.find(
+      (f) =>
+        f.repo === pf.repo &&
+        f.path.endsWith(`${route.controller}_controller.rb`),
+    );
+    if (!controller) continue;
+
+    addEdge({
+      sourceFile: pf.path,
+      targetFile: controller.path,
+      relation: "route_controller",
+      metadata: { path: route.path, action: route.action ?? "" },
+      repo: pf.repo,
+    });
+  }
+}
+
+function addControllerModelEdges(
+  pf: ParsedFile,
+  classIndex: Map<string, ParsedFile>,
+  addEdge: (e: GraphEdge) => void,
+): void {
+  if (pf.language !== "ruby") return;
+
+  const match = pf.path.match(/(\w+)_controller\.rb$/);
+  if (!match) return;
+
+  const inferredClass = snakeToPascal(singularize(match[1]));
+  const model = classIndex.get(inferredClass);
+  if (!model || model.path === pf.path) return;
+
+  addEdge({
+    sourceFile: pf.path,
+    targetFile: model.path,
+    relation: "controller_model",
+    metadata: { inferredModel: inferredClass },
+    repo: pf.repo,
+  });
+}
+
+/**
+ * Matches FE API client files to BE controllers by converting
+ * kebab-case filenames to snake_case controller names.
+ */
+function addCrossRepoApiEdges(
+  pf: ParsedFile,
+  parsedFiles: ParsedFile[],
+  addEdge: (e: GraphEdge) => void,
+): void {
+  if (pf.language === "ruby" || pf.apiCalls.length === 0) return;
+
+  const basename = fileBasename(pf.path);
+  const snakeName = kebabToSnake(basename);
+
+  for (const other of parsedFiles) {
+    if (other.repo === pf.repo) continue;
+
+    // Match against controller filenames
+    if (
+      other.language === "ruby" &&
+      other.path.endsWith(`${snakeName}_controller.rb`)
+    ) {
+      addEdge({
+        sourceFile: pf.path,
+        targetFile: other.path,
+        relation: "api_endpoint",
+        metadata: { feResource: basename, beController: snakeName },
+        repo: pf.repo,
+      });
+      continue;
+    }
+
+    // Fall back to route path matching
+    const matchingRoute = other.routes.find(
+      (r) => r.controller === snakeName || r.path.includes(`/${snakeName}`),
+    );
+    if (matchingRoute) {
+      addEdge({
+        sourceFile: pf.path,
+        targetFile: other.path,
+        relation: "api_endpoint",
+        metadata: {
+          feResource: basename,
+          routePath: matchingRoute.path,
+        },
+        repo: pf.repo,
+      });
+    }
+  }
+}
+
+function addStoreApiEdges(
+  pf: ParsedFile,
+  parsedFiles: ParsedFile[],
+  addEdge: (e: GraphEdge) => void,
+): void {
+  if (pf.language === "ruby" || !/store/i.test(pf.path)) return;
+
+  for (const imp of pf.imports) {
+    if (!/api/i.test(imp.source)) continue;
+
+    const target = resolveImport(pf, imp.source, parsedFiles);
+    if (!target || target.path === pf.path) continue;
+
+    addEdge({
+      sourceFile: pf.path,
+      targetFile: target.path,
+      relation: "store_api",
+      metadata: { importSource: imp.source },
+      repo: pf.repo,
+    });
+  }
+}
+
+function addImportEdges(
+  pf: ParsedFile,
+  parsedFiles: ParsedFile[],
+  addEdge: (e: GraphEdge) => void,
+): void {
+  for (const imp of pf.imports) {
+    const target = resolveImport(pf, imp.source, parsedFiles);
+    if (!target || target.path === pf.path) continue;
+    if (target.repo !== pf.repo) continue;
+
+    addEdge({
+      sourceFile: pf.path,
+      targetFile: target.path,
+      relation: "import",
+      metadata: { importSource: imp.source },
+      repo: pf.repo,
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Naming helpers
+// ---------------------------------------------------------------------------
+
+/** Naive singularization covering common Rails model plurals. */
+function singularize(word: string): string {
+  if (word.endsWith("ies")) return word.slice(0, -3) + "y";
+  if (word.endsWith("sses")) return word.slice(0, -2);
+  if (word.endsWith("shes")) return word.slice(0, -2);
+  if (word.endsWith("ches")) return word.slice(0, -2);
+  if (word.endsWith("xes")) return word.slice(0, -2);
+  if (word.endsWith("zes")) return word.slice(0, -2);
+  if (word.endsWith("s") && !word.endsWith("ss")) return word.slice(0, -1);
+  return word;
+}
+
+function snakeToPascal(snake: string): string {
+  return snake
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join("");
+}
+
+function associationToClassName(name: string, type: string): string {
+  const singular =
+    type === "has_many" || type === "has_and_belongs_to_many"
+      ? singularize(name)
+      : name;
+  return snakeToPascal(singular);
+}
+
+function kebabToSnake(kebab: string): string {
+  return kebab.replace(/-/g, "_");
+}
+
+function fileBasename(filePath: string): string {
+  return filePath.replace(/^.*\//, "").replace(/\.[^.]+$/, "");
+}
+
+// ---------------------------------------------------------------------------
+// Import resolution
+// ---------------------------------------------------------------------------
+
+function buildClassIndex(
+  parsedFiles: ParsedFile[],
+): Map<string, ParsedFile> {
+  const index = new Map<string, ParsedFile>();
+  for (const pf of parsedFiles) {
+    for (const cls of pf.classes) {
+      index.set(cls.name, pf);
+    }
+  }
+  return index;
+}
+
+/** Resolves a relative import source (e.g. `../api/billing-orders`) to a ParsedFile. */
+function resolveImport(
+  from: ParsedFile,
+  source: string,
+  parsedFiles: ParsedFile[],
+): ParsedFile | undefined {
+  if (!source.startsWith(".")) return undefined;
+
+  const dir = from.path.replace(/\/[^/]+$/, "");
+  const combined = `${dir}/${source}`;
+
+  const segments = combined.split("/");
+  const resolved: string[] = [];
+  for (const seg of segments) {
+    if (seg === "..") {
+      resolved.pop();
+    } else if (seg !== ".") {
+      resolved.push(seg);
+    }
+  }
+
+  const normalizedBase = stripExtension(resolved.join("/"));
+
+  return parsedFiles.find((pf) => {
+    return stripExtension(pf.path) === normalizedBase;
+  });
+}
+
+function stripExtension(filePath: string): string {
+  return filePath.replace(/\.(js|ts|jsx|tsx|vue|rb)$/, "");
+}

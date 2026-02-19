@@ -1,0 +1,62 @@
+{
+  "name": "srcmap",
+  "displayName": "srcmap – Code Context Engine",
+  "description": "Watches local git changes and syncs them to the srcmap engine for knowledge card invalidation.",
+  "version": "0.1.0",
+  "publisher": "biobridge",
+  "license": "AGPL-3.0",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": [
+    "workspaceContains:.git"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "srcmap.syncNow",
+        "title": "srcmap: Sync Current Changes"
+      },
+      {
+        "command": "srcmap.showStatus",
+        "title": "srcmap: Show Connection Status"
+      },
+      {
+        "command": "srcmap.reindex",
+        "title": "srcmap: Trigger Full Re-index"
+      }
+    ],
+    "configuration": {
+      "title": "srcmap",
+      "properties": {
+        "srcmap.engineUrl": {
+          "type": "string",
+          "default": "http://localhost:4000",
+          "description": "URL of the srcmap engine server."
+        },
+        "srcmap.autoSync": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically sync git changes on file save."
+        },
+        "srcmap.syncDebounceMs": {
+          "type": "number",
+          "default": 2000,
+          "description": "Debounce interval (ms) before sending sync after a save."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "esbuild src/extension.ts --bundle --outdir=dist --platform=node --external:vscode --format=cjs",
+    "watch": "esbuild src/extension.ts --bundle --outdir=dist --platform=node --external:vscode --format=cjs --watch",
+    "package": "npx @vscode/vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.7.0"
+  }
+}

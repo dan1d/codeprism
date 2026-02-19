@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: srcmap
+    runtime: docker
+    plan: starter
+    envVars:
+      - key: SRCMAP_PORT
+        value: 4000
+      - key: SRCMAP_DB_PATH
+        value: /data/srcmap.db
+    disk:
+      name: srcmap-data
+      mountPath: /data
+      sizeGB: 1

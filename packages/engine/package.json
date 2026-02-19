@@ -1,0 +1,42 @@
+{
+  "name": "@srcmap/engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "srcmap core engine: code indexer, knowledge graph, MCP server, and search",
+  "license": "AGPL-3.0",
+  "main": "./dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "index": "tsx src/cli/index-repos.ts",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.77.0",
+    "@fastify/cors": "latest",
+    "@huggingface/transformers": "latest",
+    "@modelcontextprotocol/sdk": "latest",
+    "better-sqlite3": "latest",
+    "fastify": "latest",
+    "glob": "latest",
+    "graphology": "^0.26.0",
+    "graphology-communities-louvain": "^2.0.2",
+    "graphology-types": "^0.24.8",
+    "nanoid": "latest",
+    "sqlite-vec": "latest",
+    "tree-sitter": "latest",
+    "tree-sitter-javascript": "latest",
+    "tree-sitter-ruby": "latest",
+    "tree-sitter-typescript": "latest",
+    "tree-sitter-vue": "latest",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "latest",
+    "@types/node": "latest",
+    "tsx": "latest",
+    "typescript": "latest"
+  }
+}

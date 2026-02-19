@@ -1,0 +1,14 @@
+node_modules
+packages/*/node_modules
+packages/*/dist
+packages/extension
+*.db
+*.db-wal
+*.db-shm
+.git
+.gitignore
+*.md
+LICENSE
+render.yaml
+docker-compose.yml
+.env*

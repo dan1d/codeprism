@@ -1,0 +1,14 @@
+services:
+  srcmap:
+    build: .
+    ports:
+      - "${SRCMAP_PORT:-4000}:4000"
+    volumes:
+      - srcmap-data:/data
+    environment:
+      - SRCMAP_PORT=4000
+      - SRCMAP_DB_PATH=/data/srcmap.db
+    restart: unless-stopped
+
+volumes:
+  srcmap-data:
