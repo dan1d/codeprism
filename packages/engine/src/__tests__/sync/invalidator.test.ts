@@ -13,7 +13,7 @@ vi.mock("../../db/connection.js", () => ({
   closeDb: () => {},
 }));
 
-const { invalidateCards, invalidateProjectDocs } = await import(
+const { invalidateCards, invalidateProjectDocs, propagateCrossRepoStaleness } = await import(
   "../../sync/invalidator.js"
 );
 
@@ -179,5 +179,101 @@ describe("invalidateProjectDocs", () => {
     insertTestProjectDoc(testDb, { repo: "my-repo", doc_type: "about", stale: 0 });
     const count = invalidateProjectDocs(["some/random/file.jpg"], "my-repo");
     expect(count).toBe(0);
+  });
+
+  it("marks changelog stale on merge events when code files change", () => {
+    insertTestProjectDoc(testDb, { repo: "my-repo", doc_type: "changelog", stale: 0 });
+
+    const count = invalidateProjectDocs(["app/models/patient.rb"], "my-repo", true);
+    expect(count).toBeGreaterThan(0);
+
+    const row = testDb
+      .prepare("SELECT stale FROM project_docs WHERE repo = ? AND doc_type = 'changelog'")
+      .get("my-repo") as { stale: number };
+    expect(row.stale).toBe(1);
+  });
+
+  it("does NOT mark changelog stale on save events", () => {
+    insertTestProjectDoc(testDb, { repo: "my-repo", doc_type: "changelog", stale: 0 });
+
+    invalidateProjectDocs(["app/models/patient.rb"], "my-repo", false);
+
+    const row = testDb
+      .prepare("SELECT stale FROM project_docs WHERE repo = ? AND doc_type = 'changelog'")
+      .get("my-repo") as { stale: number };
+    expect(row.stale).toBe(0);
+  });
+
+  it("cascades specialist staleness to workspace specialist", () => {
+    insertTestProjectDoc(testDb, { repo: "my-repo", doc_type: "about", stale: 0 });
+    insertTestProjectDoc(testDb, { repo: "my-repo", doc_type: "architecture", stale: 0 });
+    insertTestProjectDoc(testDb, { repo: "my-repo", doc_type: "specialist", stale: 0 });
+    insertTestProjectDoc(testDb, { repo: "__workspace__", doc_type: "specialist", stale: 0 });
+
+    // about and architecture changes trigger specialist cascade
+    invalidateProjectDocs(["app/models/patient.rb"], "my-repo", false);
+
+    const wsRow = testDb
+      .prepare("SELECT stale FROM project_docs WHERE repo = '__workspace__' AND doc_type = 'specialist'")
+      .get() as { stale: number };
+    expect(wsRow.stale).toBe(1);
+  });
+});
+
+describe("propagateCrossRepoStaleness", () => {
+  beforeEach(() => {
+    testDb = createTestDb();
+  });
+
+  afterEach(() => {
+    testDb.close();
+  });
+
+  it("returns 0 when no graph edges exist for the changed files", () => {
+    insertTestCard(testDb, {
+      card_type: "cross_service",
+      source_files: '["app/controllers/api/v1/patients_controller.rb"]',
+      source_repos: '["frontend"]',
+      stale: 0,
+    });
+
+    const result = propagateCrossRepoStaleness(["app/models/patient.rb"], "backend");
+    expect(result).toBe(0);
+  });
+
+  it("returns 0 when changedFiles is empty", () => {
+    const result = propagateCrossRepoStaleness([], "backend");
+    expect(result).toBe(0);
+  });
+
+  it("marks cross_service cards stale when a connected backend file changes", () => {
+    // Insert a graph edge: backend file → frontend file (api_endpoint relation)
+    testDb.prepare(
+      `INSERT INTO graph_edges (source_file, target_file, relation, repo)
+       VALUES (?, ?, ?, ?)`,
+    ).run(
+      "app/controllers/api/v1/patients_controller.rb",
+      "src/api/patients.ts",
+      "api_endpoint",
+      "backend",
+    );
+
+    // Insert a cross_service card that references the frontend file
+    const cardId = insertTestCard(testDb, {
+      id: "cross-card",
+      card_type: "cross_service",
+      source_files: '["src/api/patients.ts"]',
+      source_repos: '["frontend"]',
+      stale: 0,
+    });
+
+    const result = propagateCrossRepoStaleness(
+      ["app/controllers/api/v1/patients_controller.rb"],
+      "backend",
+    );
+    expect(result).toBe(1);
+
+    const card = testDb.prepare("SELECT stale FROM cards WHERE id = ?").get(cardId) as { stale: number };
+    expect(card.stale).toBe(1);
   });
 });

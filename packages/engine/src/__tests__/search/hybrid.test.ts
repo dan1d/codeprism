@@ -48,7 +48,7 @@ vi.mock("../../search/query-classifier.js", () => ({
   })),
 }));
 
-const { hybridSearch } = await import("../../search/hybrid.js");
+const { hybridSearch, checkCache } = await import("../../search/hybrid.js");
 const { semanticSearch } = await import("../../search/semantic.js");
 const { keywordSearch } = await import("../../search/keyword.js");
 
@@ -195,5 +195,169 @@ describe("hybridSearch — score fusion", () => {
 
     const results = await hybridSearch("patient", { limit: 3 });
     expect(results.length).toBeLessThanOrEqual(3);
+  });
+
+  it("applies embedding-based repo-affinity when classifier has confidence > 0.03", async () => {
+    const { classifyQueryEmbedding } = await import("../../search/query-classifier.js");
+
+    const backendCardId = insertTestCard(testDb, {
+      id: "be-card",
+      card_type: "flow",
+      source_repos: '["backend"]',
+      specificity_score: 0.5,
+    });
+    const frontendCardId = insertTestCard(testDb, {
+      id: "fe-card",
+      card_type: "flow",
+      source_repos: '["frontend"]',
+      specificity_score: 0.5,
+    });
+
+    mockSemanticResults.push(
+      { cardId: backendCardId, distance: 0.1 },
+      { cardId: frontendCardId, distance: 0.1 },
+    );
+
+    // Make classifier return high confidence for backend — no keyword results
+    // so textAffinity stays empty and embeddingClassification path is used
+    vi.mocked(classifyQueryEmbedding).mockReturnValueOnce({
+      topRepo: "backend",
+      confidence: 0.15,
+      scores: new Map([["backend", 0.95], ["frontend", 0.3]]),
+    });
+
+    const results = await hybridSearch("patient backend query", { limit: 5 });
+    expect(results.length).toBe(2);
+    // Backend card should rank higher due to embedding affinity boost
+    const beIdx = results.findIndex((r) => r.card.id === backendCardId);
+    const feIdx = results.findIndex((r) => r.card.id === frontendCardId);
+    expect(beIdx).toBeLessThan(feIdx);
+  });
+
+  it("applies text-based repo-affinity when query mentions a known repo name", async () => {
+    const beCardId = insertTestCard(testDb, {
+      id: "text-be-card",
+      card_type: "flow",
+      source_repos: '["biobridge-backend"]',
+      specificity_score: 0.5,
+    });
+    const feCardId = insertTestCard(testDb, {
+      id: "text-fe-card",
+      card_type: "flow",
+      source_repos: '["biobridge-frontend"]',
+      specificity_score: 0.5,
+    });
+
+    mockSemanticResults.push(
+      { cardId: beCardId, distance: 0.1 },
+      { cardId: feCardId, distance: 0.1 },
+    );
+
+    // Query explicitly mentions the backend repo name
+    const results = await hybridSearch("biobridge-backend patient model", { limit: 5 });
+    expect(results.length).toBe(2);
+  });
+
+  it("includes fresh cards in results", async () => {
+    const freshId = insertTestCard(testDb, { id: "fresh-only", card_type: "flow", stale: 0 });
+
+    mockSemanticResults.push({ cardId: freshId, distance: 0.1 });
+
+    const results = await hybridSearch("patient");
+    expect(results.some((r) => r.card.id === freshId)).toBe(true);
+  });
+
+  it("handles keyword-only results (no semantic matches)", async () => {
+    const id = insertTestCard(testDb, {
+      id: "kw-only",
+      card_type: "flow",
+      specificity_score: 0.5,
+    });
+    mockKeywordResults.push({ cardId: id, rank: -5 });
+
+    const results = await hybridSearch("patient");
+    expect(results.some((r) => r.card.id === id)).toBe(true);
+    expect(results[0]?.source).toBe("keyword");
+  });
+
+});
+
+// ---------------------------------------------------------------------------
+// checkCache — semantic cache lookup
+// ---------------------------------------------------------------------------
+
+describe("checkCache", () => {
+  beforeEach(() => {
+    testDb = createTestDb();
+  });
+
+  afterEach(() => {
+    testDb.close();
+  });
+
+  it("returns null when no metrics with embeddings exist", async () => {
+    const result = await checkCache("patient authorization");
+    expect(result).toBeNull();
+  });
+
+  it("returns null when cached embedding is below threshold", async () => {
+    const id = insertTestCard(testDb, { id: "low-sim", card_type: "flow" });
+
+    // Store a totally different embedding (orthogonal → dot product ≈ 0)
+    const ortho = new Float32Array(384);
+    for (let i = 0; i < 384; i++) ortho[i] = i % 2 === 0 ? 0.05 : -0.05;
+    testDb.prepare(
+      `INSERT INTO metrics (query, query_embedding, response_cards, response_tokens, cache_hit, latency_ms)
+       VALUES (?, ?, ?, 100, 0, 10)`,
+    ).run("old query", Buffer.from(ortho.buffer), JSON.stringify([id]));
+
+    const result = await checkCache("patient authorization");
+    expect(result).toBeNull();
+  });
+
+  it("returns cached cards when a very similar query exists", async () => {
+    const id = insertTestCard(testDb, { id: "cache-hit-card", card_type: "flow" });
+
+    // Mock embedder returns Float32Array(384).fill(0.1)
+    // Dot product with itself = 384 * 0.01 = 3.84 >> 0.92 threshold
+    const embVec = new Float32Array(384).fill(0.1);
+    testDb.prepare(
+      `INSERT INTO metrics (query, query_embedding, response_cards, response_tokens, cache_hit, latency_ms)
+       VALUES (?, ?, ?, 100, 0, 10)`,
+    ).run("similar query", Buffer.from(embVec.buffer), JSON.stringify([id]));
+
+    const result = await checkCache("cache hit test");
+
+    expect(result).not.toBeNull();
+    expect(result!.length).toBeGreaterThan(0);
+    expect(result![0]?.score).toBe(1);
+    expect(result![0]?.source).toBe("both");
+  });
+
+  it("returns empty array (and not null) when cached response_cards is empty", async () => {
+    const embVec = new Float32Array(384).fill(0.1);
+    testDb.prepare(
+      `INSERT INTO metrics (query, query_embedding, response_cards, response_tokens, cache_hit, latency_ms)
+       VALUES (?, ?, ?, 0, 0, 10)`,
+    ).run("empty cache", Buffer.from(embVec.buffer), JSON.stringify([]));
+
+    const result = await checkCache("empty result query");
+
+    expect(result).not.toBeNull();
+    expect(result!).toEqual([]);
+  });
+
+  it("skips metric rows where embedding length does not match", async () => {
+    const id = insertTestCard(testDb, { id: "wrong-dim-card", card_type: "flow" });
+
+    // Store a 128-dim embedding (wrong size)
+    const shortEmb = new Float32Array(128).fill(0.5);
+    testDb.prepare(
+      `INSERT INTO metrics (query, query_embedding, response_cards, response_tokens, cache_hit, latency_ms)
+       VALUES (?, ?, ?, 0, 0, 10)`,
+    ).run("wrong dim", Buffer.from(shortEmb.buffer), JSON.stringify([id]));
+
+    const result = await checkCache("any query");
+    expect(result).toBeNull();
   });
 });

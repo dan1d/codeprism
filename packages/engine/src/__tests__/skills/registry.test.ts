@@ -83,4 +83,33 @@ describe("buildSkillCardHints", () => {
     const hints = buildSkillCardHints(profile);
     expect(hints).toContain("Lambda");
   });
+
+  it("returns empty string for unknown profile", () => {
+    const profile = makeProfile({});
+    expect(buildSkillCardHints(profile)).toBe("");
+  });
+});
+
+describe("buildSkillSearchTag", () => {
+  // Import after vi.mock is resolved
+  it("returns empty string for unknown profile", async () => {
+    const { buildSkillSearchTag } = await import("../../skills/registry.js");
+    const profile = makeProfile({ skillIds: [] });
+    expect(buildSkillSearchTag(profile)).toBe("");
+  });
+
+  it("returns a pipe-joined tag string for Rails profile", async () => {
+    const { buildSkillSearchTag } = await import("../../skills/registry.js");
+    const profile = makeProfile({ skillIds: ["rails"] });
+    const tag = buildSkillSearchTag(profile);
+    expect(typeof tag).toBe("string");
+    expect(tag.length).toBeGreaterThan(0);
+  });
+
+  it("combines multiple skill search tags with | separator", async () => {
+    const { buildSkillSearchTag } = await import("../../skills/registry.js");
+    const profile = makeProfile({ skillIds: ["fastapi", "python"] });
+    const tag = buildSkillSearchTag(profile);
+    expect(tag).toContain("|");
+  });
 });

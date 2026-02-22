@@ -267,6 +267,30 @@ describe("generateCards — card types", () => {
     expect(cards.length).toBeGreaterThan(0);
   });
 
+  it("resolves association names via pascalFromAssoc when target_model is missing", async () => {
+    // Associations without target_model trigger pascalFromAssoc + naiveSingularize
+    const modelWithoutTargets = makeParsedFile({
+      path: "/repo/app/models/prescription.rb",
+      repo: "biobridge-backend",
+      language: "ruby",
+      fileRole: "domain",
+      classes: [{ name: "Prescription", type: "model" }],
+      associations: [
+        { type: "has_many", name: "items", target_model: undefined, options: undefined },
+        { type: "has_many", name: "categories", target_model: undefined, options: undefined },
+        { type: "belongs_to", name: "patient", target_model: undefined, options: undefined },
+      ],
+    });
+    const flow = makeFlow(
+      [modelWithoutTargets.path],
+      { name: "prescription-flow", isHub: false, repos: ["biobridge-backend"] },
+    );
+
+    // Should not throw when resolving association names via naiveSingularize
+    const cards = await generateCards([flow], [modelWithoutTargets], [], null);
+    expect(cards.length).toBeGreaterThan(0);
+  });
+
   it("includes correct sourceRepos on generated cards", async () => {
     const flow = makeFlow(
       [patientModel.path],
@@ -278,5 +302,96 @@ describe("generateCards — card types", () => {
     for (const card of cards) {
       expect(card.sourceRepos).toContain("biobridge-backend");
     }
+  }, CARD_GEN_TIMEOUT);
+
+  it("generates cross_service cards for api_endpoint edges", async () => {
+    const feFile = makeParsedFile({
+      path: "/fe/src/api/patients.ts",
+      repo: "biobridge-frontend",
+      language: "javascript",
+      fileRole: "domain",
+      apiCalls: [{ method: "GET", path: "/api/v1/patients" }],
+    });
+    const beFile = makeParsedFile({
+      path: "/be/app/controllers/api/v1/patients_controller.rb",
+      repo: "biobridge-backend",
+      language: "ruby",
+      fileRole: "domain",
+      classes: [{ name: "PatientsController", type: "controller" }],
+      routes: [{ path: "/api/v1/patients", method: "GET", action: "index" }],
+    });
+
+    const apiEdge = makeEdge({
+      sourceFile: feFile.path,
+      targetFile: beFile.path,
+      relation: "api_endpoint",
+      repo: "biobridge-frontend",
+      weight: 3,
+    });
+
+    const cards = await generateCards(
+      [],
+      [feFile, beFile],
+      [apiEdge],
+      mockLlm,
+    );
+
+    const crossCards = cards.filter((c) => c.cardType === "cross_service");
+    expect(crossCards.length).toBeGreaterThan(0);
+    expect(crossCards[0]?.sourceRepos).toContain("biobridge-frontend");
+    expect(crossCards[0]?.sourceRepos).toContain("biobridge-backend");
+  }, CARD_GEN_TIMEOUT);
+
+  it("generates cross_service cards in structural-only mode (no LLM)", async () => {
+    const feFile = makeParsedFile({
+      path: "/fe/src/api/patients.ts",
+      repo: "biobridge-frontend",
+      language: "javascript",
+      fileRole: "domain",
+      apiCalls: [{ method: "POST", path: "/api/v1/patients" }],
+    });
+    const beFile = makeParsedFile({
+      path: "/be/app/controllers/api/v1/patients_controller.rb",
+      repo: "biobridge-backend",
+      language: "ruby",
+      fileRole: "domain",
+      classes: [{ name: "PatientsController", type: "controller" }],
+      routes: [{ path: "/api/v1/patients", method: "POST", action: "create" }],
+    });
+
+    const apiEdge = makeEdge({
+      sourceFile: feFile.path,
+      targetFile: beFile.path,
+      relation: "api_endpoint",
+      weight: 3,
+    });
+
+    // No LLM → structural markdown fallback (covers renderSourceFiles, renderRelationships etc.)
+    const cards = await generateCards([], [feFile, beFile], [apiEdge], null);
+
+    const crossCards = cards.filter((c) => c.cardType === "cross_service");
+    expect(crossCards.length).toBeGreaterThan(0);
+    expect(crossCards[0]?.content.length).toBeGreaterThan(0);
+  });
+
+  it("stamps commitSha on single-repo cards when commitShaByRepo is provided", async () => {
+    const flow = makeFlow(
+      [patientModel.path],
+      { name: "sha-flow", isHub: false, repos: ["biobridge-backend"] },
+    );
+
+    const commitShaByRepo = new Map([["biobridge-backend", "deadbeef123"]]);
+
+    const cards = await generateCards(
+      [flow],
+      [patientModel],
+      [],
+      mockLlm,
+      undefined,
+      commitShaByRepo,
+    );
+
+    const backendCards = cards.filter((c) => c.sourceRepos.includes("biobridge-backend"));
+    expect(backendCards.every((c) => c.commitSha === "deadbeef123")).toBe(true);
   }, CARD_GEN_TIMEOUT);
 });

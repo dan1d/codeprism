@@ -6,7 +6,8 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { classifyFileRole } from "../../indexer/file-classifier.js";
+import { classifyFileRole, applyGraphRoles, computeInboundDegrees } from "../../indexer/file-classifier.js";
+import { makeParsedFile } from "../helpers/fixtures.js";
 
 // Minimal ParsedFile shape accepted by classifyFileRole
 const empty = { classes: [], associations: [], language: "ruby" as const };
@@ -180,5 +181,115 @@ describe("classifyFileRole — srcmap.json config overrides", () => {
     expect(
       classifyFileRole("vendor/cache/module.ts", emptyJs, repoConfig),
     ).toBe("config");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// applyGraphRoles
+// ---------------------------------------------------------------------------
+
+describe("applyGraphRoles", () => {
+  it("marks domain files with >= IMPORT_HUB_THRESHOLD inbound imports as entry_point", () => {
+    const hub = makeParsedFile({
+      path: "/app/src/App.tsx",
+      repo: "frontend",
+      language: "javascript",
+      fileRole: "domain",
+    });
+
+    const inboundImport = new Map([[hub.path, 10]]);
+    const inboundAssoc = new Map<string, number>();
+
+    applyGraphRoles([hub], inboundImport, inboundAssoc, 10);
+
+    expect(hub.fileRole).toBe("entry_point");
+  });
+
+  it("leaves files with fewer than threshold inbound imports unchanged", () => {
+    const file = makeParsedFile({
+      path: "/app/src/patient.ts",
+      fileRole: "domain",
+    });
+
+    applyGraphRoles([file], new Map([[file.path, 3]]), new Map(), 10);
+    expect(file.fileRole).toBe("domain");
+  });
+
+  it("marks domain files with polymorphic belongs_to as shared_utility", () => {
+    const polymorphic = makeParsedFile({
+      path: "/app/models/comment.rb",
+      language: "ruby",
+      fileRole: "domain",
+      associations: [
+        { type: "belongs_to", name: "commentable", options: "polymorphic: true" },
+      ],
+    });
+
+    applyGraphRoles([polymorphic], new Map(), new Map(), 10);
+    expect(polymorphic.fileRole).toBe("shared_utility");
+  });
+
+  it("marks files with *able belongs_to as shared_utility", () => {
+    const taggable = makeParsedFile({
+      path: "/app/models/tag.rb",
+      language: "ruby",
+      fileRole: "domain",
+      associations: [
+        { type: "belongs_to", name: "taggable" },
+      ],
+    });
+
+    applyGraphRoles([taggable], new Map(), new Map(), 10);
+    expect(taggable.fileRole).toBe("shared_utility");
+  });
+
+  it("skips non-domain files (already classified)", () => {
+    const testFile = makeParsedFile({
+      path: "/spec/models/patient_spec.rb",
+      fileRole: "test",
+    });
+
+    applyGraphRoles([testFile], new Map([[testFile.path, 20]]), new Map(), 10);
+    // Should not be promoted to entry_point since fileRole !== "domain"
+    expect(testFile.fileRole).toBe("test");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// computeInboundDegrees
+// ---------------------------------------------------------------------------
+
+describe("computeInboundDegrees", () => {
+  it("returns empty maps for files with no imports", () => {
+    const files = [makeParsedFile({ path: "/app/models/patient.rb", imports: [] })];
+    const { inboundImport } = computeInboundDegrees(files);
+    expect(inboundImport.size).toBe(0);
+  });
+
+  it("counts inbound imports for relative imports", () => {
+    const target = makeParsedFile({
+      path: "/src/utils/auth.ts",
+      repo: "frontend",
+      imports: [],
+    });
+
+    const importer = makeParsedFile({
+      path: "/src/components/Login.tsx",
+      repo: "frontend",
+      imports: [{ source: "../utils/auth", name: "auth", isDefault: false }],
+    });
+
+    const { inboundImport } = computeInboundDegrees([target, importer]);
+    expect(inboundImport.get(target.path)).toBe(1);
+  });
+
+  it("handles files with no relative imports", () => {
+    const importer = makeParsedFile({
+      path: "/src/App.tsx",
+      imports: [{ source: "react", name: "React", isDefault: true }],
+    });
+
+    const { inboundImport } = computeInboundDegrees([importer]);
+    expect(inboundImport.size).toBe(0);
   });
 });
