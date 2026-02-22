@@ -130,6 +130,19 @@ async function indexRepos(repos: RepoConfig[]): Promise<void> {
     console.log(`     - ${flow.name} (${flow.files.length} files, ${flow.repos.join(", ")})`);
   }
 
+  // --- Stack profiling (always runs, even without LLM) ---
+  console.log(`\nDetecting stack profiles...`);
+  const { detectStackProfile, saveRepoProfile } = await import("../indexer/stack-profiler.js");
+  const skillLabelByRepo = new Map<string, string>();
+  for (const repo of repos) {
+    const absPath = resolve(repo.path);
+    const profile = detectStackProfile(absPath);
+    saveRepoProfile(repo.name, profile);
+    const skillLabel = [profile.primaryLanguage, ...profile.frameworks].filter(Boolean).join(", ");
+    skillLabelByRepo.set(repo.name, skillLabel);
+    console.log(`  [${repo.name}] ${profile.primaryLanguage} / ${profile.frameworks.join(", ") || "no frameworks"}`);
+  }
+
   // --- Project documentation (pre-indexing) ---
   const projectContextByRepo = new Map<string, string>();
 
@@ -142,12 +155,7 @@ async function indexRepos(repos: RepoConfig[]): Promise<void> {
       const repoParsed = allParsed.filter((f) => f.repo === repo.name);
       console.log(`  ${repo.name}: generating docs...`);
 
-      // Detect stack profile before doc generation so skillLabel is available for specialist
-      const { detectStackProfile, saveRepoProfile } = await import("../indexer/stack-profiler.js");
-      const profile = detectStackProfile(absPath);
-      saveRepoProfile(repo.name, profile);
-      const skillLabel = [profile.primaryLanguage, ...profile.frameworks].filter(Boolean).join(", ");
-      console.log(`[${repo.name}] Stack: ${profile.primaryLanguage}, skills: ${profile.skillIds.join(", ") || "none"}`);
+      const skillLabel = skillLabelByRepo.get(repo.name) ?? "";
 
       await generateProjectDocs(
         repo.name,
