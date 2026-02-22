@@ -63,11 +63,21 @@ export function detectFlows(
 // ---------------------------------------------------------------------------
 
 function detectHubs(edges: GraphEdge[]): Set<string> {
+  // Count weighted degree across ALL high-signal relation types
+  // (not just model_association, so polymorphic models also become hubs)
+  const HIGH_SIGNAL_RELATIONS = new Set([
+    "model_association",
+    "controller_model",
+    "route_controller",
+  ]);
+
   const degree = new Map<string, number>();
   for (const e of edges) {
-    if (e.relation !== "model_association") continue;
-    degree.set(e.sourceFile, (degree.get(e.sourceFile) ?? 0) + 1);
-    degree.set(e.targetFile, (degree.get(e.targetFile) ?? 0) + 1);
+    if (!HIGH_SIGNAL_RELATIONS.has(e.relation)) continue;
+    // Weight by edge weight so downweighted (shared_utility) edges count less
+    const w = e.weight ?? 1;
+    degree.set(e.sourceFile, (degree.get(e.sourceFile) ?? 0) + w);
+    degree.set(e.targetFile, (degree.get(e.targetFile) ?? 0) + w);
   }
 
   const hubs = new Set<string>();

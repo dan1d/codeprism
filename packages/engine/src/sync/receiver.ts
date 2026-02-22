@@ -1,11 +1,13 @@
 import { getDb } from "../db/connection.js";
 import { parseFile } from "../indexer/tree-sitter.js";
-import { invalidateCards } from "./invalidator.js";
+import { invalidateCards, invalidateProjectDocs, propagateCrossRepoStaleness } from "./invalidator.js";
 
 export interface SyncPayload {
   repo: string;
   branch: string;
   commitSha?: string;
+  /** Discriminates the git event that triggered this sync. Defaults to 'save'. */
+  eventType?: "save" | "merge" | "pull" | "rebase";
   changedFiles: {
     path: string;
     content: string;
@@ -80,8 +82,25 @@ export async function handleSync(
 
   applyChanges();
 
-  // Phase 3: mark affected cards as stale
+  const eventType = payload.eventType ?? "save";
+  const isMergeEvent = eventType === "merge" || eventType === "pull" || eventType === "rebase";
+
+  // Phase 3: mark affected cards and project docs as stale
   const invalidated = invalidateCards(changedPaths, payload.repo);
+  const docsInvalidated = invalidateProjectDocs(changedPaths, payload.repo, isMergeEvent);
+
+  if (docsInvalidated > 0) {
+    console.log(`[sync] ${docsInvalidated} project doc(s) marked stale for ${payload.repo}`);
+  }
+
+  // Phase 4: cross-repo propagation is only meaningful on merge/pull events because
+  // in-progress saves shouldn't ripple staleness across service boundaries yet.
+  if (isMergeEvent) {
+    const crossRepoStaled = propagateCrossRepoStaleness(changedPaths, payload.repo);
+    if (crossRepoStaled > 0) {
+      console.log(`[sync] ${crossRepoStaled} cross-repo card(s) marked stale (cross-service deps of ${payload.repo})`);
+    }
+  }
 
   return { indexed, invalidated };
 }

@@ -1,7 +1,95 @@
 import type { FastifyInstance } from "fastify";
+import { readFileSync, existsSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { dirname } from "node:path";
 import { getDb } from "../db/connection.js";
-import type { Card } from "../db/schema.js";
+import type { Card, ProjectDoc } from "../db/schema.js";
 import { calculateMetrics } from "./calculator.js";
+import { hybridSearch } from "../search/hybrid.js";
+import { createLLMProvider } from "../llm/provider.js";
+import { buildRefreshDocPrompt, DOC_SYSTEM_PROMPT, type DocType } from "../indexer/doc-prompts.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// ---------------------------------------------------------------------------
+// Async reindex state — shared singleton guard
+// ---------------------------------------------------------------------------
+
+interface ReindexState {
+  status: "idle" | "running" | "done" | "error";
+  startedAt: string | null;
+  finishedAt: string | null;
+  log: string[];
+  error: string | null;
+}
+
+const reindexState: ReindexState = {
+  status: "idle",
+  startedAt: null,
+  finishedAt: null,
+  log: [],
+  error: null,
+};
+
+/**
+ * Fires an async background reindex by spawning the index-repos CLI.
+ * Uses a module-level guard to prevent concurrent runs.
+ */
+function runIncrementalReindex(repo?: string): void {
+  if (reindexState.status === "running") return;
+
+  reindexState.status = "running";
+  reindexState.startedAt = new Date().toISOString();
+  reindexState.finishedAt = null;
+  reindexState.log = [];
+  reindexState.error = null;
+
+  // Resolve workspace root (4 levels up from packages/engine/src/metrics/)
+  const workspaceRoot = resolve(__dirname, "../../../../..");
+
+  const args = ["--filter", "engine", "index-repos"];
+  if (repo) args.push("--repo", repo);
+
+  const child = spawn("pnpm", args, {
+    cwd: workspaceRoot,
+    stdio: ["ignore", "pipe", "pipe"],
+    env: { ...process.env },
+  });
+
+  const append = (line: string) => {
+    reindexState.log.push(line);
+    if (reindexState.log.length > 200) reindexState.log.shift();
+  };
+
+  child.stdout?.on("data", (chunk: Buffer) =>
+    String(chunk).split("\n").filter(Boolean).forEach(append),
+  );
+  child.stderr?.on("data", (chunk: Buffer) =>
+    String(chunk).split("\n").filter(Boolean).forEach(append),
+  );
+
+  child.on("close", (code) => {
+    reindexState.finishedAt = new Date().toISOString();
+    if (code === 0) {
+      reindexState.status = "done";
+      reindexState.error = null;
+    } else {
+      reindexState.status = "error";
+      reindexState.error = `Process exited with code ${code}`;
+    }
+  });
+
+  child.on("error", (err) => {
+    reindexState.finishedAt = new Date().toISOString();
+    reindexState.status = "error";
+    reindexState.error = err.message;
+  });
+}
+
+export { reindexState };
 
 /**
  * Registers REST endpoints that power the srcmap dashboard UI.
@@ -65,6 +153,52 @@ export async function registerDashboardRoutes(app: FastifyInstance): Promise<voi
     return reply.send(flows);
   });
 
+  /**
+   * Evaluation endpoint: runs hybrid search and returns scored cards as JSON.
+   * Used by the Python Ragas evaluation harness in srcmap/eval/.
+   *
+   * GET /api/search?q=<query>&limit=<n>
+   */
+  app.get("/api/search", async (request, reply) => {
+    const { q, limit } = request.query as { q?: string; limit?: string };
+
+    if (!q || q.trim() === "") {
+      return reply.status(400).send({ error: "Missing required query param: q" });
+    }
+
+    const n = Math.min(parseInt(limit ?? "10", 10) || 10, 50);
+
+    try {
+      const results = await hybridSearch(q, { limit: n });
+
+      const payload = results.map((r) => {
+        let sourceFiles: string[] = [];
+        try {
+          sourceFiles = JSON.parse(r.card.source_files as unknown as string);
+        } catch {
+          // ignore
+        }
+        return {
+          id: r.card.id,
+          title: r.card.title,
+          card_type: r.card.card_type,
+          flow: r.card.flow,
+          score: r.score,
+          source: r.source,
+          content: r.card.content,
+          source_files: sourceFiles,
+          tags: (() => {
+            try { return JSON.parse(r.card.tags as unknown as string); } catch { return []; }
+          })(),
+        };
+      });
+
+      return reply.send({ query: q, results: payload });
+    } catch (err) {
+      return reply.status(500).send({ error: String(err) });
+    }
+  });
+
   app.get<{ Params: { repo: string } }>("/api/branches/:repo", (request, reply) => {
     const db = getDb();
 
@@ -91,4 +225,158 @@ export async function registerDashboardRoutes(app: FastifyInstance): Promise<voi
 
     return reply.send(branches);
   });
+
+  // ---------------------------------------------------------------------------
+  // Project docs endpoints
+  // ---------------------------------------------------------------------------
+
+  /**
+   * GET /api/project-docs
+   * Returns project documentation stored in the project_docs table.
+   * Optional query params: ?repo=<name>&type=<doc_type>
+   */
+  app.get("/api/project-docs", (request, reply) => {
+    const { repo, type } = request.query as { repo?: string; type?: string };
+    const db = getDb();
+
+    let rows: ProjectDoc[];
+    if (repo && type) {
+      rows = [db.prepare("SELECT * FROM project_docs WHERE repo = ? AND doc_type = ?").get(repo, type)].filter(Boolean) as ProjectDoc[];
+    } else if (repo) {
+      rows = db.prepare("SELECT * FROM project_docs WHERE repo = ? ORDER BY doc_type").all(repo) as ProjectDoc[];
+    } else {
+      rows = db.prepare("SELECT * FROM project_docs ORDER BY repo, doc_type").all() as ProjectDoc[];
+    }
+
+    return reply.send(rows);
+  });
+
+  /**
+   * POST /api/refresh
+   * Regenerates stale project docs using the LLM (reads source files from disk).
+   * Body: { repo?: string } — if omitted, refreshes all stale docs across all repos.
+   * Returns: { refreshed: number, skipped: number, errors: string[] }
+   */
+  app.post("/api/refresh", async (request, reply) => {
+    const { repo: targetRepo } = (request.body as { repo?: string }) ?? {};
+    const db = getDb();
+
+    const llm = createLLMProvider();
+    if (!llm) {
+      return reply.status(503).send({
+        error: "LLM not configured. Set SRCMAP_LLM_PROVIDER and SRCMAP_LLM_API_KEY to enable refresh.",
+      });
+    }
+
+    const staleQuery = targetRepo
+      ? "SELECT * FROM project_docs WHERE stale = 1 AND repo = ? ORDER BY repo, doc_type"
+      : "SELECT * FROM project_docs WHERE stale = 1 ORDER BY repo, doc_type";
+
+    const staleDocs = (targetRepo
+      ? db.prepare(staleQuery).all(targetRepo)
+      : db.prepare(staleQuery).all()
+    ) as ProjectDoc[];
+
+    if (staleDocs.length === 0) {
+      return reply.send({ refreshed: 0, skipped: 0, errors: [], message: "No stale docs found." });
+    }
+
+    let refreshed = 0;
+    let skipped = 0;
+    const errors: string[] = [];
+
+    for (const doc of staleDocs) {
+      let sourceFilePaths: string[] = [];
+      try {
+        sourceFilePaths = JSON.parse(doc.source_file_paths) as string[];
+      } catch {
+        // ignore parse errors
+      }
+
+      const availableFiles = sourceFilePaths
+        .filter((p) => existsSync(p))
+        .map((p) => {
+          try {
+            const raw = readFileSync(p, "utf-8");
+            const lines = raw.split("\n");
+            const content = lines.length > 120
+              ? lines.slice(0, 120).join("\n") + `\n... (${lines.length - 120} more lines)`
+              : raw.trimEnd();
+            return { path: p, content };
+          } catch {
+            return null;
+          }
+        })
+        .filter((f): f is { path: string; content: string } => f !== null);
+
+      if (availableFiles.length === 0) {
+        skipped++;
+        errors.push(`${doc.repo}/${doc.doc_type}: no source files available on disk`);
+        continue;
+      }
+
+      try {
+        const prompt = buildRefreshDocPrompt(doc.doc_type as DocType, doc.repo, availableFiles);
+        const newContent = await llm.generate(prompt, { systemPrompt: DOC_SYSTEM_PROMPT, maxTokens: 1200 });
+
+        db.prepare(
+          `UPDATE project_docs SET content = ?, stale = 0, updated_at = datetime('now') WHERE id = ?`,
+        ).run(newContent, doc.id);
+
+        refreshed++;
+        console.log(`[refresh] ${doc.repo}/${doc.doc_type} regenerated`);
+      } catch (err) {
+        skipped++;
+        const msg = err instanceof Error ? err.message : String(err);
+        errors.push(`${doc.repo}/${doc.doc_type}: LLM error — ${msg.slice(0, 100)}`);
+      }
+    }
+
+    return reply.send({ refreshed, skipped, errors });
+  });
+
+  /**
+   * GET /api/reindex-status
+   * Returns the current state of the background reindex job.
+   */
+  app.get("/api/reindex-status", (_request, reply) => {
+    return reply.send(reindexState);
+  });
+
+  /**
+   * POST /api/reindex-stale
+   * Fires an async background reindex of all stale cards (or a specific repo).
+   * Returns 409 if a reindex is already running, 202 when kicked off, 200 if nothing to do.
+   *
+   * Optional query param: ?repo=<name>
+   */
+  app.post("/api/reindex-stale", (request, reply) => {
+    const { repo } = (request.query as { repo?: string });
+    const db = getDb();
+
+    if (reindexState.status === "running") {
+      return reply.status(409).send({
+        status: "running",
+        message: "A reindex is already in progress. Check GET /api/reindex-status for progress.",
+        startedAt: reindexState.startedAt,
+      });
+    }
+
+    const staleCount = repo
+      ? (db.prepare("SELECT COUNT(*) as n FROM cards WHERE stale = 1 AND source_repos LIKE ?").get(`%${repo}%`) as { n: number }).n
+      : (db.prepare("SELECT COUNT(*) as n FROM cards WHERE stale = 1").get() as { n: number }).n;
+
+    if (staleCount === 0) {
+      return reply.send({ status: "ok", message: "No stale cards. Knowledge base is up to date." });
+    }
+
+    runIncrementalReindex(repo);
+
+    return reply.status(202).send({
+      status: "queued",
+      message: `Reindexing ${staleCount} stale card(s)${repo ? ` in ${repo}` : ""}. Poll GET /api/reindex-status for progress.`,
+      staleCount,
+    });
+  });
+
 }

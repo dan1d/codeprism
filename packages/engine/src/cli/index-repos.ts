@@ -1,17 +1,44 @@
-import { resolve } from "node:path";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { execSync } from "node:child_process";
 import { getDb, closeDb } from "../db/connection.js";
 import { runMigrations } from "../db/migrations.js";
-import { parseDirectory, type ParsedFile } from "../indexer/tree-sitter.js";
+import { registry } from "../indexer/tree-sitter.js";
 import { buildGraph } from "../indexer/graph-builder.js";
 import { detectFlows } from "../indexer/flow-detector.js";
 import { generateCards } from "../indexer/card-generator.js";
+import { generateProjectDocs, loadProjectContext, generateWorkspaceSpecialist } from "../indexer/doc-generator.js";
 import { getEmbedder } from "../embeddings/local-embedder.js";
 import { createLLMProvider } from "../llm/provider.js";
+import { computeSpecificity } from "../search/specificity.js";
+import { loadRepoConfig } from "../indexer/repo-config.js";
+import type { ParsedFile } from "../indexer/types.js";
+
+/** Returns the HEAD commit SHA for a given repo directory, or null if git is unavailable. */
+function getHeadSha(repoPath: string): string | null {
+  try {
+    return execSync("git rev-parse HEAD", { cwd: repoPath, stdio: ["ignore", "pipe", "ignore"] })
+      .toString()
+      .trim();
+  } catch {
+    return null;
+  }
+}
 
 interface RepoConfig {
   name: string;
   path: string;
 }
+
+const skipDocs = process.argv.includes("--skip-docs");
+const forceDocs = process.argv.includes("--force-docs");
+
+// --repo <name>  filter indexing to a single repository by name
+const repoFlagIdx = process.argv.indexOf("--repo");
+const repoFilter: string | null = repoFlagIdx !== -1 ? (process.argv[repoFlagIdx + 1] ?? null) : null;
+
+// Positional workspace root = first non-flag argument after the script path
+const positionalArgs = process.argv.slice(2).filter((a) => !a.startsWith("--"));
 
 async function indexRepos(repos: RepoConfig[]): Promise<void> {
   const db = getDb();
@@ -19,21 +46,56 @@ async function indexRepos(repos: RepoConfig[]): Promise<void> {
 
   const llm = createLLMProvider();
   if (llm) {
-    console.log(`LLM: ${llm.model} (provider: ${process.env["SRCMAP_LLM_PROVIDER"] ?? "anthropic"})`);
+    const provider = process.env["SRCMAP_LLM_PROVIDER"] ?? "anthropic";
+    console.log(`LLM: ${llm.model} (provider: ${provider})`);
+    if (provider === "gemini") {
+      console.log(`     Free tier: 15 RPM / 1M tokens/day — throttled to ~14 RPM`);
+      console.log(`     Get a free key at https://ai.google.dev/`);
+    } else if (provider === "deepseek") {
+      console.log(`     DeepSeek-V3: ~$0.14/1M input tokens, ~$0.28/1M output tokens`);
+      console.log(`     Get a key at https://platform.deepseek.com/`);
+    }
   } else {
-    console.log(`LLM: disabled (set SRCMAP_LLM_API_KEY to enable rich cards)`);
+    console.log(`LLM: disabled — using structural cards`);
+    console.log(`     Tip: set SRCMAP_LLM_PROVIDER=deepseek and SRCMAP_LLM_API_KEY for richer cards`);
   }
 
   console.log(`\n=== srcmap indexer ===\n`);
   console.log(`Repos to index: ${repos.map((r) => r.name).join(", ")}\n`);
 
   const allParsed: ParsedFile[] = [];
+  const commitShaByRepo = new Map<string, string>();
+
+  // Detect frameworks once across all repos before parsing
+  const allRootPaths = repos.map((r) => resolve(r.path));
+  const detectedFrameworks = await registry.detectFrameworks(allRootPaths);
+  if (detectedFrameworks.length > 0) {
+    console.log(`Detected frameworks: ${detectedFrameworks.join(", ")}`);
+  }
 
   for (const repo of repos) {
     const absPath = resolve(repo.path);
+
+    // Record HEAD SHA so cards can be stamped with the commit they came from
+    const sha = getHeadSha(absPath);
+    if (sha) {
+      commitShaByRepo.set(repo.name, sha);
+    } else {
+      console.warn(`  [${repo.name}] Could not read HEAD SHA — cards won't have source_commit stamped (not a git repo?)`);
+    }
+    const repoConfig = loadRepoConfig(absPath);
     console.log(`Parsing ${repo.name} at ${absPath}...`);
-    const parsed = await parseDirectory(absPath, repo.name);
-    console.log(`  -> ${parsed.length} files parsed`);
+    const parsed = await registry.parseDirectory(absPath, repo.name, repoConfig);
+
+    // Log role breakdown per repo
+    const roleCounts: Record<string, number> = {};
+    for (const pf of parsed) {
+      roleCounts[pf.fileRole] = (roleCounts[pf.fileRole] ?? 0) + 1;
+    }
+    const roleStr = Object.entries(roleCounts)
+      .map(([r, c]) => `${r}: ${c}`)
+      .join(", ");
+    console.log(`  -> ${parsed.length} files parsed (${roleStr})`);
     allParsed.push(...parsed);
   }
 
@@ -68,8 +130,68 @@ async function indexRepos(repos: RepoConfig[]): Promise<void> {
     console.log(`     - ${flow.name} (${flow.files.length} files, ${flow.repos.join(", ")})`);
   }
 
+  // --- Project documentation (pre-indexing) ---
+  const projectContextByRepo = new Map<string, string>();
+
+  if (llm && !skipDocs) {
+    console.log(`\nGenerating project documentation...`);
+    if (forceDocs) console.log(`  (--force-docs: regenerating all docs)`);
+
+    for (const repo of repos) {
+      const absPath = resolve(repo.path);
+      const repoParsed = allParsed.filter((f) => f.repo === repo.name);
+      console.log(`  ${repo.name}: generating docs...`);
+
+      // Detect stack profile before doc generation so skillLabel is available for specialist
+      const { detectStackProfile, saveRepoProfile } = await import("../indexer/stack-profiler.js");
+      const profile = detectStackProfile(absPath);
+      saveRepoProfile(repo.name, profile);
+      const skillLabel = [profile.primaryLanguage, ...profile.frameworks].filter(Boolean).join(", ");
+      console.log(`[${repo.name}] Stack: ${profile.primaryLanguage}, skills: ${profile.skillIds.join(", ") || "none"}`);
+
+      await generateProjectDocs(
+        repo.name,
+        absPath,
+        repoParsed,
+        llm,
+        { skipExisting: !forceDocs, forceRegenerate: forceDocs },
+        skillLabel,
+      );
+
+      const ctx = loadProjectContext(repo.name);
+      if (ctx) {
+        projectContextByRepo.set(repo.name, ctx);
+        console.log(`  ${repo.name}: context ready (${ctx.split(/\s+/).length} words)`);
+      }
+    }
+    console.log(`  -> ${projectContextByRepo.size} repos have project context`);
+
+    // Generate workspace specialist once all per-repo docs are ready
+    const allRepoNames = repos.map((r) => r.name);
+    if (allRepoNames.length >= 2) {
+      console.log("\n[workspace] Generating workspace specialist...");
+      await generateWorkspaceSpecialist(allRepoNames, llm).catch((err: unknown) =>
+        console.warn("[workspace] Specialist generation failed:", (err as Error).message),
+      );
+    }
+  } else if (skipDocs) {
+    console.log(`\nSkipping doc generation (--skip-docs). Loading existing context...`);
+    for (const repo of repos) {
+      const ctx = loadProjectContext(repo.name);
+      if (ctx) projectContextByRepo.set(repo.name, ctx);
+    }
+    console.log(`  -> ${projectContextByRepo.size} repos have existing context`);
+  }
+
   console.log(`\nGenerating cards...`);
-  const cards = await generateCards(flows, allParsed, edges, llm);
+  const cards = await generateCards(
+    flows,
+    allParsed,
+    edges,
+    llm,
+    projectContextByRepo.size > 0 ? projectContextByRepo : undefined,
+    commitShaByRepo.size > 0 ? commitShaByRepo : undefined,
+  );
   console.log(`  -> ${cards.length} cards generated`);
 
   if (llm) {
@@ -80,12 +202,12 @@ async function indexRepos(repos: RepoConfig[]): Promise<void> {
     console.log(`  LLM cost estimate: ~$${(inputCost + outputCost).toFixed(4)} (${estimatedTokens} tokens)`);
   }
 
-  db.prepare("DELETE FROM cards WHERE card_type = 'auto_generated'").run();
+  db.prepare("DELETE FROM cards WHERE card_type IN ('auto_generated', 'flow', 'model', 'cross_service', 'hub')").run();
   db.prepare("DELETE FROM card_embeddings").run();
 
   const insertCard = db.prepare(
-    `INSERT INTO cards (id, flow, title, content, card_type, source_files, source_repos, valid_branches, commit_sha)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO cards (id, flow, title, content, card_type, source_files, source_repos, tags, valid_branches, commit_sha)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const insertCardTx = db.transaction(() => {
     for (const card of cards) {
@@ -97,6 +219,7 @@ async function indexRepos(repos: RepoConfig[]): Promise<void> {
         card.cardType,
         JSON.stringify(card.sourceFiles),
         JSON.stringify(card.sourceRepos),
+        JSON.stringify(card.tags),
         card.validBranches ? JSON.stringify(card.validBranches) : null,
         card.commitSha
       );
@@ -125,13 +248,17 @@ async function indexRepos(repos: RepoConfig[]): Promise<void> {
   console.log("");
   insertEmbTx();
 
+  console.log(`\nComputing specificity scores...`);
+  const specStats = computeSpecificity();
+  console.log(`  -> ${specStats.total} cards scored (global dist range: ${specStats.globalRange[0].toFixed(4)} - ${specStats.globalRange[1].toFixed(4)})`);
+
   const fileInsert = db.prepare(
-    `INSERT OR REPLACE INTO file_index (path, repo, branch, parsed_data)
-     VALUES (?, ?, 'main', ?)`
+    `INSERT OR REPLACE INTO file_index (path, repo, branch, file_role, parsed_data)
+     VALUES (?, ?, 'main', ?, ?)`
   );
   const fileInsertTx = db.transaction(() => {
     for (const pf of allParsed) {
-      fileInsert.run(pf.path, pf.repo, JSON.stringify({
+      fileInsert.run(pf.path, pf.repo, pf.fileRole, JSON.stringify({
         classes: pf.classes,
         associations: pf.associations,
         functions: pf.functions.map((f) => f.name),
@@ -159,14 +286,28 @@ async function indexRepos(repos: RepoConfig[]): Promise<void> {
   closeDb();
 }
 
-const workspaceRoot = process.argv[2] ?? resolve(process.cwd(), "..");
+// Script lives at srcmap/packages/engine/src/cli/index-repos.ts
+// Resolving ../../../../.. always gives the biobridge workspace root,
+// regardless of the cwd that pnpm sets when running the script.
+const scriptDir = dirname(fileURLToPath(import.meta.url));
+const workspaceRoot = positionalArgs[0] ?? resolve(scriptDir, "../../../../..");
 
-const repos: RepoConfig[] = [
+const allRepos: RepoConfig[] = [
   { name: "biobridge-backend", path: resolve(workspaceRoot, "biobridge-backend") },
   { name: "biobridge-frontend", path: resolve(workspaceRoot, "biobridge-frontend") },
   { name: "bp-monitor-api", path: resolve(workspaceRoot, "bp-monitor-api") },
   { name: "bp-monitor-frontend", path: resolve(workspaceRoot, "bp-monitor-frontend") },
 ];
+
+// Apply --repo filter if supplied
+const repos = repoFilter
+  ? allRepos.filter((r) => r.name === repoFilter)
+  : allRepos;
+
+if (repoFilter && repos.length === 0) {
+  console.error(`[index-repos] Unknown repo "${repoFilter}". Known: ${allRepos.map((r) => r.name).join(", ")}`);
+  process.exit(1);
+}
 
 indexRepos(repos).catch((err) => {
   console.error("Indexing failed:", err);

@@ -7,6 +7,7 @@ import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import { glob } from "glob";
 import { emptyParsedFile } from "./types.js";
+import { classifyFileRole, applyGraphRoles, computeInboundDegrees, type RepoConfig } from "./file-classifier.js";
 
 const SKIP_PATTERNS = [
   "**/node_modules/**",
@@ -68,20 +69,25 @@ export class ParserRegistry {
   /**
    * Parse a single file. The appropriate language parser is selected by file
    * extension. Active framework extractors are applied in registration order.
+   * File role is classified immediately after parsing.
    */
-  async parseFile(filePath: string, repo: string): Promise<ParsedFile> {
+  async parseFile(filePath: string, repo: string, repoConfig?: RepoConfig): Promise<ParsedFile> {
     const ext = extname(filePath);
     const parser = this.extensionMap.get(ext);
 
     if (!parser) {
-      return emptyParsedFile(filePath, repo, languageFromExt(ext));
+      const pf = emptyParsedFile(filePath, repo, languageFromExt(ext));
+      pf.fileRole = classifyFileRole(filePath, pf, repoConfig);
+      return pf;
     }
 
     let source: string;
     try {
       source = await readFile(filePath, "utf-8");
     } catch {
-      return emptyParsedFile(filePath, repo, parser.id as ParsedFile["language"]);
+      const pf = emptyParsedFile(filePath, repo, parser.id as ParsedFile["language"]);
+      pf.fileRole = classifyFileRole(filePath, pf, repoConfig);
+      return pf;
     }
 
     const partial = parser.parse(source, filePath);
@@ -98,6 +104,9 @@ export class ParserRegistry {
       }
     }
 
+    // First-pass role classification (path + content signals)
+    result.fileRole = classifyFileRole(filePath, result, repoConfig);
+
     return result;
   }
 
@@ -105,10 +114,13 @@ export class ParserRegistry {
    * Recursively parse every supported file under `dirPath`.
    * Skips `node_modules`, `vendor`, `dist`, and `.git`. Files are
    * processed in batches of {@link BATCH_SIZE} for backpressure control.
+   * After parsing, applies graph-based role promotion (entry_point by
+   * inbound import degree, shared_utility by polymorphic associations).
    */
   async parseDirectory(
     dirPath: string,
     repo: string,
+    repoConfig?: RepoConfig,
   ): Promise<ParsedFile[]> {
     const extensions = this.getSupportedExtensions();
     if (extensions.length === 0) return [];
@@ -126,12 +138,16 @@ export class ParserRegistry {
     for (let i = 0; i < files.length; i += BATCH_SIZE) {
       const batch = files.slice(i, i + BATCH_SIZE);
       const parsed = await Promise.all(
-        batch.map((f) => this.parseFile(f, repo).catch(() => null)),
+        batch.map((f) => this.parseFile(f, repo, repoConfig).catch(() => null)),
       );
       for (const p of parsed) {
         if (p) results.push(p);
       }
     }
+
+    // Second-pass: promote by graph degree (entry_point, shared_utility)
+    const { inboundImport } = computeInboundDegrees(results);
+    applyGraphRoles(results, inboundImport, new Map());
 
     return results;
   }

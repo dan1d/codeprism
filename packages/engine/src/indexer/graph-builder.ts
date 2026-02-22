@@ -29,13 +29,28 @@ const EDGE_WEIGHTS: Record<GraphEdge["relation"], number> = {
 /**
  * Builds a dependency graph from parsed source files across one or more repos.
  * Returns a deduplicated list of edges representing relationships between files.
+ *
+ * Role-aware: test files contribute no edges; entry-point and shared_utility
+ * files contribute reduced-weight edges so they don't distort Louvain communities.
  */
 export function buildGraph(parsedFiles: ParsedFile[]): GraphEdge[] {
   const edges: GraphEdge[] = [];
   const seen = new Set<string>();
   const classIndex = buildClassIndex(parsedFiles);
 
+  // Pre-compute role multipliers per file
+  const roleWeightMultiplier = (role: ParsedFile["fileRole"]): number => {
+    switch (role) {
+      case "test":         return 0;   // no edges at all — test files have no domain meaning
+      case "config":       return 0;   // config files don't define domain relationships
+      case "entry_point":  return 0;   // entry points are structurally noisy, excluded from graph
+      case "shared_utility": return 0.2; // present but strongly downweighted
+      default:             return 1.0;
+    }
+  };
+
   function addEdge(edge: GraphEdge): void {
+    if ((edge.weight ?? 1) <= 0) return; // skip zero-weight edges entirely
     const key = `${edge.sourceFile}|${edge.targetFile}|${edge.relation}`;
     if (seen.has(key)) return;
     seen.add(key);
@@ -43,12 +58,18 @@ export function buildGraph(parsedFiles: ParsedFile[]): GraphEdge[] {
   }
 
   for (const pf of parsedFiles) {
-    addModelAssociationEdges(pf, classIndex, addEdge);
+    const mult = roleWeightMultiplier(pf.fileRole);
+    if (mult <= 0) continue; // test / config files: skip all edge generation
+
+    addModelAssociationEdgesWeighted(pf, classIndex, addEdge, mult);
     addRouteControllerEdges(pf, parsedFiles, addEdge);
     addControllerModelEdges(pf, classIndex, addEdge);
-    addCrossRepoApiEdges(pf, parsedFiles, addEdge);
-    addStoreApiEdges(pf, parsedFiles, addEdge);
-    addImportEdges(pf, parsedFiles, addEdge);
+    // Entry points should NOT create cross-service or store edges (too noisy)
+    if (pf.fileRole === "domain" || pf.fileRole === "shared_utility") {
+      addCrossRepoApiEdges(pf, parsedFiles, addEdge);
+      addStoreApiEdges(pf, parsedFiles, addEdge);
+    }
+    addImportEdges(pf, parsedFiles, addEdge, mult);
   }
 
   return edges;
@@ -58,18 +79,25 @@ export function buildGraph(parsedFiles: ParsedFile[]): GraphEdge[] {
 // Edge producers
 // ---------------------------------------------------------------------------
 
-function addModelAssociationEdges(
+function addModelAssociationEdgesWeighted(
   pf: ParsedFile,
   classIndex: Map<string, ParsedFile>,
   addEdge: (e: GraphEdge) => void,
+  weightMultiplier = 1.0,
 ): void {
-  if (pf.language !== "ruby" || pf.associations.length === 0) return;
+  if (pf.associations.length === 0) return;
 
   for (const assoc of pf.associations) {
     const targetClass =
       assoc.target_model ?? associationToClassName(assoc.name, assoc.type);
     const target = classIndex.get(targetClass);
     if (!target || target.path === pf.path) continue;
+
+    // Downweight edges from shared_utility sources
+    const baseWeight = EDGE_WEIGHTS["model_association"];
+    const targetMult =
+      target.fileRole === "shared_utility" ? 0.2 :
+      target.fileRole === "test" ? 0 : 1.0;
 
     addEdge({
       sourceFile: pf.path,
@@ -79,8 +107,10 @@ function addModelAssociationEdges(
         associationType: assoc.type,
         associationName: assoc.name,
         targetClass,
+        fileRole: pf.fileRole,
       },
       repo: pf.repo,
+      weight: baseWeight * weightMultiplier * targetMult,
     });
   }
 }
@@ -211,18 +241,25 @@ function addImportEdges(
   pf: ParsedFile,
   parsedFiles: ParsedFile[],
   addEdge: (e: GraphEdge) => void,
+  weightMultiplier = 1.0,
 ): void {
   for (const imp of pf.imports) {
     const target = resolveImport(pf, imp.source, parsedFiles);
     if (!target || target.path === pf.path) continue;
     if (target.repo !== pf.repo) continue;
+    if (target.fileRole === "test" || target.fileRole === "config") continue;
+
+    const targetMult =
+      target.fileRole === "entry_point" ? 0.1 :
+      target.fileRole === "shared_utility" ? 0.3 : 1.0;
 
     addEdge({
       sourceFile: pf.path,
       targetFile: target.path,
       relation: "import",
-      metadata: { importSource: imp.source },
+      metadata: { importSource: imp.source, fileRole: pf.fileRole },
       repo: pf.repo,
+      weight: EDGE_WEIGHTS["import"] * weightMultiplier * targetMult,
     });
   }
 }

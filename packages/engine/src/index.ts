@@ -10,6 +10,7 @@ import { handleSync } from "./sync/receiver.js";
 import type { SyncPayload } from "./sync/receiver.js";
 import { createMcpServer } from "./mcp/server.js";
 import { registerDashboardRoutes } from "./metrics/dashboard-api.js";
+import { warmReranker } from "./search/reranker.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -112,6 +113,9 @@ async function main(): Promise<void> {
   ).c;
   console.log(`[srcmap] Engine listening on http://${host}:${port}`);
   console.log(`[srcmap] Database ready – ${cardCount} cards indexed`);
+
+  // Pre-load the cross-encoder model so the first query has no cold-start latency
+  warmReranker();
 
   // ── Graceful shutdown ──────────────────────────────────────────────
 

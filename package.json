@@ -9,7 +9,11 @@
     "build": "pnpm --filter @srcmap/engine build",
     "start": "pnpm --filter @srcmap/engine start",
     "index": "pnpm --filter @srcmap/engine index",
-    "lint": "pnpm -r lint"
+    "index-repos": "pnpm --filter @srcmap/engine index",
+    "eval": "cd eval && source .venv/bin/activate && python evaluate.py --ragas",
+    "lint": "pnpm -r lint",
+    "test": "pnpm --filter @srcmap/engine test",
+    "ci": "pnpm build && pnpm test"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

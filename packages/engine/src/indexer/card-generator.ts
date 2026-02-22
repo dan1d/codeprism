@@ -1,5 +1,5 @@
 import type { Flow } from "./flow-detector.js";
-import type { ParsedFile } from "./types.js";
+import type { ParsedFile, FileRole } from "./types.js";
 import type { GraphEdge } from "./graph-builder.js";
 import type { LLMProvider } from "../llm/provider.js";
 import {
@@ -11,6 +11,26 @@ import {
 } from "../llm/prompts.js";
 import { nanoid } from "nanoid";
 
+// Minimum ms between LLM calls — keeps Gemini free tier (15 RPM) safe
+const LLM_INTER_CALL_DELAY_MS = 4200; // ~14 RPM with headroom
+let lastLlmCallAt = 0;
+
+async function callLlm(
+  llm: LLMProvider,
+  prompt: string,
+  label: string,
+): Promise<string> {
+  const now = Date.now();
+  const wait = LLM_INTER_CALL_DELAY_MS - (now - lastLlmCallAt);
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  lastLlmCallAt = Date.now();
+
+  const content = await llm.generate(prompt, { systemPrompt: SYSTEM_PROMPT, maxTokens: 1024 });
+  const tokens = llm.estimateTokens(content);
+  console.log(`  [llm] ${label} — ~${tokens} output tokens`);
+  return content;
+}
+
 export interface GeneratedCard {
   id: string;
   flow: string;
@@ -19,6 +39,7 @@ export interface GeneratedCard {
   cardType: "flow" | "model" | "cross_service" | "hub" | "auto_generated";
   sourceFiles: string[];
   sourceRepos: string[];
+  tags: string[];
   validBranches: string[] | null;
   commitSha: string | null;
 }
@@ -62,6 +83,27 @@ const RELATION_LABELS: Readonly<Record<string, string>> = {
 
 const MAX_MODEL_CARDS = 20;
 const MAX_CROSS_SERVICE_CARDS = 15;
+
+/**
+ * Merges project context strings for all repos involved in a card.
+ * Deduplicates content and caps the total to keep prompts from bloating.
+ */
+function mergeProjectContext(
+  repos: string[],
+  projectContextByRepo?: Map<string, string>,
+): string {
+  if (!projectContextByRepo || projectContextByRepo.size === 0) return "";
+  const seen = new Set<string>();
+  const parts: string[] = [];
+  for (const repo of repos) {
+    const ctx = projectContextByRepo.get(repo);
+    if (ctx && !seen.has(ctx)) {
+      seen.add(ctx);
+      parts.push(ctx);
+    }
+  }
+  return parts.join("\n");
+}
 const MIN_MODEL_ASSOCIATIONS = 2;
 
 /**
@@ -82,6 +124,10 @@ export async function generateCards(
   parsedFiles: ParsedFile[],
   edges: GraphEdge[],
   llm?: LLMProvider | null,
+  /** Project context strings keyed by repo name. Injected into every card prompt. */
+  projectContextByRepo?: Map<string, string>,
+  /** HEAD commit SHA per repo, used to stamp source_commit on generated cards. */
+  commitShaByRepo?: Map<string, string>,
 ): Promise<GeneratedCard[]> {
   const fileIndex = new Map(parsedFiles.map((f) => [f.path, f]));
 
@@ -91,6 +137,7 @@ export async function generateCards(
     edges,
     fileIndex,
     llm ?? null,
+    projectContextByRepo,
   );
 
   const modelCards = await generateModelCards(
@@ -98,12 +145,14 @@ export async function generateCards(
     edges,
     fileIndex,
     llm ?? null,
+    projectContextByRepo,
   );
 
   const crossServiceCards = await generateCrossServiceCards(
     edges,
     fileIndex,
     llm ?? null,
+    projectContextByRepo,
   );
 
   const hubCards = await generateHubCards(
@@ -112,9 +161,22 @@ export async function generateCards(
     edges,
     fileIndex,
     llm ?? null,
+    projectContextByRepo,
   );
 
-  return [...flowCards, ...modelCards, ...crossServiceCards, ...hubCards];
+  const all = [...flowCards, ...modelCards, ...crossServiceCards, ...hubCards];
+
+  // Stamp source_commit for single-repo cards when SHA is available
+  if (commitShaByRepo && commitShaByRepo.size > 0) {
+    for (const card of all) {
+      if (card.sourceRepos.length === 1) {
+        const sha = commitShaByRepo.get(card.sourceRepos[0]);
+        if (sha) card.commitSha = sha;
+      }
+    }
+  }
+
+  return all;
 }
 
 /* ------------------------------------------------------------------ */
@@ -127,31 +189,35 @@ async function generateFlowCards(
   edges: GraphEdge[],
   fileIndex: Map<string, ParsedFile>,
   llm: LLMProvider | null,
+  projectContextByRepo?: Map<string, string>,
 ): Promise<GeneratedCard[]> {
   const cards: GeneratedCard[] = [];
 
   for (const flow of nonHubFlows) {
     const flowFiles = flow.files
       .map((p) => fileIndex.get(p))
-      .filter((f): f is ParsedFile => f != null);
+      .filter((f): f is ParsedFile => f != null && isDomainRelevant(f.fileRole));
+
+    if (flowFiles.length === 0) continue;
 
     const flowPaths = new Set(flow.files);
     const flowEdges = edges.filter(
       (e) => flowPaths.has(e.sourceFile) || flowPaths.has(e.targetFile),
     );
 
+    // Merge project context from all repos involved in this flow
+    const projectContext = mergeProjectContext(flow.repos, projectContextByRepo);
+
     let content: string;
 
     if (llm) {
       try {
-        const prompt = buildFlowCardPrompt(flow, flowFiles, flowEdges);
-        content = await llm.generate(prompt, { systemPrompt: SYSTEM_PROMPT });
-        const tokens = llm.estimateTokens(content);
-        console.log(`[card-gen] flow "${flow.name}" — ~${tokens} tokens`);
+        const prompt = buildFlowCardPrompt(flow, flowFiles, flowEdges, projectContext);
+        content = await callLlm(llm, prompt, `flow "${flow.name}"`);
       } catch (err) {
         console.warn(
-          `[card-gen] LLM failed for flow "${flow.name}", using structural fallback`,
-          err,
+          `[card-gen] LLM failed for flow "${flow.name}", using structural fallback:`,
+          err instanceof Error ? err.message : err,
         );
         const grouped = groupByCategory(flowFiles);
         content = buildMarkdown(flow, grouped, flowEdges, fileIndex);
@@ -161,14 +227,16 @@ async function generateFlowCards(
       content = buildMarkdown(flow, grouped, flowEdges, fileIndex);
     }
 
+    const domainFilePaths = flowFiles.map((f) => f.path);
     cards.push({
       id: nanoid(),
       flow: flow.name,
       title: `${flow.name} flow`,
       content,
       cardType: "flow",
-      sourceFiles: flow.files,
+      sourceFiles: domainFilePaths,
       sourceRepos: flow.repos,
+      tags: computeTags(flowFiles, flow.repos),
       validBranches: null,
       commitSha: null,
     });
@@ -186,12 +254,15 @@ async function generateModelCards(
   edges: GraphEdge[],
   fileIndex: Map<string, ParsedFile>,
   llm: LLMProvider | null,
+  projectContextByRepo?: Map<string, string>,
 ): Promise<GeneratedCard[]> {
   const models = parsedFiles
     .filter(
       (f) =>
-        f.language === "ruby" &&
-        f.associations.length >= MIN_MODEL_ASSOCIATIONS,
+        // Any language can have model cards — Ruby models, Django models, etc.
+        f.associations.length >= MIN_MODEL_ASSOCIATIONS &&
+        // Skip test files, config, and entry points — they pollute cards
+        isDomainRelevant(f.fileRole),
     )
     .sort((a, b) => b.associations.length - a.associations.length)
     .slice(0, MAX_MODEL_CARDS);
@@ -219,16 +290,16 @@ async function generateModelCards(
 
     let content: string;
 
+    const projectContext = mergeProjectContext([model.repo], projectContextByRepo);
+
     if (llm) {
       try {
-        const prompt = buildModelCardPrompt(model, modelEdges, relatedFiles);
-        content = await llm.generate(prompt, { systemPrompt: SYSTEM_PROMPT });
-        const tokens = llm.estimateTokens(content);
-        console.log(`[card-gen] model "${modelName}" — ~${tokens} tokens`);
+        const prompt = buildModelCardPrompt(model, modelEdges, relatedFiles, projectContext);
+        content = await callLlm(llm, prompt, `model "${modelName}"`);
       } catch (err) {
         console.warn(
-          `[card-gen] LLM failed for model "${modelName}", using structural fallback`,
-          err,
+          `[card-gen] LLM failed for model "${modelName}", using structural fallback:`,
+          err instanceof Error ? err.message : err,
         );
         content = buildModelMarkdown(model, modelEdges, fileIndex);
       }
@@ -244,6 +315,7 @@ async function generateModelCards(
       cardType: "model",
       sourceFiles: [model.path, ...relatedPaths],
       sourceRepos: [model.repo],
+      tags: computeTags([model, ...relatedFiles], [model.repo]),
       validBranches: null,
       commitSha: null,
     });
@@ -311,6 +383,7 @@ async function generateCrossServiceCards(
   edges: GraphEdge[],
   fileIndex: Map<string, ParsedFile>,
   llm: LLMProvider | null,
+  projectContextByRepo?: Map<string, string>,
 ): Promise<GeneratedCard[]> {
   const apiEdges = edges.filter((e) => e.relation === "api_endpoint");
   const pairMap = new Map<string, CrossServicePair>();
@@ -335,6 +408,8 @@ async function generateCrossServiceCards(
     const feParsed = fileIndex.get(pair.feFile);
     const beParsed = fileIndex.get(pair.beFile);
     if (!feParsed || !beParsed) continue;
+    // Skip cross-service pairs where either side is a test or entry-point file
+    if (!isDomainRelevant(feParsed.fileRole) || !isDomainRelevant(beParsed.fileRole)) continue;
 
     const feBasename = basename(pair.feFile);
     const beBasename = basename(pair.beFile);
@@ -342,30 +417,25 @@ async function generateCrossServiceCards(
 
     let content: string;
 
+    const repos = new Set<string>();
+    if (feParsed.repo) repos.add(feParsed.repo);
+    if (beParsed.repo) repos.add(beParsed.repo);
+    const projectContext = mergeProjectContext([...repos], projectContextByRepo);
+
     if (llm) {
       try {
-        const prompt = buildCrossServiceCardPrompt(
-          feParsed,
-          beParsed,
-          pair.edges,
-        );
-        content = await llm.generate(prompt, { systemPrompt: SYSTEM_PROMPT });
-        const tokens = llm.estimateTokens(content);
-        console.log(`[card-gen] cross-service "${title}" — ~${tokens} tokens`);
+        const prompt = buildCrossServiceCardPrompt(feParsed, beParsed, pair.edges, projectContext);
+        content = await callLlm(llm, prompt, `cross-service "${title}"`);
       } catch (err) {
         console.warn(
-          `[card-gen] LLM failed for cross-service "${title}", using structural fallback`,
-          err,
+          `[card-gen] LLM failed for cross-service "${title}", using structural fallback:`,
+          err instanceof Error ? err.message : err,
         );
         content = buildCrossServiceMarkdown(feParsed, beParsed, pair.edges);
       }
     } else {
       content = buildCrossServiceMarkdown(feParsed, beParsed, pair.edges);
     }
-
-    const repos = new Set<string>();
-    if (feParsed.repo) repos.add(feParsed.repo);
-    if (beParsed.repo) repos.add(beParsed.repo);
 
     cards.push({
       id: nanoid(),
@@ -375,6 +445,7 @@ async function generateCrossServiceCards(
       cardType: "cross_service",
       sourceFiles: [pair.feFile, pair.beFile],
       sourceRepos: [...repos],
+      tags: computeTags([feParsed, beParsed], [...repos]),
       validBranches: null,
       commitSha: null,
     });
@@ -434,6 +505,7 @@ async function generateHubCards(
   edges: GraphEdge[],
   fileIndex: Map<string, ParsedFile>,
   llm: LLMProvider | null,
+  projectContextByRepo?: Map<string, string>,
 ): Promise<GeneratedCard[]> {
   const cards: GeneratedCard[] = [];
 
@@ -457,18 +529,18 @@ async function generateHubCards(
       )),
     );
 
+    const projectContext = mergeProjectContext(flow.repos, projectContextByRepo);
+
     let content: string;
 
     if (llm) {
       try {
-        const prompt = buildHubCardPrompt(hubFile, connectedFlows, hubEdges);
-        content = await llm.generate(prompt, { systemPrompt: SYSTEM_PROMPT });
-        const tokens = llm.estimateTokens(content);
-        console.log(`[card-gen] hub "${hubName}" — ~${tokens} tokens`);
+        const prompt = buildHubCardPrompt(hubFile, connectedFlows, hubEdges, projectContext);
+        content = await callLlm(llm, prompt, `hub "${hubName}"`);
       } catch (err) {
         console.warn(
-          `[card-gen] LLM failed for hub "${hubName}", using structural fallback`,
-          err,
+          `[card-gen] LLM failed for hub "${hubName}", using structural fallback:`,
+          err instanceof Error ? err.message : err,
         );
         content = buildHubMarkdown(hubFile, hubEdges, connectedFlows, fileIndex);
       }
@@ -484,6 +556,7 @@ async function generateHubCards(
       cardType: "hub",
       sourceFiles: flow.files,
       sourceRepos: flow.repos,
+      tags: computeTags([hubFile], flow.repos),
       validBranches: null,
       commitSha: null,
     });
@@ -556,6 +629,35 @@ function categorize(pf: ParsedFile): FileCategory {
   if (pf.apiCalls.length > 0) return "api_client";
 
   return "other";
+}
+
+/**
+ * Returns true for file roles that should contribute to card content.
+ * Tests, configs, and pure entry-points are indexed but excluded from
+ * the card embedding text to keep semantic signals clean.
+ */
+export function isDomainRelevant(role: FileRole): boolean {
+  return role === "domain" || role === "shared_utility";
+}
+
+export function computeTags(sourceFiles: ParsedFile[], sourceRepos: string[]): string[] {
+  const tags = new Set<string>();
+
+  for (const repo of sourceRepos) {
+    const lower = repo.toLowerCase();
+    if (lower.includes("frontend")) tags.add("frontend");
+    else if (lower.includes("backend") || lower.includes("api")) tags.add("backend");
+  }
+
+  for (const f of sourceFiles) {
+    const cat = categorize(f);
+    if (cat !== "other") tags.add(cat);
+    tags.add(f.language);
+    // Tag shared utilities so search can deprioritize them
+    if (f.fileRole === "shared_utility") tags.add("shared_utility");
+  }
+
+  return [...tags];
 }
 
 function groupByCategory(

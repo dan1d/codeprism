@@ -6,6 +6,13 @@
 /*  can import from here without any breaking changes.                 */
 /* ------------------------------------------------------------------ */
 
+export type FileRole =
+  | "domain"        // production code that belongs to a domain flow
+  | "test"          // test, spec, fixture, e2e — indexed but excluded from graph
+  | "entry_point"   // root files (App, index, main) — high degree but no domain meaning
+  | "shared_utility"// polymorphic/generic utilities used across many domains
+  | "config";       // config files — indexed but excluded from graph
+
 export interface ParsedFile {
   path: string;
   repo: string;
@@ -21,6 +28,7 @@ export interface ParsedFile {
     | "elixir"
     | "rust"
     | "csharp";
+  fileRole: FileRole;
   classes: ClassInfo[];
   associations: Association[];
   routes: RouteInfo[];
@@ -145,6 +153,7 @@ export function emptyParsedFile(
     path,
     repo,
     language,
+    fileRole: "domain",
     classes: [],
     associations: [],
     routes: [],

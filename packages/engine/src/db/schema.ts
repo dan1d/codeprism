@@ -12,11 +12,13 @@ export interface Card {
   card_type: string;
   source_files: string;
   source_repos: string;
+  tags: string;
   valid_branches: string | null;
   commit_sha: string | null;
   created_by: string | null;
   stale: number;
   usage_count: number;
+  specificity_score: number;
   created_at: string;
   updated_at: string;
 }
@@ -61,6 +63,47 @@ export interface BranchEvent {
   event_type: string;
   from_branch: string | null;
   commit_sha: string | null;
+}
+
+export interface ProjectDoc {
+  id: string;
+  repo: string;
+  doc_type:
+    | "readme"
+    | "about"
+    | "architecture"
+    | "code_style"
+    | "rules"
+    | "styles"
+    | "api_contracts"
+    | "specialist"
+    | "changelog"
+    | "memory";
+  title: string;
+  content: string;
+  stale: number;
+  source_file_paths: string; // JSON array of file paths used to generate this doc
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RepoProfile {
+  repo: string;
+  primary_language: string;
+  frameworks: string; // JSON array
+  is_lambda: number; // 0 | 1
+  package_manager: string;
+  skill_ids: string; // JSON array
+  detected_at: string;
+}
+
+export interface CardInteraction {
+  id: number;
+  timestamp: string;
+  query: string;
+  card_id: string;
+  outcome: "viewed" | "insight_saved";
+  session_id: string | null;
 }
 
 /* ------------------------------------------------------------------ */

@@ -13,6 +13,109 @@ const migrations: Migration[] = [
       initSchema(db);
     },
   },
+  {
+    version: 2,
+    up: (db) => {
+      db.exec(`
+        ALTER TABLE cards ADD COLUMN specificity_score REAL DEFAULT 0.5;
+
+        CREATE TABLE IF NOT EXISTS search_config (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL,
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+      `);
+    },
+  },
+  {
+    version: 3,
+    up: (db) => {
+      db.exec("ALTER TABLE cards ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'");
+      // Rebuild FTS5 to include source_repos and tags for BM25 matching
+      db.exec("DROP TABLE IF EXISTS cards_fts");
+      db.exec(`
+        CREATE VIRTUAL TABLE cards_fts USING fts5(
+          title, content, flow, source_repos, tags,
+          content=cards, content_rowid=rowid
+        )
+      `);
+      db.exec("INSERT INTO cards_fts(cards_fts) VALUES('rebuild')");
+    },
+  },
+  {
+    version: 4,
+    up: (db) => {
+      db.exec(
+        "ALTER TABLE file_index ADD COLUMN file_role TEXT NOT NULL DEFAULT 'domain'",
+      );
+    },
+  },
+  {
+    version: 5,
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS project_docs (
+          id                TEXT PRIMARY KEY,
+          repo              TEXT NOT NULL,
+          doc_type          TEXT NOT NULL,
+          title             TEXT NOT NULL,
+          content           TEXT NOT NULL,
+          stale             INTEGER NOT NULL DEFAULT 0,
+          source_file_paths TEXT NOT NULL DEFAULT '[]',
+          created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS project_docs_repo_type
+          ON project_docs(repo, doc_type);
+      `);
+    },
+  },
+  {
+    // Living memory: card_interactions tracking table
+    version: 6,
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS card_interactions (
+          id         INTEGER PRIMARY KEY AUTOINCREMENT,
+          timestamp  TEXT NOT NULL DEFAULT (datetime('now')),
+          query      TEXT NOT NULL,
+          card_id    TEXT NOT NULL,
+          outcome    TEXT NOT NULL DEFAULT 'viewed',
+          session_id TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_card_interactions_card_id
+          ON card_interactions(card_id);
+        CREATE INDEX IF NOT EXISTS idx_card_interactions_timestamp
+          ON card_interactions(timestamp);
+      `);
+    },
+  },
+  {
+    // Stack profiling: repo_profiles table for skill routing
+    version: 7,
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS repo_profiles (
+          repo              TEXT PRIMARY KEY,
+          primary_language  TEXT NOT NULL DEFAULT '',
+          frameworks        TEXT NOT NULL DEFAULT '[]',
+          is_lambda         INTEGER NOT NULL DEFAULT 0,
+          package_manager   TEXT NOT NULL DEFAULT '',
+          skill_ids         TEXT NOT NULL DEFAULT '[]',
+          detected_at       TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+      `);
+    },
+  },
+  {
+    // source_commit on cards for precise staleness tracking
+    version: 8,
+    up: (db) => {
+      db.exec(
+        "ALTER TABLE cards ADD COLUMN source_commit TEXT",
+      );
+    },
+  },
 ];
 
 /**

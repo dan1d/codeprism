@@ -1,0 +1,98 @@
+{
+  "version": "1.0",
+  "description": "Golden dataset for srcmap Ragas evaluation. Queries are based on real Biobridge tickets (ENG-755, ENG-756) and common codebase questions. Each test case has a query, a ground-truth answer describing what context the ideal response should contain, and expected_flows / expected_file_fragments for deterministic precision/recall.",
+  "test_cases": [
+    {
+      "id": "eng755-cpt-icd",
+      "ticket": "ENG-755",
+      "query": "Automate CPT and ICD codes for pre-authorization form when patient is selected based on device type and cycle",
+      "ground_truth": "The pre-authorization form should automatically fill CPT codes and ICD-10 codes when a patient is selected. CPT code selection is based on device type and billing cycle. ICD-10 codes are selected based on device type, cycle, and the patient's diagnosis profile. The logic should reuse the same rules used when authorizations are auto-generated at the start of a cycle.",
+      "expected_flows": ["PreAuthorization", "icd_codes_patient", "Patients", "Patient", "Cycle", "DeviceType"],
+      "expected_file_fragments": [
+        "pre_authorization",
+        "icd_code",
+        "device_type",
+        "cycle",
+        "patient"
+      ]
+    },
+    {
+      "id": "eng756-batch-remote-auth",
+      "ticket": "ENG-756",
+      "query": "Batch create remote pre-authorizations from patient list with checkbox selection and date picker modal",
+      "ground_truth": "Users should be able to select multiple patients from the patient list using checkboxes, then open a modal with a date picker to select an authorization date. A new batch endpoint should create pre-authorizations for all selected patients using that date. The modal should display the selected patients, allow adding or removing them, then submit a batch create request.",
+      "expected_flows": ["PreAuthorization", "Patients", "RemoteCheck", "patients"],
+      "expected_file_fragments": [
+        "pre_authorization",
+        "patient",
+        "remote"
+      ]
+    },
+    {
+      "id": "patient-device-cycle",
+      "ticket": null,
+      "query": "How does a patient get assigned to a device and enrolled in a billing cycle?",
+      "ground_truth": "Patients are associated with monitoring devices through a patient-device relationship. A billing cycle tracks the monitoring period for a patient on a specific device. The cycle drives which CPT and ICD codes are applicable. Enrollment involves linking the patient model to a device type and a cycle record.",
+      "expected_flows": ["Patient", "patients", "Patients", "Cycle", "DeviceType", "Device"],
+      "expected_file_fragments": [
+        "patient",
+        "device",
+        "cycle"
+      ]
+    },
+    {
+      "id": "remote-check-billing",
+      "ticket": null,
+      "query": "Remote check authorization flow and billing order creation",
+      "ground_truth": "A remote check involves reviewing patient monitoring data and creating or updating a pre-authorization. Once authorized, a billing order is generated linking the pre-authorization, the cycle, and the CPT codes. The RemoteCheck model connects patient data, authorization status, and billing records.",
+      "expected_flows": ["RemoteCheck", "BillingOrder", "PreAuthorization"],
+      "expected_file_fragments": [
+        "remote_check",
+        "pre_authorization",
+        "billing_order"
+      ]
+    },
+    {
+      "id": "user-auth-session",
+      "ticket": null,
+      "query": "User authentication and session management across Rails and React",
+      "ground_truth": "User authentication uses a session-based mechanism on the Rails backend. The React frontend stores the session token and sends it as a header or cookie. The User model holds credentials and role information. Authentication middleware validates sessions on protected API routes.",
+      "expected_flows": ["User", "users", "Session"],
+      "expected_file_fragments": [
+        "user",
+        "session"
+      ]
+    },
+    {
+      "id": "practice-setup",
+      "ticket": null,
+      "query": "Practice configuration and multi-practice setup in the application",
+      "ground_truth": "A Practice is the top-level tenant in the system. It holds configuration for billing, device types, and user memberships. Multiple practices can coexist and share device type definitions. Practice-scoped resources are filtered by the current practice context in API queries.",
+      "expected_flows": ["Practice", "practices", "Practices"],
+      "expected_file_fragments": [
+        "practice"
+      ]
+    },
+    {
+      "id": "alert-notifications",
+      "ticket": null,
+      "query": "Alert generation and notification delivery for patient monitoring events",
+      "ground_truth": "Alerts are generated when patient monitoring thresholds are crossed. They are associated with the patient and optionally the remote check. Notifications can be sent to practitioners via email or in-app messages. The alert model stores severity, type, and resolution status.",
+      "expected_flows": ["Alert"],
+      "expected_file_fragments": [
+        "alert"
+      ]
+    },
+    {
+      "id": "frontend-patient-list-filters",
+      "ticket": null,
+      "query": "Patient list page with filtering, sorting and pagination in React frontend",
+      "ground_truth": "The patient list component in the React frontend renders a table of patients with filter controls for status, device type, and practice. Checkboxes allow multi-select for bulk actions. Pagination and sorting are handled by query params sent to the Rails API. The component uses Redux for state management.",
+      "expected_flows": ["Patients", "patients"],
+      "expected_file_fragments": [
+        "patient",
+        "Patient"
+      ]
+    }
+  ]
+}

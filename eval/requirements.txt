@@ -1,0 +1,16 @@
+# Python 3.10+ required (Ragas uses X | Y union syntax)
+# Core dependencies (always needed)
+requests>=2.31.0
+
+# Ragas + LLM judge (needed only for --ragas flag)
+ragas>=0.2.0
+datasets>=2.18.0
+
+# LangChain adapters – install ONE of these depending on your judge LLM:
+#   Gemini (free, recommended):
+langchain-google-genai>=1.0.0
+#   OpenAI (alternative):
+# langchain-openai>=0.1.0
+
+# DeepEval — per-card contextual relevance scoring
+deepeval>=0.21.0

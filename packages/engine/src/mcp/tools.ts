@@ -3,14 +3,49 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getDb } from "../db/connection.js";
 import type { Card } from "../db/schema.js";
-import { hybridSearch, checkCache } from "../search/hybrid.js";
+import { hybridSearch, checkCache, type SearchResult } from "../search/hybrid.js";
+import { crossEncoderRerank } from "../search/reranker.js";
 import { trackToolCall } from "../metrics/tracker.js";
 import { getEmbedder } from "../embeddings/local-embedder.js";
+import { classifyQueryEmbedding } from "../search/query-classifier.js";
+import { createLLMProvider } from "../llm/provider.js";
+import { patchMemoryDoc } from "../indexer/doc-generator.js";
 
 const MAX_CARD_LINES = 40;
 const MAX_TOTAL_LINES = 300;
 
-type CardSummary = Pick<Card, "id" | "flow" | "title" | "content" | "source_files" | "card_type">;
+// ---------------------------------------------------------------------------
+// search_config cache — loaded once per process, invalidated on writes
+// ---------------------------------------------------------------------------
+
+let _searchConfig: Map<string, number> | null = null;
+
+/** Returns all search_config values as a Map, loading from DB on first access. */
+function getSearchConfig(): Map<string, number> {
+  if (_searchConfig) return _searchConfig;
+  try {
+    const rows = getDb()
+      .prepare("SELECT key, value FROM search_config")
+      .all() as { key: string; value: string }[];
+    _searchConfig = new Map(rows.map((r) => [r.key, parseFloat(r.value)]));
+  } catch {
+    _searchConfig = new Map();
+  }
+  return _searchConfig;
+}
+
+/** Look up a single numeric config key with a fallback default. */
+function getSearchConfigValue(key: string, fallback: number): number {
+  const v = getSearchConfig().get(key);
+  return v !== undefined && !Number.isNaN(v) ? v : fallback;
+}
+
+/** Invalidate the in-process config cache (called after any search_config write). */
+function invalidateSearchConfig(): void {
+  _searchConfig = null;
+}
+
+type CardSummary = Pick<Card, "id" | "flow" | "title" | "content" | "source_files" | "card_type" | "specificity_score" | "usage_count">;
 
 function truncateContent(content: string, maxLines: number): string {
   const lines = content.split("\n");
@@ -69,29 +104,188 @@ function prioritizeCards(cards: CardSummary[]): CardSummary[] {
   });
 }
 
+const REPO_PREFIXES: Record<string, string> = {
+  "biobridge-frontend": "React frontend UI component: ",
+  "biobridge-backend": "Rails backend API model controller: ",
+  "bp-monitor-frontend": "Vue frontend bp-monitor: ",
+  "bp-monitor-api": "Cuba API bp-monitor service: ",
+};
+
+/**
+ * Builds a context-prefixed semantic query to steer embeddings toward the
+ * relevant repo's semantic subspace. Falls back to the original query when
+ * classification confidence is too low.
+ */
+async function buildSemanticQuery(query: string): Promise<string> {
+  try {
+    const raw = await getEmbedder().embed(query);
+    const cls = classifyQueryEmbedding(raw);
+    if (cls.topRepo && cls.confidence > 0.05) {
+      const prefix = REPO_PREFIXES[cls.topRepo];
+      if (prefix) return prefix + query;
+    }
+  } catch { /* non-critical */ }
+  return query;
+}
+
+/**
+ * HyDE — Hypothetical Document Embeddings.
+ * For long ticket descriptions (> 80 chars), asks the configured LLM to
+ * generate a hypothetical knowledge card that would answer the query, then
+ * uses that richer text as the semantic query. This bridges the vocabulary
+ * gap between short natural-language questions and dense technical card prose.
+ *
+ * Falls back to `buildSemanticQuery` if no LLM is configured, the description
+ * is short (<= 200 chars), or the LLM doesn't respond within the timeout.
+ * Timeout defaults to 1500ms but can be overridden via search_config key `hyde_timeout_ms`.
+ */
+async function buildHydeQuery(description: string): Promise<string> {
+  if (description.length <= 200) return buildSemanticQuery(description);
+
+  const llm = createLLMProvider();
+  if (!llm) return buildSemanticQuery(description);
+
+  // Read timeout from config (default 1500ms — generous enough for remote LLMs)
+  const hydeTimeoutMs = getSearchConfigValue("hyde_timeout_ms", 1500);
+
+  const hydeCall = (async () => {
+    try {
+      const hypothetical = await llm.generate(
+        `Write a concise technical knowledge card (3–5 sentences) that directly answers this developer question about a codebase:\n\n"${description.slice(0, 600)}"\n\nWrite as if describing an existing system. Use technical terms naturally (models, controllers, services, components, associations, routes). Be specific.`,
+        { maxTokens: 200, temperature: 0.1 },
+      );
+      if (hypothetical && hypothetical.trim().length > 20) return hypothetical.trim();
+    } catch { /* non-critical */ }
+    return null;
+  })();
+
+  const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), hydeTimeoutMs));
+
+  const result = await Promise.race([hydeCall, timeout]);
+  // Fallback is lazy — only called when HyDE misses (avoids double embedding cost)
+  return result ?? buildSemanticQuery(description);
+}
+
+/**
+ * Expands search results with graph neighbours — cards that share files with
+ * the top-5 results via import/API-endpoint edges. Added at a low base score
+ * (0.3) so the cross-encoder can still surface them if they're relevant.
+ */
+function expandWithGraphNeighbours(results: SearchResult[]): SearchResult[] {
+  if (results.length === 0) return results;
+
+  const db = getDb();
+  const top5 = results.slice(0, 5);
+  const sourceFiles = new Set<string>();
+  for (const r of top5) {
+    try {
+      (JSON.parse(r.card.source_files) as string[]).forEach((f) => sourceFiles.add(f));
+    } catch { /* skip */ }
+  }
+
+  if (sourceFiles.size === 0) return results;
+
+  const fileListJson = JSON.stringify([...sourceFiles]);
+  const existingIdsJson = JSON.stringify(results.map((r) => r.card.id));
+
+  const neighbours = db
+    .prepare(
+      `SELECT DISTINCT c.* FROM cards c
+       WHERE c.stale = 0
+         AND EXISTS (
+           SELECT 1 FROM json_each(c.source_files) sf
+           WHERE sf.value IN (
+             SELECT ge.target_file FROM graph_edges ge
+               WHERE ge.source_file IN (SELECT j.value FROM json_each(?))
+             UNION
+             SELECT ge.source_file FROM graph_edges ge
+               WHERE ge.target_file IN (SELECT j.value FROM json_each(?))
+           )
+         )
+         AND c.id NOT IN (SELECT j.value FROM json_each(?))
+       LIMIT 5`,
+    )
+    .all(fileListJson, fileListJson, existingIdsJson) as Card[];
+
+  const extra: SearchResult[] = neighbours.map((card) => ({
+    card,
+    score: 0.3,
+    source: "semantic" as const,
+  }));
+
+  return [...results, ...extra];
+}
+
+// Lazily-cached prepared statement — avoids re-compiling SQL on every search call
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _insertInteraction: any | null = null;
+
+/** Logs a batch of card_interactions rows (outcome='viewed') for every returned card. */
+function logViewedInteractions(query: string, cardIds: string[], sessionId: string): void {
+  if (cardIds.length === 0) return;
+  try {
+    const db = getDb();
+    _insertInteraction ??= db.prepare(
+      `INSERT INTO card_interactions (query, card_id, outcome, session_id, created_at)
+       VALUES (?, ?, 'viewed', ?, datetime('now'))`,
+    );
+    const stmt = _insertInteraction;
+    const tx = db.transaction(() => {
+      for (const id of cardIds) stmt.run(query, id, sessionId);
+    });
+    tx();
+  } catch { /* non-critical — don't fail search on interaction logging errors */ }
+}
+
 async function searchAndTrack(
   query: string,
   branch?: string,
   limit = 5,
-): Promise<{ cards: CardSummary[]; cardIds: string[]; cacheHit: boolean }> {
+  /** Caller-supplied session ID — allows sub-queries in one MCP call to share a session. */
+  sessionId = randomUUID(),
+): Promise<{ cards: CardSummary[]; results: SearchResult[]; cardIds: string[]; cacheHit: boolean }> {
   const start = Date.now();
 
   const cached = await checkCache(query);
   if (cached && cached.length > 0) {
     const cards = cached.map((r) => r.card);
     const elapsed = Date.now() - start;
+    const cachedCardIds = cards.map((c) => c.id);
     trackToolCall({
       query,
-      responseCards: cards.map((c) => c.id),
+      responseCards: cachedCardIds,
       responseTokens: cards.reduce((sum, c) => sum + c.content.length / 4, 0),
       cacheHit: true,
       latencyMs: elapsed,
       branch,
     });
-    return { cards, cardIds: cards.map((c) => c.id), cacheHit: true };
+    logViewedInteractions(query, cachedCardIds, sessionId);
+    return { cards, results: cached, cardIds: cachedCardIds, cacheHit: true };
   }
 
-  const results = await hybridSearch(query, { branch, limit });
+  // Read reranker tuning params from the process-level search_config cache
+  const rerankHybridWeight = getSearchConfigValue("rerank_hybrid_weight", 0.4);
+  const rerankCeWeight     = getSearchConfigValue("rerank_ce_weight",     0.6);
+  const rerankCandidateCap = Math.round(getSearchConfigValue("rerank_candidate_cap", 30));
+
+  // Build a prefix-boosted semantic query based on embedding classification
+  const semanticQuery = await buildSemanticQuery(query);
+
+  // Fetch more candidates (4x limit) for cross-encoder reranking
+  const candidates = await hybridSearch(query, { branch, limit: limit * 4, semanticQuery });
+
+  // Expand with graph neighbours before reranking
+  const expanded = expandWithGraphNeighbours(candidates);
+
+  // Cross-encoder reranks all candidates down to the requested limit
+  const results = await crossEncoderRerank(
+    query,
+    expanded,
+    limit,
+    { hybrid: rerankHybridWeight, ce: rerankCeWeight },
+    rerankCandidateCap,
+  );
+
   const elapsed = Date.now() - start;
 
   let embedding: Buffer | null = null;
@@ -110,9 +304,11 @@ async function searchAndTrack(
     latencyMs: elapsed,
     branch,
   });
+  logViewedInteractions(query, cardIds, sessionId);
 
   return {
     cards: results.map((r) => r.card),
+    results,
     cardIds,
     cacheHit: false,
   };
@@ -134,11 +330,15 @@ export function registerTools(server: McpServer): void {
           .string()
           .optional()
           .describe("Optional branch name to scope results"),
+        debug: z
+          .boolean()
+          .optional()
+          .describe("Include score breakdown for each result"),
       },
     },
-    async ({ query, branch }) => {
+    async ({ query, branch, debug }) => {
       try {
-        const { cards, cacheHit } = await searchAndTrack(query, branch);
+        const { cards, results, cacheHit } = await searchAndTrack(query, branch);
 
         if (cards.length === 0) {
           return {
@@ -149,13 +349,24 @@ export function registerTools(server: McpServer): void {
         }
 
         const header = cacheHit ? `(cache hit) ` : "";
+        let text = `${header}Found ${cards.length} card(s) for "${query}":\n\n${formatCards(cards)}`;
+
+        if (debug) {
+          const scoreLines = results.map((r, i) => {
+            const card = r.card;
+            let files: string[] = [];
+            try { files = JSON.parse(card.source_files as unknown as string); } catch { /* ignore */ }
+            return [
+              `[${i + 1}] ${card.title} (type: ${card.card_type}, score: ${r.score.toFixed(4)}, source: ${r.source})`,
+              `    specificity: ${(card as Card).specificity_score?.toFixed(3) ?? "n/a"}, usage: ${(card as Card).usage_count ?? 0}`,
+              `    files: ${files.slice(0, 3).map((f) => shortenPath(f)).join(", ")}${files.length > 3 ? ` +${files.length - 3} more` : ""}`,
+            ].join("\n");
+          });
+          text += `\n\n--- DEBUG SCORES ---\n${scoreLines.join("\n")}`;
+        }
+
         return {
-          content: [
-            {
-              type: "text" as const,
-              text: `${header}Found ${cards.length} card(s) for "${query}":\n\n${formatCards(cards)}`,
-            },
-          ],
+          content: [{ type: "text" as const, text }],
         };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -171,9 +382,9 @@ export function registerTools(server: McpServer): void {
     "srcmap_context",
     {
       description:
-        "Get codebase context for a ticket or task. Extracts keywords, runs " +
-        "multiple searches, returns relevant knowledge cards and files. " +
-        "ALWAYS call this first when starting work on any ticket.",
+        "Get codebase context for a ticket or task. Runs a primary semantic " +
+        "search on the full description, then supplements with entity-specific " +
+        "keyword lookups. ALWAYS call this first when starting work on any ticket.",
       inputSchema: {
         description: z
           .string()
@@ -186,17 +397,34 @@ export function registerTools(server: McpServer): void {
     },
     async ({ description, branch }) => {
       try {
-        const keywords = extractSearchTerms(description);
-        const allResults = new Map<string, CardSummary>();
+        const cleaned = description
+          .replace(/https?:\/\/\S+/g, "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 1000);
 
-        for (const kw of keywords) {
-          const { cards } = await searchAndTrack(kw, branch, 4);
-          for (const card of cards) {
-            if (!allResults.has(card.id)) allResults.set(card.id, card);
+        // One session ID shared across all sub-queries so analytics can group them
+        const contextSessionId = randomUUID();
+
+        // HyDE: for long ticket descriptions, generate a hypothetical card to improve recall
+        const hydeQuery = await buildHydeQuery(cleaned);
+        const { results: primaryResults } = await searchAndTrack(hydeQuery, branch, 10, contextSessionId);
+
+        const entities = extractEntityNames(description);
+        const seenIds = new Set(primaryResults.map((r) => r.card.id));
+        const allSearchResults: SearchResult[] = [...primaryResults];
+
+        for (const entity of entities.slice(0, 3)) {
+          const { results: entityResults } = await searchAndTrack(entity, branch, 4, contextSessionId);
+          for (const r of entityResults) {
+            if (!seenIds.has(r.card.id)) {
+              seenIds.add(r.card.id);
+              allSearchResults.push({ ...r, score: r.score * 0.8 });
+            }
           }
         }
 
-        if (allResults.size === 0) {
+        if (allSearchResults.length === 0) {
           return {
             content: [
               {
@@ -207,8 +435,9 @@ export function registerTools(server: McpServer): void {
           };
         }
 
-        const sorted = prioritizeCards(Array.from(allResults.values()));
-        const capped = sorted.slice(0, 8);
+        // Cross-encoder final rerank of the merged candidate set
+        const reranked = await crossEncoderRerank(hydeQuery, allSearchResults, 8);
+        const capped = reranked.map((r) => r.card);
 
         const flows = [...new Set(capped.map((c) => c.flow))];
         const allFiles = new Set<string>();
@@ -221,7 +450,7 @@ export function registerTools(server: McpServer): void {
 
         const summary =
           `## srcmap Context\n\n` +
-          `**Searches:** ${keywords.join(", ")}\n` +
+          `**Entities:** ${entities.length > 0 ? entities.join(", ") : "(none extracted)"}\n` +
           `**Flows:** ${flows.join(", ")}\n` +
           `**Key files (${allFiles.size}):**\n${[...allFiles].slice(0, 20).map((f) => `- ${f}`).join("\n")}\n\n` +
           `---\n\n` +
@@ -254,19 +483,20 @@ export function registerTools(server: McpServer): void {
     },
     async ({ description }) => {
       try {
-        const keywords = extractSearchTerms(description);
+        const cleaned = description
+          .replace(/https?:\/\/\S+/g, "")
+          .slice(0, 500);
+
+        const results = await hybridSearch(cleaned, { limit: 10 });
         const fileScores = new Map<string, number>();
 
-        for (const kw of keywords) {
-          const results = await hybridSearch(kw, { limit: 5 });
-          for (const r of results) {
-            try {
-              const files: string[] = JSON.parse(r.card.source_files);
-              for (const f of files) {
-                fileScores.set(f, (fileScores.get(f) || 0) + r.score);
-              }
-            } catch { /* skip */ }
-          }
+        for (const r of results) {
+          try {
+            const files: string[] = JSON.parse(r.card.source_files);
+            for (const f of files) {
+              fileScores.set(f, (fileScores.get(f) || 0) + r.score);
+            }
+          } catch { /* skip */ }
         }
 
         const sorted = [...fileScores.entries()]
@@ -333,6 +563,18 @@ export function registerTools(server: McpServer): void {
            VALUES (?, ?, ?, ?, 'dev_insight', ?, 'mcp_client')`,
         ).run(id, flow, title, content, sourceFiles);
 
+        // Heartbeat: every 10 dev_insights, patch the team memory doc (fire-and-forget)
+        const insightCount = (
+          db.prepare(
+            `SELECT COUNT(*) as n FROM cards WHERE card_type = 'dev_insight' AND stale = 0`,
+          ).get() as { n: number }
+        ).n;
+        if (insightCount % 10 === 0) {
+          patchMemoryDoc().catch((err: unknown) =>
+            console.warn("[memory] Patch failed:", (err as Error).message),
+          );
+        }
+
         return {
           content: [
             {
@@ -397,55 +639,435 @@ export function registerTools(server: McpServer): void {
       };
     },
   );
+
+  server.registerTool(
+    "srcmap_configure",
+    {
+      description:
+        "View or modify srcmap search configuration. " +
+        "Use to tune search scoring multipliers or view current settings.",
+      inputSchema: {
+        action: z.enum(["get", "set", "list"]).describe("Action to perform"),
+        key: z.string().optional().describe("Config key (e.g. hub_penalty, flow_boost)"),
+        value: z.string().optional().describe("New value for the key (required for 'set')"),
+      },
+    },
+    async ({ action, key, value }) => {
+      const db = getDb();
+
+      try {
+        if (action === "list") {
+          const rows = db
+            .prepare("SELECT key, value, updated_at FROM search_config ORDER BY key")
+            .all() as { key: string; value: string; updated_at: string }[];
+
+          if (rows.length === 0) {
+            return {
+              content: [{ type: "text" as const, text: "No custom configuration set. Using defaults." }],
+            };
+          }
+
+          const lines = rows.map((r) => `- **${r.key}**: ${r.value} (updated: ${r.updated_at})`);
+          return {
+            content: [{ type: "text" as const, text: `**Search config:**\n\n${lines.join("\n")}` }],
+          };
+        }
+
+        if (action === "get") {
+          if (!key) {
+            return {
+              content: [{ type: "text" as const, text: "Error: 'key' is required for 'get'" }],
+              isError: true,
+            };
+          }
+          const row = db
+            .prepare("SELECT value FROM search_config WHERE key = ?")
+            .get(key) as { value: string } | undefined;
+
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: row ? `**${key}**: ${row.value}` : `Key "${key}" not found. Using default.`,
+              },
+            ],
+          };
+        }
+
+        if (action === "set") {
+          if (!key || value === undefined) {
+            return {
+              content: [{ type: "text" as const, text: "Error: 'key' and 'value' are required for 'set'" }],
+              isError: true,
+            };
+          }
+          db.prepare(
+            `INSERT INTO search_config (key, value, updated_at)
+             VALUES (?, ?, datetime('now'))
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+          ).run(key, value);
+
+          // Bust the in-process cache so the next search picks up the new value
+          invalidateSearchConfig();
+
+          return {
+            content: [{ type: "text" as const, text: `Set **${key}** = ${value}` }],
+          };
+        }
+
+        return {
+          content: [{ type: "text" as const, text: `Unknown action: ${action}` }],
+          isError: true,
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return {
+          content: [{ type: "text" as const, text: `Config error: ${message}` }],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  // ---------------------------------------------------------------------------
+  // srcmap_workspace_status — real-time knowledge base health overview
+  // ---------------------------------------------------------------------------
+
+  server.registerTool(
+    "srcmap_workspace_status",
+    {
+      description:
+        "Returns a real-time status of the srcmap knowledge base: stale card counts, " +
+        "last indexed commit, active skills, and cross-repo dependencies per repository. " +
+        "Use this to understand the current state of the knowledge base before deciding whether to reindex.",
+    },
+    async () => {
+      const db = getDb();
+      try {
+        const repoStats = db
+          .prepare(
+            `SELECT
+              json_each.value as repo,
+              COUNT(c.id) as total_cards,
+              SUM(c.stale) as stale_cards,
+              MAX(c.source_commit) as last_commit
+            FROM cards c, json_each(c.source_repos)
+            WHERE json_each.value != ''
+            GROUP BY json_each.value
+            ORDER BY total_cards DESC`,
+          )
+          .all() as { repo: string; total_cards: number; stale_cards: number; last_commit: string | null }[];
+
+        const profiles = db
+          .prepare(
+            "SELECT repo, primary_language, frameworks, skill_ids FROM repo_profiles",
+          )
+          .all() as { repo: string; primary_language: string; frameworks: string; skill_ids: string }[];
+        const profileMap = new Map(profiles.map((p) => [p.repo, p]));
+
+        const crossRepoEdges = db
+          .prepare(
+            `SELECT
+              ge.repo as source_repo,
+              COUNT(*) as edge_count
+            FROM graph_edges ge
+            WHERE ge.relation = 'api_endpoint'
+            GROUP BY ge.repo
+            ORDER BY edge_count DESC
+            LIMIT 10`,
+          )
+          .all() as { source_repo: string; edge_count: number }[];
+
+        const staleDocs = db
+          .prepare(
+            "SELECT repo, doc_type FROM project_docs WHERE stale = 1 AND repo != '__memory__'",
+          )
+          .all() as { repo: string; doc_type: string }[];
+
+        const lines: string[] = ["## srcmap Workspace Status\n"];
+
+        for (const stat of repoStats) {
+          const profile = profileMap.get(stat.repo);
+          let skillIds: string[] = [];
+          try { skillIds = profile ? (JSON.parse(profile.skill_ids) as string[]) : []; } catch { /* ignore */ }
+          lines.push(`### ${stat.repo}`);
+          lines.push(
+            `- **Stack:** ${profile?.primary_language ?? "unknown"}` +
+            (skillIds.length ? ` (${skillIds.join(", ")})` : ""),
+          );
+          lines.push(`- **Cards:** ${stat.total_cards} total, ${stat.stale_cards ?? 0} stale`);
+          if (stat.last_commit) {
+            lines.push(`- **Last indexed commit:** ${stat.last_commit.slice(0, 8)}`);
+          }
+          const staleDocTypes = staleDocs
+            .filter((d) => d.repo === stat.repo)
+            .map((d) => d.doc_type);
+          if (staleDocTypes.length) {
+            lines.push(`- **Stale docs:** ${staleDocTypes.join(", ")}`);
+          }
+          lines.push("");
+        }
+
+        if (crossRepoEdges.length > 0) {
+          lines.push("### Cross-Repo Connections");
+          for (const edge of crossRepoEdges) {
+            lines.push(`- **${edge.source_repo}**: ${edge.edge_count} api_endpoint edge(s)`);
+          }
+          lines.push("");
+        }
+
+        const totalStale = repoStats.reduce((sum, r) => sum + (r.stale_cards ?? 0), 0);
+        lines.push(`**Total stale cards:** ${totalStale}`);
+        if (totalStale > 0) {
+          lines.push("\n> Run `srcmap_reindex` or `POST /api/reindex-stale` to refresh stale cards.");
+        }
+
+        return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return {
+          content: [{ type: "text" as const, text: `Status error: ${message}` }],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  // ---------------------------------------------------------------------------
+  // srcmap_reindex — report stale cards and guide incremental reindexing
+  // ---------------------------------------------------------------------------
+
+  server.registerTool(
+    "srcmap_reindex",
+    {
+      description:
+        "Triggers incremental reindex of stale cards only. Faster than a full reindex — " +
+        "only regenerates cards whose source files changed.",
+      inputSchema: {
+        repo: z
+          .string()
+          .optional()
+          .describe("Limit reindex to a specific repo. Omit to reindex all stale cards."),
+      },
+    },
+    async ({ repo }) => {
+      const db = getDb();
+      try {
+        const staleCount = repo
+          ? (
+              db
+                .prepare(`SELECT COUNT(*) as n FROM cards WHERE stale = 1 AND source_repos LIKE ?`)
+                .get(`%${repo}%`) as { n: number }
+            ).n
+          : (
+              db
+                .prepare(`SELECT COUNT(*) as n FROM cards WHERE stale = 1`)
+                .get() as { n: number }
+            ).n;
+
+        if (staleCount === 0) {
+          return {
+            content: [{
+              type: "text" as const,
+              text: "No stale cards found. Knowledge base is up to date.",
+            }],
+          };
+        }
+
+        return {
+          content: [{
+            type: "text" as const,
+            text:
+              `Found ${staleCount} stale card(s)${repo ? ` in ${repo}` : ""}.\n\n` +
+              `Trigger async reindex via the REST API:\n\`\`\`\n` +
+              `curl -X POST http://localhost:4000/api/reindex-stale${repo ? `?repo=${repo}` : ""}\n\`\`\`\n\n` +
+              `Then poll for status:\n\`\`\`\n` +
+              `curl http://localhost:4000/api/reindex-status\n\`\`\`\n\n` +
+              `Or reindex manually:\n\`\`\`\npnpm index\n\`\`\``,
+          }],
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return {
+          content: [{ type: "text" as const, text: `Reindex error: ${message}` }],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  // ---------------------------------------------------------------------------
+  // srcmap_project_docs — retrieve generated project documentation
+  // ---------------------------------------------------------------------------
+
+  server.registerTool(
+    "srcmap_project_docs",
+    {
+      description:
+        "Retrieve AI-generated project documentation (About, Architecture, Code Style, Rules, Styles, README) " +
+        "for one or more repositories. Use to get high-level context before diving into implementation. " +
+        "Call without a repo filter to list all available docs.",
+      inputSchema: {
+        repo: z
+          .string()
+          .optional()
+          .describe("Repository name (e.g. 'biobridge-backend'). Omit to list all repos with docs."),
+        doc_type: z
+          .enum(["readme", "about", "architecture", "code_style", "rules", "styles"])
+          .optional()
+          .describe("Specific doc type. Omit to return all docs for the repo."),
+      },
+    },
+    async ({ repo, doc_type }) => {
+      const db = getDb();
+
+      try {
+        // List mode: show all repos and their doc types
+        if (!repo) {
+          const rows = db
+            .prepare(
+              `SELECT repo, doc_type, title, stale, updated_at
+               FROM project_docs ORDER BY repo, doc_type`,
+            )
+            .all() as { repo: string; doc_type: string; title: string; stale: number; updated_at: string }[];
+
+          if (rows.length === 0) {
+            return {
+              content: [{
+                type: "text" as const,
+                text: "No project docs found. Run `pnpm index` to generate them.",
+              }],
+            };
+          }
+
+          const byRepo = new Map<string, typeof rows>();
+          for (const row of rows) {
+            const list = byRepo.get(row.repo) ?? [];
+            list.push(row);
+            byRepo.set(row.repo, list);
+          }
+
+          const lines: string[] = ["## Available Project Docs\n"];
+          for (const [r, docs] of byRepo) {
+            lines.push(`### ${r}`);
+            for (const d of docs) {
+              const staleFlag = d.stale ? " ⚠️ stale" : "";
+              lines.push(`- **${d.doc_type}**: ${d.title}${staleFlag} (${d.updated_at})`);
+            }
+            lines.push("");
+          }
+
+          return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+        }
+
+        // Fetch specific doc(s) for a repo
+        const query = doc_type
+          ? "SELECT * FROM project_docs WHERE repo = ? AND doc_type = ?"
+          : "SELECT * FROM project_docs WHERE repo = ? ORDER BY doc_type";
+
+        const rows = (doc_type
+          ? [db.prepare(query).get(repo, doc_type)]
+          : db.prepare(query).all(repo)
+        ).filter(Boolean) as Array<{
+          id: string;
+          repo: string;
+          doc_type: string;
+          title: string;
+          content: string;
+          stale: number;
+          updated_at: string;
+        }>;
+
+        if (rows.length === 0) {
+          return {
+            content: [{
+              type: "text" as const,
+              text: `No docs found for repo "${repo}"${doc_type ? ` (type: ${doc_type})` : ""}. ` +
+                "Run `pnpm index` to generate project documentation.",
+            }],
+          };
+        }
+
+        const parts = rows.map((d) => {
+          const staleWarning = d.stale
+            ? "\n> ⚠️ **This doc may be stale** — some source files have changed since generation. " +
+              "Call `POST /api/refresh` to regenerate.\n"
+            : "";
+          return `# ${d.title}\n_Updated: ${d.updated_at}_\n${staleWarning}\n${d.content}`;
+        });
+
+        return {
+          content: [{ type: "text" as const, text: parts.join("\n\n---\n\n") }],
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return {
+          content: [{ type: "text" as const, text: `Project docs error: ${message}` }],
+          isError: true,
+        };
+      }
+    },
+  );
 }
 
-const STOP_WORDS = new Set([
+const ENGLISH_STOP_WORDS = new Set([
   "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
   "have", "has", "had", "do", "does", "did", "will", "would", "could",
-  "should", "may", "might", "shall", "can", "need", "dare", "ought",
-  "used", "to", "of", "in", "for", "on", "with", "at", "by", "from",
-  "as", "into", "through", "during", "before", "after", "above", "below",
-  "between", "out", "off", "over", "under", "again", "further", "then",
-  "once", "here", "there", "when", "where", "why", "how", "all", "each",
-  "every", "both", "few", "more", "most", "other", "some", "such", "no",
-  "not", "only", "own", "same", "so", "than", "too", "very", "just",
-  "because", "but", "and", "or", "if", "while", "that", "this", "these",
-  "those", "it", "its", "we", "they", "them", "their", "i", "you", "he",
-  "she", "what", "which", "who", "whom", "want", "also", "get", "add",
-  "use", "able", "based", "like", "make", "work", "new", "click",
-  "ticket", "environment", "demo", "fields", "blank", "selected",
-  "user", "users", "would", "once",
+  "should", "may", "might", "shall", "can", "need", "ought", "to", "of",
+  "in", "for", "on", "with", "at", "by", "from", "as", "into", "through",
+  "during", "before", "after", "between", "out", "off", "over", "under",
+  "again", "then", "once", "here", "there", "when", "where", "why", "how",
+  "all", "each", "every", "both", "few", "more", "most", "other", "some",
+  "such", "no", "not", "only", "own", "same", "so", "than", "too", "very",
+  "just", "because", "but", "and", "or", "if", "while", "that", "this",
+  "these", "those", "it", "its", "we", "they", "them", "their", "i", "you",
+  "he", "she", "what", "which", "who", "whom", "also", "get", "like",
+  "about", "above", "below", "up", "down",
 ]);
 
-function extractSearchTerms(text: string): string[] {
-  const cleaned = text
-    .replace(/https?:\/\/\S+/g, "")
-    .replace(/[^a-zA-Z0-9_\s-]/g, " ")
-    .toLowerCase();
+/**
+ * Extracts likely domain entity names from a ticket description.
+ * Looks for compound terms (snake_case, PascalCase), capitalized words,
+ * and frequent nouns that are not generic English stop words.
+ */
+function extractEntityNames(text: string): string[] {
+  const cleaned = text.replace(/https?:\/\/\S+/g, "");
 
-  const words = cleaned.split(/\s+/).filter(
-    (w) => w.length > 2 && !STOP_WORDS.has(w),
-  );
+  const entities: string[] = [];
+
+  const snakeCase = cleaned.match(/[a-z][a-z0-9]*(?:_[a-z0-9]+)+/g) ?? [];
+  entities.push(...snakeCase);
+
+  const pascalCase = cleaned.match(/[A-Z][a-z]+(?:[A-Z][a-z]+)+/g) ?? [];
+  entities.push(...pascalCase);
+
+  const words = cleaned
+    .replace(/[^a-zA-Z0-9_\s-]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length > 2 && !ENGLISH_STOP_WORDS.has(w.toLowerCase()));
 
   const freq = new Map<string, number>();
   for (const w of words) {
-    freq.set(w, (freq.get(w) || 0) + 1);
-  }
-
-  const bigrams: string[] = [];
-  for (let i = 0; i < words.length - 1; i++) {
-    if (!STOP_WORDS.has(words[i]!) && !STOP_WORDS.has(words[i + 1]!)) {
-      bigrams.push(`${words[i]} ${words[i + 1]}`);
-    }
+    const lower = w.toLowerCase();
+    freq.set(lower, (freq.get(lower) || 0) + 1);
   }
 
   const topWords = [...freq.entries()]
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 8)
+    .slice(0, 5)
     .map(([w]) => w);
 
-  const topBigrams = [...new Set(bigrams)].slice(0, 3);
+  entities.push(...topWords);
 
-  const terms = [...topBigrams, ...topWords];
-  return [...new Set(terms)].slice(0, 6);
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const e of entities) {
+    const lower = e.toLowerCase();
+    if (!seen.has(lower) && !ENGLISH_STOP_WORDS.has(lower) && e.length > 2) {
+      seen.add(lower);
+      unique.push(e);
+    }
+  }
+
+  return unique.slice(0, 5);
 }

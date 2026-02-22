@@ -11,11 +11,15 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "index": "tsx src/cli/index-repos.ts",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.77.0",
     "@fastify/cors": "latest",
+    "@google/generative-ai": "^0.24.1",
     "@huggingface/transformers": "latest",
     "@modelcontextprotocol/sdk": "latest",
     "better-sqlite3": "latest",
@@ -25,6 +29,7 @@
     "graphology-communities-louvain": "^2.0.2",
     "graphology-types": "^0.24.8",
     "nanoid": "latest",
+    "openai": "^6.22.0",
     "sqlite-vec": "latest",
     "tree-sitter": "latest",
     "tree-sitter-javascript": "latest",
@@ -36,7 +41,9 @@
   "devDependencies": {
     "@types/better-sqlite3": "latest",
     "@types/node": "latest",
+    "@vitest/coverage-v8": "^4.0.18",
     "tsx": "latest",
-    "typescript": "latest"
+    "typescript": "latest",
+    "vitest": "^4.0.18"
   }
 }
