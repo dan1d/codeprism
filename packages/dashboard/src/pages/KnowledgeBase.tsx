@@ -298,6 +298,19 @@ export function KnowledgeBase() {
                   try { sourceRepos = JSON.parse(card.source_repos) as string[]; } catch { /* ignore */ }
                   const mainFile = sourceFiles[0];
 
+                  const typeColor: Record<string, string> = {
+                    flow: "text-blue-400 bg-blue-400/10 border-blue-400/20",
+                    model: "text-purple-400 bg-purple-400/10 border-purple-400/20",
+                    cross_service: "text-orange-400 bg-orange-400/10 border-orange-400/20",
+                    hub: "text-[#8b949e] bg-[#8b949e]/10 border-[#8b949e]/20",
+                    auto_generated: "text-green-400 bg-green-400/10 border-green-400/20",
+                  };
+                  const typeBadgeClass = typeColor[card.card_type] ?? typeColor.hub;
+                  // For cross-service cards, show the source files as context (not title)
+                  const fileHint = card.card_type === "cross_service" && mainFile
+                    ? mainFile.replace(/^.*\/src\//, "").replace(/^.*\/app\//, "")
+                    : null;
+
                   return (
                     <div
                       key={card.id}
@@ -305,16 +318,23 @@ export function KnowledgeBase() {
                       className="flex items-center gap-3 px-4 py-3 hover:bg-[#1c2333]/50 cursor-pointer transition-colors group"
                     >
                       <div className="flex-1 min-w-0">
-                        {mainFile && (
-                          <div className="font-mono text-[10px] text-[#8b949e] truncate mb-0.5">{mainFile}</div>
-                        )}
-                        <div className="text-xs text-[#c9d1d9] font-medium truncate">{card.title}</div>
+                        {/* Primary: card title */}
+                        <div className="flex items-center gap-2">
+                          <div className="text-xs text-[#c9d1d9] font-medium truncate">{card.title}</div>
+                          <span className={`flex-shrink-0 text-[9px] px-1.5 py-0.5 rounded border font-medium ${typeBadgeClass}`}>
+                            {card.card_type.replace("_", " ")}
+                          </span>
+                        </div>
+                        {/* Secondary: flow + repos + optional file hint */}
                         <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-[10px] text-[#484f58] font-mono">{card.flow}</span>
+                          <span className="text-[10px] text-[#484f58] font-mono truncate max-w-[120px]">{card.flow}</span>
                           {sourceRepos.slice(0, 2).map((r) => (
                             <RepoBadge key={r} label={r} />
                           ))}
-                          <span className="text-[10px] text-[#484f58]">{formatRelativeTime(card.updated_at)}</span>
+                          {fileHint && (
+                            <span className="font-mono text-[9px] text-[#484f58] truncate max-w-[180px]">{fileHint}</span>
+                          )}
+                          <span className="text-[10px] text-[#484f58] ml-auto flex-shrink-0">{formatRelativeTime(card.updated_at)}</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">

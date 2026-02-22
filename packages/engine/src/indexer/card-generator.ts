@@ -411,9 +411,11 @@ async function generateCrossServiceCards(
     // Skip cross-service pairs where either side is a test or entry-point file
     if (!isDomainRelevant(feParsed.fileRole) || !isDomainRelevant(beParsed.fileRole)) continue;
 
-    const feBasename = basename(pair.feFile);
-    const beBasename = basename(pair.beFile);
-    const title = `${feBasename} → ${beBasename}`;
+    const feLabel = humanizeFeFilename(basename(pair.feFile));
+    const beLabel = humanizeBeFilename(basename(pair.beFile), beParsed?.classes[0]?.name);
+    // Skip cross-service pairs where both labels are extremely generic
+    if (feLabel === "Api" || beLabel === "Api Controller" || (feLabel === beLabel)) continue;
+    const title = `${feLabel} ↔ ${beLabel}`;
 
     let content: string;
 
@@ -454,20 +456,66 @@ async function generateCrossServiceCards(
   return cards;
 }
 
+/**
+ * Convert a FE filename to a human-readable label.
+ * "useAlertGeneratedEvent.js" → "Alert Generated Event"
+ * "transmissions.js"          → "Transmissions"
+ * "BatchRemoteAuthorizationsModal.jsx" → "Batch Remote Authorizations Modal"
+ */
+function humanizeFeFilename(filename: string): string {
+  let name = filename.replace(/\.[^.]+$/, ""); // remove extension
+  name = name.replace(/^use(?=[A-Z])/, "");    // strip React hook prefix
+  name = name.replace(/^_+/, "");              // strip leading underscores
+  // split camelCase / PascalCase
+  name = name.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2");
+  // snake_case to words
+  name = name.replace(/_/g, " ").replace(/-/g, " ");
+  // title case each word
+  name = name.split(" ").filter(Boolean).map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+  return name || filename;
+}
+
+/**
+ * Convert a BE filename/class name to a human-readable label.
+ * "pre_authorizations_controller.rb" → "Pre Authorizations"
+ * "PreAuthorizationPolicy"           → "Pre Authorization"
+ * "remote_check.rb"                  → "Remote Check"
+ */
+function humanizeBeFilename(filename: string, className?: string): string {
+  if (className) {
+    // Use the class name, strip common BE suffixes
+    return className
+      .replace(/Controller$/, "")
+      .replace(/Policy$/, "")
+      .replace(/Serializer$/, "")
+      .replace(/Service$/, "")
+      .replace(/([a-z])([A-Z])/g, "$1 $2")
+      .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+      .trim();
+  }
+  let name = filename.replace(/\.rb$/, "").replace(/\.[^.]+$/, "");
+  name = name.replace(/_controller$/, "").replace(/_policy$/, "").replace(/_serializer$/, "");
+  name = name.replace(/_/g, " ").replace(/-/g, " ");
+  name = name.split(" ").filter(Boolean).map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+  return name || filename;
+}
+
 function buildCrossServiceMarkdown(
   feFile: ParsedFile,
   beFile: ParsedFile,
   pairEdges: GraphEdge[],
 ): string {
-  const feLabel = basename(feFile.path);
-  const beLabel =
-    beFile.classes[0]?.name ?? basename(beFile.path);
+  const feLabel = humanizeFeFilename(basename(feFile.path));
+  const beLabel = humanizeBeFilename(basename(beFile.path), beFile.classes[0]?.name);
+  const feDir = feFile.path.replace(/\/[^/]+$/, "").replace(/^.*\/src\//, "src/");
 
   const lines: string[] = [
-    `## ${feLabel} → ${beLabel}`,
+    `## ${feLabel} ↔ ${beLabel}`,
     "",
-    `**Frontend**: ${feFile.path}`,
-    `**Backend**: ${beFile.path}`,
+    `This card describes the API connection between the **${feLabel}** frontend module and the **${beLabel}** backend resource.`,
+    "",
+    `**Frontend**: \`${feDir}/${basename(feFile.path)}\``,
+    `**Backend**: \`${basename(beFile.path)}\``,
   ];
 
   if (feFile.apiCalls.length > 0) {
@@ -686,8 +734,27 @@ function buildMarkdown(
   edges: GraphEdge[],
   fileIndex: Map<string, ParsedFile>,
 ): string {
+  // Build a structural summary sentence even without LLM
+  const hasModels = (grouped.get("model")?.length ?? 0) > 0;
+  const hasControllers = (grouped.get("controller")?.length ?? 0) > 0;
+  const hasComponents = (grouped.get("component")?.length ?? 0) > 0;
+  const hasStores = (grouped.get("store")?.length ?? 0) > 0;
+  const isCrossRepo = flow.repos.length > 1;
+
+  const layers: string[] = [];
+  if (hasControllers) layers.push("REST API");
+  if (hasModels) layers.push("data model");
+  if (hasComponents) layers.push("UI components");
+  if (hasStores) layers.push("state management");
+
+  const summary = layers.length > 0
+    ? `Covers the **${flow.name}** feature${isCrossRepo ? " across frontend and backend" : ""}: ${layers.join(", ")}.`
+    : `The **${flow.name}** feature${isCrossRepo ? " spans frontend and backend" : ""}.`;
+
   const parts: string[] = [
-    `## ${flow.name} flow`,
+    `## ${flow.name}`,
+    "",
+    summary,
     "",
     `**Repos**: ${flow.repos.join(", ")}`,
   ];
