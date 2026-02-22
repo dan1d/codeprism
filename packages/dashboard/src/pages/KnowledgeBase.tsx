@@ -124,13 +124,32 @@ function FlowCard({ flow, onClick }: FlowCardProps) {
   return (
     <button
       onClick={onClick}
-      className="text-left rounded-lg border border-[#30363d] bg-[#161b22] p-4 hover:border-[#58a6ff]/40 hover:bg-[#1c2333] transition-all"
+      className={cn(
+        "text-left rounded-lg border p-4 hover:bg-[#1c2333] transition-all",
+        flow.isPageFlow
+          ? "border-blue-400/20 bg-[#161b22] hover:border-blue-400/40"
+          : "border-[#30363d] bg-[#161b22] hover:border-[#58a6ff]/30",
+      )}
     >
-      <div className="text-sm font-medium text-[#c9d1d9] truncate">{flow.flow}</div>
+      <div className="flex items-start justify-between gap-2">
+        <div className="text-sm font-medium text-[#c9d1d9] truncate">{flow.flow}</div>
+        {flow.isPageFlow && (
+          <span className="flex-shrink-0 text-[9px] px-1.5 py-0.5 rounded bg-blue-400/10 text-blue-400 border border-blue-400/20">page</span>
+        )}
+      </div>
       <div className="mt-2 flex items-center gap-3 text-[10px] text-[#8b949e]">
         <span className="flex items-center gap-1"><Layers size={10} />{flow.cardCount} cards</span>
         <span className="flex items-center gap-1"><FileText size={10} />{flow.fileCount} files</span>
+        {flow.repos.length > 1 && <span className="text-blue-400/60">cross-repo</span>}
+        {flow.staleCount > 0 && <span className="text-warning/70">⚠ {flow.staleCount} stale</span>}
       </div>
+      {flow.repos.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {flow.repos.slice(0, 2).map((r) => (
+            <span key={r} className="text-[9px] px-1 py-0.5 rounded bg-[#1c2333] text-[#484f58] border border-[#21262d] truncate max-w-[100px]">{r}</span>
+          ))}
+        </div>
+      )}
     </button>
   );
 }
@@ -236,28 +255,59 @@ export function KnowledgeBase() {
             {flows.length > 0 && (
               <div>
                 <h3 className="text-[10px] font-medium text-[#484f58] uppercase tracking-wider mb-2">Flow</h3>
-                <div className="space-y-1 max-h-64 overflow-y-auto">
+                <div className="space-y-0.5 max-h-[420px] overflow-y-auto">
                   <button
                     onClick={() => setSelectedFlow(null)}
                     className={cn(
-                      "block w-full text-left text-xs px-2 py-1 rounded transition-colors",
+                      "block w-full text-left text-xs px-2 py-1.5 rounded transition-colors",
                       !selectedFlow ? "text-accent bg-[#1c2333]" : "text-[#8b949e] hover:text-[#c9d1d9] hover:bg-[#161b22]",
                     )}
                   >
                     All flows
                   </button>
-                  {flows.map((f) => (
-                    <button
-                      key={f.flow}
-                      onClick={() => setSelectedFlow(f.flow === selectedFlow ? null : f.flow)}
-                      className={cn(
-                        "block w-full text-left text-xs px-2 py-1 rounded transition-colors truncate",
-                        selectedFlow === f.flow ? "text-accent bg-[#1c2333]" : "text-[#8b949e] hover:text-[#c9d1d9] hover:bg-[#161b22]",
-                      )}
-                    >
-                      {f.flow}
-                    </button>
-                  ))}
+
+                  {/* Page-level flows (FE-seeded, named with spaces) */}
+                  {flows.filter((f) => f.isPageFlow).length > 0 && (
+                    <>
+                      <div className="text-[9px] font-medium text-[#484f58] uppercase tracking-wider px-2 pt-2 pb-0.5">Pages</div>
+                      {flows.filter((f) => f.isPageFlow).map((f) => (
+                        <button
+                          key={f.flow}
+                          onClick={() => setSelectedFlow(f.flow === selectedFlow ? null : f.flow)}
+                          className={cn(
+                            "block w-full text-left px-2 py-1.5 rounded transition-colors group",
+                            selectedFlow === f.flow ? "bg-[#1c2333]" : "hover:bg-[#161b22]",
+                          )}
+                        >
+                          <div className={cn("text-xs truncate", selectedFlow === f.flow ? "text-accent" : "text-[#c9d1d9]")}>{f.flow}</div>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-[9px] text-[#484f58]">{f.cardCount} cards</span>
+                            {f.repos.length > 1 && <span className="text-[9px] text-blue-400/60">cross-repo</span>}
+                            {f.staleCount > 0 && <span className="text-[9px] text-warning/70">⚠ {f.staleCount}</span>}
+                          </div>
+                        </button>
+                      ))}
+                    </>
+                  )}
+
+                  {/* Technical/hub flows */}
+                  {flows.filter((f) => !f.isPageFlow).length > 0 && (
+                    <>
+                      <div className="text-[9px] font-medium text-[#484f58] uppercase tracking-wider px-2 pt-2 pb-0.5">Technical</div>
+                      {flows.filter((f) => !f.isPageFlow).map((f) => (
+                        <button
+                          key={f.flow}
+                          onClick={() => setSelectedFlow(f.flow === selectedFlow ? null : f.flow)}
+                          className={cn(
+                            "block w-full text-left text-xs px-2 py-1 rounded transition-colors truncate",
+                            selectedFlow === f.flow ? "text-accent bg-[#1c2333]" : "text-[#8b949e] hover:text-[#c9d1d9] hover:bg-[#161b22]",
+                          )}
+                        >
+                          {f.flow}
+                        </button>
+                      ))}
+                    </>
+                  )}
                 </div>
               </div>
             )}

@@ -132,6 +132,16 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    // Card verification tracking (inspired by Antigravity KI system)
+    version: 11,
+    up: (db) => {
+      db.exec(`
+        ALTER TABLE cards ADD COLUMN verified_at TEXT;
+        ALTER TABLE cards ADD COLUMN verification_count INTEGER NOT NULL DEFAULT 0;
+      `);
+    },
+  },
 ];
 
 /**

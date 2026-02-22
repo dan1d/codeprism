@@ -77,11 +77,48 @@ export function detectFlows(
     for (const f of validFiles) seededFiles.add(f);
   }
 
-  // --- Phase 2: Louvain on unseeded files only ---
+  // --- Phase 2: Absorb hub files into seeded flows ---
+  // A hub file (e.g. pre_authorization.rb) should merge into its seeded parent
+  // (e.g. "Pre Authorizations") instead of creating a separate hub flow.
   const hubs = detectHubs(edges);
+  const absorbedHubs = new Set<string>();
 
-  // Exclude seeded files and hubs from the Louvain graph so communities
-  // form around the remaining code (cross-service, infrastructure flows)
+  for (const hubFile of hubs) {
+    // Try to find a seeded flow whose files are connected to this hub
+    const hubPf = fileIndex.get(hubFile);
+    if (!hubPf) continue;
+    const hubSnake = hubPf.classes[0]?.name
+      ? pascalToSnake(hubPf.classes[0].name)
+      : hubFile.replace(/^.*\//, "").replace(/\.[^.]+$/, "").replace(/-/g, "_");
+
+    for (const sf of seededFlows) {
+      const seedSnake = sf.name
+        .toLowerCase()
+        .replace(/\s+/g, "_");
+
+      // Match by name similarity or by file already being in the seed
+      const nameMatch =
+        seedSnake === hubSnake ||
+        seedSnake === hubSnake + "s" ||
+        seedSnake + "s" === hubSnake ||
+        seedSnake.includes(hubSnake) ||
+        hubSnake.includes(seedSnake);
+
+      if (nameMatch && !sf.files.includes(hubFile)) {
+        sf.files.push(hubFile);
+        if (hubPf.repo && !sf.repos.includes(hubPf.repo)) sf.repos.push(hubPf.repo);
+        sf.edgeCount = countEdgesInComponent(edges, new Set(sf.files));
+        if (!sf.primaryModel && hubPf.classes[0]?.name) {
+          sf.primaryModel = hubPf.classes[0].name;
+        }
+        absorbedHubs.add(hubFile);
+        seededFiles.add(hubFile);
+        break;
+      }
+    }
+  }
+
+  // --- Phase 3: Louvain on unseeded files only ---
   const excludedFromLouvain = new Set([...seededFiles, ...hubs]);
   const graph = buildLouvainGraph(edges, excludedFromLouvain);
 
@@ -91,7 +128,10 @@ export function detectFlows(
       : new Map<number, string[]>();
 
   const communityFlows = buildCommunityFlows(communities, edges, fileIndex);
-  const hubFlows = buildHubFlows(hubs, edges, fileIndex);
+
+  // Only create hub flows for hubs that weren't absorbed into a seed
+  const remainingHubs = new Set([...hubs].filter((h) => !absorbedHubs.has(h)));
+  const hubFlows = buildHubFlows(remainingHubs, edges, fileIndex);
 
   const flows = [...seededFlows, ...communityFlows, ...hubFlows];
   flows.sort((a, b) => b.edgeCount - a.edgeCount);

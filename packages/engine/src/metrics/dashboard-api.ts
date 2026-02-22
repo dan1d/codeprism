@@ -295,16 +295,37 @@ export async function registerDashboardRoutes(app: FastifyInstance): Promise<voi
     const flows = db
       .prepare(
         `SELECT
-          flow,
-          COUNT(*) AS cardCount,
-          COUNT(DISTINCT json_each.value) AS fileCount
-        FROM cards, json_each(cards.source_files)
-        GROUP BY flow
+          c.flow,
+          COUNT(DISTINCT c.id)          AS cardCount,
+          COUNT(DISTINCT jf.value)      AS fileCount,
+          GROUP_CONCAT(DISTINCT jr.value) AS repos,
+          SUM(CASE WHEN c.stale = 1 THEN 1 ELSE 0 END) AS staleCount
+        FROM cards c
+          LEFT JOIN json_each(c.source_files) jf
+          LEFT JOIN json_each(c.source_repos) jr
+        GROUP BY c.flow
         ORDER BY cardCount DESC`,
       )
-      .all() as Array<{ flow: string; cardCount: number; fileCount: number }>;
+      .all() as Array<{ flow: string; cardCount: number; fileCount: number; repos: string | null; staleCount: number }>;
 
-    return reply.send(flows);
+    // Normalise repos CSV into array and add isPageFlow flag for sorting
+    const result = flows.map((f) => ({
+      flow: f.flow,
+      cardCount: f.cardCount,
+      fileCount: f.fileCount,
+      staleCount: f.staleCount ?? 0,
+      repos: f.repos ? [...new Set(f.repos.split(","))].filter(Boolean) : [],
+      isPageFlow: f.flow.includes(" ") && !f.flow.includes("↔"), // seeded page flows have spaces (exclude cross-service "A ↔ B")
+    }));
+
+    // Page flows first, then technical/hub flows
+    result.sort((a, b) => {
+      if (a.isPageFlow && !b.isPageFlow) return -1;
+      if (!a.isPageFlow && b.isPageFlow) return 1;
+      return b.cardCount - a.cardCount;
+    });
+
+    return reply.send(result);
   });
 
   /**

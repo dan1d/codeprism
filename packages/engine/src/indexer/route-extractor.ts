@@ -1,28 +1,31 @@
 /**
  * route-extractor.ts
  *
- * Extracts business-level "seed flows" from FE component directories so that
- * flow detection is driven by what users *see and do*, not by what the code
- * graph happens to cluster around.
+ * Extracts business-level "page flows" from FE component directories.
+ *
+ * Design principle: the **frontend defines user flows**.  Each user-facing page
+ * or feature area in the FE is a flow.  The BE models, controllers, and
+ * serializers that support it are pulled in by name-matching.
  *
  * Strategy
  * --------
- * 1. For each FE parsed file, identify which top-level component directory it
- *    belongs to  (e.g. "PreAuthorizations" from src/components/PreAuthorizations/Form.jsx).
- * 2. Filter out generic/utility directories that represent shared infrastructure,
- *    not discrete user-facing features.
- * 3. For each surviving business directory, find matching BE files by converting
- *    the directory name to snake_case resource names and matching against model /
- *    controller paths in the parsed-file index.
- * 4. Return a SeedFlow[] that the flow-detector can use to pre-assign files
- *    before running Louvain on the remainder.
+ * 1. Walk every FE parsed file and identify its *leaf* component directory.
+ *    For nested dirs like `Billing/OfficeAuthorizations/Form.jsx` the leaf
+ *    is `OfficeAuthorizations`, not `Billing`.
+ * 2. If a top-level dir has sub-directories that are also component dirs
+ *    (e.g. Billing/{BillingOrders, OfficeAuthorizations, OfficeBillingOrders}),
+ *    each sub-dir becomes its own flow.  The parent dir only gets files that
+ *    live directly inside it (not in a sub-dir).
+ * 3. Filter out infra/utility dirs.
+ * 4. For each surviving dir, find matching BE files (models, controllers,
+ *    serializers, policies, services) by snake_case name matching.
+ * 5. Return SeedFlow[] used by flow-detector.
  */
 
-import { join, relative, sep } from "node:path";
 import type { ParsedFile } from "./tree-sitter.js";
 
 export interface SeedFlow {
-  /** Human-readable business name, e.g. "Pre Authorizations" */
+  /** Human-readable page/feature name, e.g. "Office Authorizations" */
   name: string;
   /** All file paths (FE + BE) that belong to this flow */
   files: string[];
@@ -30,90 +33,20 @@ export interface SeedFlow {
   repos: string[];
 }
 
-// Component directories that are infrastructure / shared utilities, not features
 const UTILITY_DIRS = new Set([
-  "common",
-  "forms",
-  "shared",
-  "utils",
-  "utilities",
-  "helpers",
-  "layout",
-  "router",
-  "routing",
-  "hooks",
-  "context",
-  "config",
-  "assets",
-  "icons",
-  "images",
-  "styles",
-  "types",
-  "constants",
-  "lib",
-  "hoc",
-  "wrappers",
-  "providers",
-  "auth",        // often infra-level, not feature
-  "loading",
-  "errors",
-  "modals",      // generic modal infra — specific modals are named in their feature dir
+  "common", "forms", "shared", "utils", "utilities", "helpers",
+  "layout", "router", "routing", "hooks", "context", "config",
+  "assets", "icons", "images", "styles", "types", "constants",
+  "lib", "hoc", "wrappers", "providers", "loading", "errors",
+  "modals", "usecase",
 ]);
 
-/**
- * Converts a PascalCase or camelCase directory name to snake_case.
- * "PreAuthorizations" → "pre_authorizations"
- * "OfficeChecks"     → "office_checks"
- */
-function toSnakeCase(name: string): string {
-  return name
-    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
-    .replace(/([a-z\d])([A-Z])/g, "$1_$2")
-    .toLowerCase();
-}
-
-/**
- * "Pre Authorizations" from "PreAuthorizations"
- * "Office Checks"     from "OfficeChecks"
- */
-function toDisplayName(dirName: string): string {
-  return dirName.replace(/([A-Z])/g, " $1").trim();
-}
-
-/**
- * Given a snake_case resource name like "pre_authorizations", return candidate
- * BE file path substrings to match against:
- *   - models/pre_authorization.rb  (singular)
- *   - controllers/pre_authorizations_controller.rb  (plural)
- *   - controllers/pre_authorizations/  (namespaced controllers)
- */
-function beFilePatterns(snakePlural: string): string[] {
-  // Naive singularisation — handles the most common English plurals
-  const singular = snakePlural.endsWith("ies")
-    ? snakePlural.slice(0, -3) + "y"
-    : snakePlural.endsWith("ses") || snakePlural.endsWith("xes") || snakePlural.endsWith("ches")
-    ? snakePlural.slice(0, -2)
-    : snakePlural.endsWith("s")
-    ? snakePlural.slice(0, -1)
-    : snakePlural;
-
-  return [
-    `models/${singular}.rb`,
-    `models/${snakePlural}.rb`,
-    `controllers/${snakePlural}_controller.rb`,
-    `controllers/${singular}_controller.rb`,
-    `controllers/${snakePlural}/`,   // namespaced controllers dir
-    `serializers/${singular}_serializer.rb`,
-    `policies/${singular}_policy.rb`,
-    `services/${snakePlural}`,
-  ];
-}
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
 
 /**
  * Extract seed flows from a mixed set of parsed files covering multiple repos.
- *
- * @param parsedFiles  All parsed files (FE + BE combined)
- * @param feRepoNames  Names of FE repos (used to identify component dirs)
  */
 export function extractSeedFlows(
   parsedFiles: ParsedFile[],
@@ -122,72 +55,75 @@ export function extractSeedFlows(
   const feRepoSet = new Set(feRepoNames);
   const filesByPath = new Map(parsedFiles.map((f) => [f.path, f]));
 
-  // --- 1. Group FE files by their top-level component directory ---
-  const componentGroups = new Map<string, string[]>(); // dirName → [filePath]
+  // --- 1. Group FE files by their leaf component directory path ---
+  //   key = "PreAuthorizations" or "Billing/OfficeAuthorizations"
+  const componentGroups = new Map<string, string[]>();
 
   for (const pf of parsedFiles) {
     if (!feRepoSet.has(pf.repo)) continue;
-
-    // Find the components/ (or pages/) segment in the path
-    const componentDirName = extractComponentDir(pf.path);
-    if (!componentDirName) continue;
-
-    const key = componentDirName; // preserve original case for matching
-    if (!componentGroups.has(key)) componentGroups.set(key, []);
-    componentGroups.get(key)!.push(pf.path);
+    const dirKey = extractLeafComponentDir(pf.path);
+    if (!dirKey) continue;
+    if (!componentGroups.has(dirKey)) componentGroups.set(dirKey, []);
+    componentGroups.get(dirKey)!.push(pf.path);
   }
 
   // --- 2. Build seed flows ---
   const seeds: SeedFlow[] = [];
+  const beFiles = parsedFiles.filter((pf) => !feRepoSet.has(pf.repo));
 
-  for (const [dirName, fePaths] of componentGroups) {
-    // Skip utility directories
-    if (UTILITY_DIRS.has(dirName.toLowerCase())) continue;
-    // Skip directories that are a single file name (e.g. "Authenticated.jsx")
+  for (const [dirKey, fePaths] of componentGroups) {
+    const leafName = dirKey.split("/").pop()!;
+    if (UTILITY_DIRS.has(leafName.toLowerCase())) continue;
     if (fePaths.length === 0) continue;
 
-    const snakePlural = toSnakeCase(dirName);
+    const snakePlural = toSnakeCase(leafName);
     const bePatterns = beFilePatterns(snakePlural);
 
-    // --- 3. Find matching BE files ---
-    const beFiles: string[] = [];
-    for (const pf of parsedFiles) {
-      if (feRepoSet.has(pf.repo)) continue; // skip FE files in BE search
+    // Find matching BE files
+    const matchedBe: string[] = [];
+    for (const pf of beFiles) {
       if (bePatterns.some((pat) => pf.path.includes(pat))) {
-        beFiles.push(pf.path);
+        matchedBe.push(pf.path);
       }
     }
 
-    const allFiles = [...fePaths, ...beFiles];
-    const repos = [...new Set(allFiles.map((p) => filesByPath.get(p)?.repo ?? "").filter(Boolean))];
+    const allFiles = [...fePaths, ...matchedBe];
+    const repos = [...new Set(
+      allFiles.map((p) => filesByPath.get(p)?.repo ?? "").filter(Boolean),
+    )];
 
     seeds.push({
-      name: toDisplayName(dirName),
+      name: toDisplayName(leafName),
       files: allFiles,
       repos,
     });
   }
 
-  // Sort by descending file count so the most substantial flows come first
-  seeds.sort((a, b) => b.files.length - a.files.length);
-  return seeds;
+  // Merge seeds that resolve to the same display name
+  const merged = mergeDuplicateSeeds(seeds);
+  merged.sort((a, b) => b.files.length - a.files.length);
+  return merged;
 }
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
 /**
- * Extracts the top-level component/pages directory name from a file path.
+ * Extracts the *leaf* component directory from a file path.
  *
- * "/abs/path/to/repo/src/components/PreAuthorizations/Form.jsx"
- *   → "PreAuthorizations"
+ * For `src/components/Billing/OfficeAuthorizations/Form.jsx`
+ * → returns `"Billing/OfficeAuthorizations"` (not just "Billing")
  *
- * "/abs/path/to/repo/src/pages/Dashboard/index.tsx"
- *   → "Dashboard"
+ * For `src/components/Patients/BatchRemoteAuthorizationsModal.jsx`
+ * → returns `"Patients"` (file sits directly in top-level dir)
  *
- * Returns undefined if no component-style directory is found.
+ * For `src/components/OfficeChecks/UseCase/CreateOfficeCheck.js`
+ * → returns `"OfficeChecks"` (UseCase is in UTILITY_DIRS, so we go up)
  */
-function extractComponentDir(filePath: string): string | undefined {
+function extractLeafComponentDir(filePath: string): string | undefined {
   const normalised = filePath.replace(/\\/g, "/");
 
-  // Look for common FE source directory markers
   const markers = ["/components/", "/pages/", "/views/", "/features/", "/screens/"];
   for (const marker of markers) {
     const idx = normalised.indexOf(marker);
@@ -195,13 +131,94 @@ function extractComponentDir(filePath: string): string | undefined {
 
     const afterMarker = normalised.slice(idx + marker.length);
     const parts = afterMarker.split("/");
-    const dirName = parts[0];
 
-    // Must be a non-empty name that doesn't look like a file itself
-    if (!dirName || dirName.includes(".")) continue;
+    // parts = ["Billing", "OfficeAuthorizations", "Form.jsx"]
+    // We want everything except the final filename, but only keep non-utility dirs
+    const dirParts: string[] = [];
+    for (let i = 0; i < parts.length - 1; i++) {
+      const p = parts[i];
+      if (!p || p.includes(".")) break;
+      if (UTILITY_DIRS.has(p.toLowerCase())) break; // stop at utility dirs
+      dirParts.push(p);
+    }
 
-    return dirName;
+    if (dirParts.length === 0) continue;
+
+    // If there are sub-directories (e.g. Billing/OfficeAuthorizations),
+    // return the full path so each sub-page is its own flow.
+    // If it's just the top-level (e.g. Patients), return that.
+    return dirParts.join("/");
   }
 
   return undefined;
+}
+
+function toSnakeCase(name: string): string {
+  return name
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
+    .replace(/([a-z\d])([A-Z])/g, "$1_$2")
+    .toLowerCase();
+}
+
+function toDisplayName(dirName: string): string {
+  return dirName.replace(/([A-Z])/g, " $1").trim();
+}
+
+/**
+ * Generates candidate BE file path substrings from a snake_case resource name.
+ * Also handles the "in_office" Rails naming convention.
+ */
+function beFilePatterns(snakePlural: string): string[] {
+  const singular = singularize(snakePlural);
+
+  const patterns = [
+    `models/${singular}.rb`,
+    `models/${snakePlural}.rb`,
+    `controllers/${snakePlural}_controller.rb`,
+    `controllers/${singular}_controller.rb`,
+    `controllers/${snakePlural}/`,
+    `serializers/${singular}_serializer.rb`,
+    `policies/${singular}_policy.rb`,
+    `services/${snakePlural}`,
+    `presenters/${singular}`,
+  ];
+
+  // Rails uses "in_office_authorizations" for "OfficeAuthorizations" sometimes
+  if (snakePlural.startsWith("office_")) {
+    const inOffice = "in_" + snakePlural;
+    const inOfficeSingular = singularize(inOffice);
+    patterns.push(
+      `controllers/${inOffice}_controller.rb`,
+      `controllers/${inOfficeSingular}_controller.rb`,
+      `models/${inOfficeSingular}.rb`,
+    );
+  }
+
+  return patterns;
+}
+
+function singularize(word: string): string {
+  if (word.endsWith("ies")) return word.slice(0, -3) + "y";
+  if (word.endsWith("ses") || word.endsWith("xes") || word.endsWith("ches"))
+    return word.slice(0, -2);
+  if (word.endsWith("s") && !word.endsWith("ss")) return word.slice(0, -1);
+  return word;
+}
+
+/**
+ * Merge seeds that have the same display name (can happen when the same
+ * component dir appears in multiple FE repos).
+ */
+function mergeDuplicateSeeds(seeds: SeedFlow[]): SeedFlow[] {
+  const byName = new Map<string, SeedFlow>();
+  for (const s of seeds) {
+    const existing = byName.get(s.name);
+    if (existing) {
+      existing.files = [...new Set([...existing.files, ...s.files])];
+      existing.repos = [...new Set([...existing.repos, ...s.repos])];
+    } else {
+      byName.set(s.name, { ...s });
+    }
+  }
+  return [...byName.values()];
 }

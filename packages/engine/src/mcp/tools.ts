@@ -45,7 +45,11 @@ function invalidateSearchConfig(): void {
   _searchConfig = null;
 }
 
-type CardSummary = Pick<Card, "id" | "flow" | "title" | "content" | "source_files" | "card_type" | "specificity_score" | "usage_count">;
+type CardSummary = Pick<Card, "id" | "flow" | "title" | "content" | "source_files" | "card_type" | "specificity_score" | "usage_count"> & {
+  stale?: number;
+  verified_at?: string | null;
+  verification_count?: number;
+};
 
 function truncateContent(content: string, maxLines: number): string {
   const lines = content.split("\n");
@@ -66,9 +70,14 @@ function formatCards(cards: CardSummary[], totalLinesBudget = MAX_TOTAL_LINES): 
     const fileList = files.slice(0, 5).map((f) => shortenPath(f)).join(", ");
     const moreFiles = files.length > 5 ? ` +${files.length - 5} more` : "";
 
+    // Confidence indicator (inspired by Antigravity KI system)
+    let confidence = "likely valid";
+    if ((r as CardSummary).stale) confidence = "⚠ needs verification";
+    else if ((r as CardSummary).verified_at) confidence = `✓ verified (${(r as CardSummary).verification_count ?? 0}x)`;
+
     const block =
       `### ${i + 1}. ${r.title}\n` +
-      `**Flow:** ${r.flow} | **Type:** ${r.card_type}\n` +
+      `**Flow:** ${r.flow} | **Type:** ${r.card_type} | **Confidence:** ${confidence}\n` +
       `**Files:** ${fileList}${moreFiles}\n\n${trimmed}`;
 
     const blockLines = block.split("\n").length;
@@ -349,7 +358,14 @@ export function registerTools(server: McpServer): void {
         }
 
         const header = cacheHit ? `(cache hit) ` : "";
-        let text = `${header}Found ${cards.length} card(s) for "${query}":\n\n${formatCards(cards)}`;
+
+        // Flow context: summarize which flows were hit
+        const flowHits = [...new Set(cards.map((c) => c.flow))];
+        const flowContext = flowHits.length > 0
+          ? `**Flows touched:** ${flowHits.join(", ")}\n\n`
+          : "";
+
+        let text = `${header}Found ${cards.length} card(s) for "${query}":\n\n${flowContext}${formatCards(cards)}`;
 
         if (debug) {
           const scoreLines = results.map((r, i) => {
@@ -599,44 +615,170 @@ export function registerTools(server: McpServer): void {
     "srcmap_list_flows",
     {
       description:
-        "List all flows in the knowledge base with card counts. " +
-        "Useful for discovering documented topics and areas.",
+        "List all flows in the knowledge base with card counts, repos, and file counts. " +
+        "Use this first to understand the app's structure before searching for specific topics.",
     },
     async () => {
       const db = getDb();
 
       const rows = db
         .prepare(
-          `SELECT flow, COUNT(*) as count
-           FROM cards
-           WHERE stale = 0
-           GROUP BY flow
-           ORDER BY count DESC`,
+          `SELECT
+            c.flow,
+            COUNT(DISTINCT c.id) AS card_count,
+            GROUP_CONCAT(DISTINCT jr.value) AS repos,
+            COUNT(DISTINCT jf.value) AS file_count,
+            SUM(CASE WHEN c.stale = 1 THEN 1 ELSE 0 END) AS stale_count
+          FROM cards c
+            LEFT JOIN json_each(c.source_repos) jr
+            LEFT JOIN json_each(c.source_files) jf
+          GROUP BY c.flow
+          ORDER BY card_count DESC`,
         )
-        .all() as { flow: string; count: number }[];
+        .all() as { flow: string; card_count: number; repos: string | null; file_count: number; stale_count: number }[];
 
       if (rows.length === 0) {
         return {
-          content: [
-            {
-              type: "text" as const,
-              text: "No flows found. The knowledge base is empty.",
-            },
-          ],
+          content: [{
+            type: "text" as const,
+            text: "No flows found. The knowledge base is empty.",
+          }],
         };
       }
 
-      const lines = rows.map((r) => `- **${r.flow}**: ${r.count} card(s)`);
-      const total = rows.reduce((sum, r) => sum + r.count, 0);
+      const lines = rows.map((r) => {
+        const repos = r.repos ? [...new Set(r.repos.split(","))].join(", ") : "unknown";
+        const crossRepo = repos.includes(",") ? " (cross-repo)" : "";
+        const staleFlag = r.stale_count > 0 ? ` ⚠ ${r.stale_count} stale` : "";
+        return `- **${r.flow}**: ${r.card_count} card(s), ${r.file_count} files — ${repos}${crossRepo}${staleFlag}`;
+      });
+      const total = rows.reduce((sum, r) => sum + r.card_count, 0);
 
       return {
-        content: [
-          {
-            type: "text" as const,
-            text: `**${rows.length} flows** (${total} total cards):\n\n${lines.join("\n")}`,
-          },
-        ],
+        content: [{
+          type: "text" as const,
+          text: `**${rows.length} flows** (${total} total cards):\n\n${lines.join("\n")}`,
+        }],
       };
+    },
+  );
+
+  // ---------------------------------------------------------------------------
+  // srcmap_verify_card — confirm a card is still accurate (Antigravity KI pattern)
+  // ---------------------------------------------------------------------------
+
+  server.registerTool(
+    "srcmap_verify_card",
+    {
+      description:
+        "Mark a card as verified — confirming its content is still accurate after " +
+        "reviewing it. This builds confidence scores over time. Call this after using " +
+        "a card's information and confirming it matched the actual codebase.",
+      inputSchema: {
+        card_id: z.string().describe("The card ID to mark as verified"),
+      },
+    },
+    async ({ card_id }) => {
+      const db = getDb();
+      try {
+        const result = db.prepare(
+          `UPDATE cards
+           SET verified_at = datetime('now'),
+               verification_count = verification_count + 1
+           WHERE id = ?`,
+        ).run(card_id);
+
+        if (result.changes === 0) {
+          return {
+            content: [{ type: "text" as const, text: `Card "${card_id}" not found.` }],
+            isError: true,
+          };
+        }
+
+        return {
+          content: [{
+            type: "text" as const,
+            text: `Verified card "${card_id}". Confidence increased.`,
+          }],
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return {
+          content: [{ type: "text" as const, text: `Verify error: ${message}` }],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  // ---------------------------------------------------------------------------
+  // srcmap_recent_queries — past query history (Windsurf trajectory pattern)
+  // ---------------------------------------------------------------------------
+
+  server.registerTool(
+    "srcmap_recent_queries",
+    {
+      description:
+        "Returns recent search queries and which cards they matched. Use to avoid " +
+        "re-asking the same questions and to see what context was previously retrieved.",
+      inputSchema: {
+        limit: z.number().optional().describe("Max queries to return (default 10)"),
+      },
+    },
+    async ({ limit }) => {
+      const db = getDb();
+      try {
+        const rows = db
+          .prepare(
+            `SELECT
+              ci.query,
+              COUNT(DISTINCT ci.card_id) AS matched_cards,
+              GROUP_CONCAT(DISTINCT c.title) AS card_titles,
+              MAX(ci.timestamp) AS last_asked,
+              COUNT(*) AS ask_count
+            FROM card_interactions ci
+              LEFT JOIN cards c ON c.id = ci.card_id
+            GROUP BY ci.query
+            ORDER BY last_asked DESC
+            LIMIT ?`,
+          )
+          .all(limit ?? 10) as {
+            query: string;
+            matched_cards: number;
+            card_titles: string | null;
+            last_asked: string;
+            ask_count: number;
+          }[];
+
+        if (rows.length === 0) {
+          return {
+            content: [{
+              type: "text" as const,
+              text: "No recent queries found. The query history is empty.",
+            }],
+          };
+        }
+
+        const lines = rows.map((r) => {
+          const titles = r.card_titles
+            ? r.card_titles.split(",").slice(0, 3).join(", ")
+            : "no matches";
+          return `- **"${r.query}"** → ${r.matched_cards} card(s) [${titles}] (${r.last_asked})`;
+        });
+
+        return {
+          content: [{
+            type: "text" as const,
+            text: `**Recent queries (${rows.length}):**\n\n${lines.join("\n")}`,
+          }],
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return {
+          content: [{ type: "text" as const, text: `Query history error: ${message}` }],
+          isError: true,
+        };
+      }
     },
   );
 

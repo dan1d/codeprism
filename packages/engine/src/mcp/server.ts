@@ -21,10 +21,25 @@ function buildServer(): McpServer {
     { name: "srcmap", version: "0.1.0" },
     {
       instructions:
-        "srcmap is a code context engine. Use srcmap_search to find " +
-        "knowledge cards about the codebase, srcmap_save_insight to " +
-        "capture new insights, and srcmap_list_flows to discover " +
-        "documented topics.",
+        "srcmap is a code context engine. Use srcmap_search to find knowledge cards about the codebase, " +
+        "srcmap_save_insight to capture new insights, and srcmap_list_flows to discover documented topics.\n\n" +
+        "PROACTIVE USAGE GUIDELINES:\n" +
+        "1. ALWAYS call srcmap_context or srcmap_search FIRST when starting work on any ticket or task.\n" +
+        "2. Call srcmap_list_flows to understand the app's structure before diving into implementation.\n" +
+        "3. After discovering a non-obvious pattern, architectural decision, or business rule, " +
+        "PROACTIVELY call srcmap_save_insight to persist it — do NOT wait for the user to ask.\n" +
+        "4. After using a card's information and confirming it's accurate, call srcmap_verify_card " +
+        "to build confidence scores.\n" +
+        "5. Call srcmap_recent_queries to avoid re-asking the same questions and to see what " +
+        "context was previously retrieved.\n" +
+        "6. When a card's information contradicts what you find in the code, note this — the card " +
+        "may be stale and needs re-indexing.\n\n" +
+        "INSIGHT CATEGORIES — save insights for:\n" +
+        "- Cross-service data flows you discover\n" +
+        "- Business rules embedded in code\n" +
+        "- Non-obvious gotchas or edge cases\n" +
+        "- Architecture decisions and their rationale\n" +
+        "- Bug root causes and their fixes",
     },
   );
 

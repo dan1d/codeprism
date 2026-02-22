@@ -228,10 +228,12 @@ async function generateFlowCards(
     }
 
     const domainFilePaths = flowFiles.map((f) => f.path);
+    // Seeded page flows (contain spaces like "Pre Authorizations") don't need " flow" suffix
+    const isPageFlow = flow.name.includes(" ");
     cards.push({
       id: nanoid(),
       flow: flow.name,
-      title: `${flow.name} flow`,
+      title: isPageFlow ? flow.name : `${flow.name} flow`,
       content,
       cardType: "flow",
       sourceFiles: domainFilePaths,

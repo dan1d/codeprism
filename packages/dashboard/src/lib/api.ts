@@ -43,6 +43,9 @@ export interface FlowSummary {
   flow: string;
   cardCount: number;
   fileCount: number;
+  staleCount: number;
+  repos: string[];
+  isPageFlow: boolean;
 }
 
 export interface Card {
