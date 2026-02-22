@@ -2,6 +2,7 @@ import { UndirectedGraph } from "graphology";
 import louvain from "graphology-communities-louvain";
 import type { GraphEdge } from "./graph-builder.js";
 import type { ParsedFile } from "./tree-sitter.js";
+import type { SeedFlow } from "./route-extractor.js";
 
 export interface Flow {
   name: string;
@@ -33,17 +34,56 @@ const PATH_SEGMENT_PATTERNS = [
 ];
 
 /**
- * Groups connected files into business-level "flows" using Louvain
- * community detection with hub removal for better cluster separation.
+ * Groups connected files into business-level "flows".
+ *
+ * Two-phase strategy:
+ * 1. Seed flows from FE component directories (human-labelled business features)
+ *    so that flows like "Pre Authorizations" and "Remote Checks" appear with
+ *    their real names and include both FE components and BE models/controllers.
+ * 2. Run Louvain community detection on the remaining files that weren't
+ *    claimed by any seed, then merge with hub flows.
+ *
+ * @param seeds  Optional seed flows from extractSeedFlows().  Pass an empty
+ *               array (or omit) to fall back to pure Louvain behaviour.
  */
 export function detectFlows(
   edges: GraphEdge[],
   parsedFiles: ParsedFile[],
+  seeds: SeedFlow[] = [],
 ): Flow[] {
   const fileIndex = indexByFilePath(parsedFiles);
 
+  // --- Phase 1: Seed flows from FE component directories ---
+  const seededFiles = new Set<string>();
+  const seededFlows: Flow[] = [];
+
+  for (const seed of seeds) {
+    const validFiles = seed.files.filter((f) => fileIndex.has(f));
+    if (validFiles.length === 0) continue;
+
+    const componentFiles = new Set(validFiles);
+    const edgeCount = countEdgesInComponent(edges, componentFiles);
+    const primaryModel = findDominantModel(validFiles, fileIndex);
+    const repos = collectRepos(validFiles, fileIndex);
+
+    seededFlows.push({
+      name: seed.name,
+      files: validFiles.sort(),
+      repos,
+      primaryModel,
+      edgeCount,
+    });
+
+    for (const f of validFiles) seededFiles.add(f);
+  }
+
+  // --- Phase 2: Louvain on unseeded files only ---
   const hubs = detectHubs(edges);
-  const graph = buildLouvainGraph(edges, hubs);
+
+  // Exclude seeded files and hubs from the Louvain graph so communities
+  // form around the remaining code (cross-service, infrastructure flows)
+  const excludedFromLouvain = new Set([...seededFiles, ...hubs]);
+  const graph = buildLouvainGraph(edges, excludedFromLouvain);
 
   const communities =
     graph.order > 0
@@ -53,7 +93,7 @@ export function detectFlows(
   const communityFlows = buildCommunityFlows(communities, edges, fileIndex);
   const hubFlows = buildHubFlows(hubs, edges, fileIndex);
 
-  const flows = [...communityFlows, ...hubFlows];
+  const flows = [...seededFlows, ...communityFlows, ...hubFlows];
   flows.sort((a, b) => b.edgeCount - a.edgeCount);
   return flows;
 }
@@ -93,12 +133,12 @@ function detectHubs(edges: GraphEdge[]): Set<string> {
 
 function buildLouvainGraph(
   edges: GraphEdge[],
-  hubs: Set<string>,
+  excluded: Set<string>,
 ): InstanceType<typeof UndirectedGraph> {
   const graph = new UndirectedGraph();
 
   for (const edge of edges) {
-    if (hubs.has(edge.sourceFile) || hubs.has(edge.targetFile)) continue;
+    if (excluded.has(edge.sourceFile) || excluded.has(edge.targetFile)) continue;
 
     if (!graph.hasNode(edge.sourceFile)) graph.addNode(edge.sourceFile);
     if (!graph.hasNode(edge.targetFile)) graph.addNode(edge.targetFile);

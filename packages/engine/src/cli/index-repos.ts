@@ -6,6 +6,7 @@ import { runMigrations } from "../db/migrations.js";
 import { registry } from "../indexer/tree-sitter.js";
 import { buildGraph } from "../indexer/graph-builder.js";
 import { detectFlows } from "../indexer/flow-detector.js";
+import { extractSeedFlows } from "../indexer/route-extractor.js";
 import { generateCards } from "../indexer/card-generator.js";
 import { generateProjectDocs, loadProjectContext, generateWorkspaceSpecialist } from "../indexer/doc-generator.js";
 import { getEmbedder } from "../embeddings/local-embedder.js";
@@ -124,7 +125,15 @@ async function indexRepos(repos: RepoConfig[]): Promise<void> {
   insertEdgeTx();
 
   console.log(`\nDetecting flows...`);
-  const flows = detectFlows(edges, allParsed);
+  // Identify FE repos by name convention (contains "frontend" or "fe")
+  const feRepoNames = repos
+    .map((r) => r.name)
+    .filter((n) => n.includes("frontend") || n.endsWith("-fe") || n.endsWith("-ui"));
+  const seedFlows = extractSeedFlows(allParsed, feRepoNames);
+  if (seedFlows.length > 0) {
+    console.log(`  Seeded ${seedFlows.length} business flows from FE component directories`);
+  }
+  const flows = detectFlows(edges, allParsed, seedFlows);
   console.log(`  -> ${flows.length} flows detected:`);
   for (const flow of flows) {
     console.log(`     - ${flow.name} (${flow.files.length} files, ${flow.repos.join(", ")})`);

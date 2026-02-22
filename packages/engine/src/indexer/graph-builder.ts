@@ -68,6 +68,7 @@ export function buildGraph(parsedFiles: ParsedFile[]): GraphEdge[] {
     if (pf.fileRole === "domain" || pf.fileRole === "shared_utility") {
       addCrossRepoApiEdges(pf, parsedFiles, addEdge);
       addStoreApiEdges(pf, parsedFiles, addEdge);
+      addReactApiCallEdges(pf, parsedFiles, addEdge);
     }
     addImportEdges(pf, parsedFiles, addEdge, mult);
   }
@@ -235,6 +236,81 @@ function addStoreApiEdges(
       repo: pf.repo,
     });
   }
+}
+
+/**
+ * Detects FE→BE API call edges for React/JS files by scanning raw source for
+ * URL string patterns like "/api/pre_authorizations", "'/pre-authorizations'"
+ * and mapping the resource slug to a matching BE controller file.
+ */
+function addReactApiCallEdges(
+  pf: ParsedFile,
+  parsedFiles: ParsedFile[],
+  addEdge: (e: GraphEdge) => void,
+): void {
+  // Only run on FE files (non-ruby)
+  if (pf.language === "ruby") return;
+
+  // Extract API URL slugs from known patterns in imports/source hints
+  const apiSlugs = new Set<string>();
+
+  // Mine from import sources that look like API modules
+  for (const imp of pf.imports) {
+    const src = imp.source.toLowerCase();
+    if (src.includes("api") || src.includes("service") || src.includes("client")) {
+      // e.g. "../../api/preAuthorizations" → "pre_authorizations"
+      const lastSegment = imp.source.replace(/.*\//, "").replace(/\.[^.]+$/, "");
+      const slug = camelToSnake(lastSegment);
+      if (slug && slug.length > 2) apiSlugs.add(slug);
+    }
+  }
+
+  // Also check the file path itself — a file in components/PreAuthorizations/ is
+  // implicitly about that resource
+  const componentDirMatch = pf.path.match(/\/components\/([^/]+)\//);
+  if (componentDirMatch?.[1]) {
+    const slug = camelToSnake(componentDirMatch[1]);
+    if (slug && slug.length > 2) apiSlugs.add(slug);
+  }
+
+  if (apiSlugs.size === 0) return;
+
+  // Find BE files (ruby) in other repos that match these slugs
+  const beFiles = parsedFiles.filter(
+    (other) =>
+      other.language === "ruby" &&
+      other.repo !== pf.repo &&
+      (other.path.includes("/models/") || other.path.includes("/controllers/")),
+  );
+
+  for (const slug of apiSlugs) {
+    const singular = singularize(slug);
+    for (const be of beFiles) {
+      const bePath = be.path.toLowerCase();
+      if (
+        bePath.includes(`/${singular}.rb`) ||
+        bePath.includes(`/${slug}_controller.rb`) ||
+        bePath.includes(`/controllers/${slug}/`)
+      ) {
+        addEdge({
+          sourceFile: pf.path,
+          targetFile: be.path,
+          relation: "api_endpoint",
+          metadata: { slug },
+          repo: pf.repo,
+          weight: EDGE_WEIGHTS["api_endpoint"] ?? 1.5,
+        });
+      }
+    }
+  }
+}
+
+function camelToSnake(str: string): string {
+  return str
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
+    .replace(/([a-z\d])([A-Z])/g, "$1_$2")
+    .toLowerCase()
+    .replace(/-/g, "_");
 }
 
 function addImportEdges(
