@@ -1,36 +1,13 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>srcmap dashboard</title>
-  <link rel="stylesheet" href="styles.css" />
-</head>
-<body>
-  <header>
-    <h1>srcmap</h1>
-    <p class="subtitle">Code context engine</p>
-  </header>
-
-  <main>
-    <section class="stats-grid" id="stats"></section>
-
-    <section class="panel">
-      <h2>Flows</h2>
-      <div id="flows" class="flow-list"></div>
-    </section>
-
-    <section class="panel">
-      <h2>Top Queries</h2>
-      <div id="top-queries" class="query-list"></div>
-    </section>
-
-    <section class="panel">
-      <h2>Most Used Cards</h2>
-      <div id="top-cards" class="card-list"></div>
-    </section>
-  </main>
-
-  <script src="app.js"></script>
-</body>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>srcmap</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>

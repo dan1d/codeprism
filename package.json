@@ -6,7 +6,10 @@
   "license": "AGPL-3.0",
   "scripts": {
     "dev": "pnpm --filter @srcmap/engine dev",
-    "build": "pnpm --filter @srcmap/engine build",
+    "dev:dashboard": "pnpm --filter @srcmap/dashboard dev",
+    "build": "pnpm --filter @srcmap/dashboard build && pnpm --filter @srcmap/engine build",
+    "build:engine": "pnpm --filter @srcmap/engine build",
+    "build:dashboard": "pnpm --filter @srcmap/dashboard build",
     "start": "pnpm --filter @srcmap/engine start",
     "index": "pnpm --filter @srcmap/engine index",
     "index-repos": "pnpm --filter @srcmap/engine index",

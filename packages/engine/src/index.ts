@@ -14,7 +14,9 @@ import { warmReranker } from "./search/reranker.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const DASHBOARD_DIR = join(__dirname, "../../dashboard");
+// In dev (ts-node/tsx): serve from packages/dashboard/dist after `pnpm --filter dashboard build`
+// In Docker: COPY copies packages/dashboard/dist to the same relative location
+const DASHBOARD_DIR = join(__dirname, "../../dashboard/dist");
 
 const MIME_TYPES: Record<string, string> = {
   ".html": "text/html",
@@ -36,6 +38,13 @@ async function main(): Promise<void> {
   // ── Database ───────────────────────────────────────────────────────
   const db = getDb();
   runMigrations(db);
+
+  // Seed instance_profile from env vars on first boot (no-op on subsequent starts)
+  const companyName = process.env["SRCMAP_COMPANY_NAME"] ?? "";
+  const plan = process.env["SRCMAP_PLAN"] ?? "self_hosted";
+  db.prepare(
+    "UPDATE instance_profile SET company_name = CASE WHEN company_name = '' THEN ? ELSE company_name END, plan = ? WHERE id = 1",
+  ).run(companyName, plan);
 
   // ── Fastify ────────────────────────────────────────────────────────
   const app = Fastify({ logger: true });

@@ -116,6 +116,22 @@ const migrations: Migration[] = [
       );
     },
   },
+  {
+    // Company-level instance profile singleton
+    version: 9,
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS instance_profile (
+          id           INTEGER PRIMARY KEY CHECK (id = 1),
+          company_name TEXT NOT NULL DEFAULT '',
+          plan         TEXT NOT NULL DEFAULT 'self_hosted',
+          instance_id  TEXT NOT NULL DEFAULT (lower(hex(randomblob(8)))),
+          created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        INSERT OR IGNORE INTO instance_profile (id) VALUES (1);
+      `);
+    },
+  },
 ];
 
 /**

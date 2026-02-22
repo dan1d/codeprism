@@ -4,12 +4,35 @@ import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
+import { createRequire } from "node:module";
 import { getDb } from "../db/connection.js";
 import type { Card, ProjectDoc } from "../db/schema.js";
 import { calculateMetrics } from "./calculator.js";
 import { hybridSearch } from "../search/hybrid.js";
 import { createLLMProvider } from "../llm/provider.js";
 import { buildRefreshDocPrompt, DOC_SYSTEM_PROMPT, type DocType } from "../indexer/doc-prompts.js";
+
+const _require = createRequire(import.meta.url);
+
+function getEngineVersion(): string {
+  try {
+    const pkg = _require("../../package.json") as { version: string };
+    return pkg.version;
+  } catch {
+    return "0.0.0";
+  }
+}
+
+export interface RepoSummary {
+  repo: string;
+  primaryLanguage: string;
+  frameworks: string[];
+  skillIds: string[];
+  cardCount: number;
+  staleCards: number;
+  indexedFiles: number;
+  lastIndexedAt: string | null;
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -95,6 +118,137 @@ export { reindexState };
  * Registers REST endpoints that power the srcmap dashboard UI.
  */
 export async function registerDashboardRoutes(app: FastifyInstance): Promise<void> {
+  // ---------------------------------------------------------------------------
+  // Instance info — identity endpoint for srcmap.ai portal aggregation
+  // ---------------------------------------------------------------------------
+  app.get("/api/instance-info", (_request, reply) => {
+    const db = getDb();
+    const profile = db
+      .prepare("SELECT * FROM instance_profile WHERE id = 1")
+      .get() as { company_name: string; plan: string; instance_id: string; created_at: string } | undefined;
+
+    return reply.send({
+      instanceId: profile?.instance_id ?? "",
+      companyName: profile?.company_name ?? "",
+      plan: profile?.plan ?? "self_hosted",
+      engineVersion: getEngineVersion(),
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // PUT /api/instance-info — update company name / plan from settings page
+  // ---------------------------------------------------------------------------
+  app.put("/api/instance-info", (request, reply) => {
+    const { companyName, plan } = (request.body as { companyName?: string; plan?: string }) ?? {};
+    const db = getDb();
+
+    if (companyName !== undefined) {
+      db.prepare("UPDATE instance_profile SET company_name = ? WHERE id = 1").run(companyName.trim());
+    }
+    if (plan !== undefined) {
+      db.prepare("UPDATE instance_profile SET plan = ? WHERE id = 1").run(plan);
+    }
+
+    const updated = db
+      .prepare("SELECT * FROM instance_profile WHERE id = 1")
+      .get() as { company_name: string; plan: string; instance_id: string };
+
+    return reply.send({
+      instanceId: updated.instance_id,
+      companyName: updated.company_name,
+      plan: updated.plan,
+      engineVersion: getEngineVersion(),
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // GET /api/repos — per-repo summary for the Repositories dashboard page
+  // ---------------------------------------------------------------------------
+  app.get("/api/repos", (_request, reply) => {
+    const db = getDb();
+
+    const rows = db
+      .prepare(
+        `SELECT
+          rp.repo,
+          rp.primary_language  AS primaryLanguage,
+          rp.frameworks,
+          rp.skill_ids         AS skillIds,
+          COUNT(DISTINCT fi.path) AS indexedFiles,
+          MAX(fi.updated_at)   AS lastIndexedAt
+        FROM repo_profiles rp
+        LEFT JOIN file_index fi ON fi.repo = rp.repo
+        GROUP BY rp.repo
+        ORDER BY lastIndexedAt DESC`,
+      )
+      .all() as Array<{
+        repo: string;
+        primaryLanguage: string;
+        frameworks: string;
+        skillIds: string;
+        indexedFiles: number;
+        lastIndexedAt: string | null;
+      }>;
+
+    const cardStats = db
+      .prepare(
+        `SELECT
+          json_each.value AS repo,
+          COUNT(*) AS cardCount,
+          SUM(CASE WHEN stale = 1 THEN 1 ELSE 0 END) AS staleCards
+        FROM cards, json_each(cards.source_repos)
+        GROUP BY json_each.value`,
+      )
+      .all() as Array<{ repo: string; cardCount: number; staleCards: number }>;
+
+    const cardStatsByRepo = new Map(cardStats.map((r) => [r.repo, r]));
+
+    const result: RepoSummary[] = rows.map((r) => {
+      const cs = cardStatsByRepo.get(r.repo);
+      return {
+        repo: r.repo,
+        primaryLanguage: r.primaryLanguage,
+        frameworks: (() => { try { return JSON.parse(r.frameworks) as string[]; } catch { return []; } })(),
+        skillIds: (() => { try { return JSON.parse(r.skillIds) as string[]; } catch { return []; } })(),
+        cardCount: cs?.cardCount ?? 0,
+        staleCards: cs?.staleCards ?? 0,
+        indexedFiles: r.indexedFiles,
+        lastIndexedAt: r.lastIndexedAt,
+      };
+    });
+
+    return reply.send(result);
+  });
+
+  // ---------------------------------------------------------------------------
+  // GET /api/settings — retrieve key search_config values for settings page
+  // ---------------------------------------------------------------------------
+  app.get("/api/settings", (_request, reply) => {
+    const db = getDb();
+    const rows = db.prepare("SELECT key, value FROM search_config").all() as Array<{ key: string; value: string }>;
+    const config: Record<string, string> = {};
+    for (const row of rows) config[row.key] = row.value;
+    return reply.send(config);
+  });
+
+  // ---------------------------------------------------------------------------
+  // PUT /api/settings — update search_config key/value pairs
+  // ---------------------------------------------------------------------------
+  app.put("/api/settings", (request, reply) => {
+    const updates = request.body as Record<string, string>;
+    const db = getDb();
+    const upsert = db.prepare(
+      "INSERT INTO search_config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')",
+    );
+    const tx = db.transaction((pairs: Record<string, string>) => {
+      for (const [key, value] of Object.entries(pairs)) {
+        upsert.run(key, String(value));
+      }
+    });
+    tx(updates);
+    return reply.send({ ok: true });
+  });
+
   app.get("/api/metrics/summary", (request, reply) => {
     const { from, to } = request.query as { from?: string; to?: string };
 
