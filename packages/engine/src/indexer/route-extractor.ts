@@ -3,29 +3,27 @@
  *
  * Extracts business-level "page flows" from FE component directories.
  *
- * Design principle: the **frontend defines user flows**.  Each user-facing page
- * or feature area in the FE is a flow.  The BE models, controllers, and
- * serializers that support it are pulled in by name-matching.
+ * Design principle: the **frontend nav/sidebar is the source of truth** for
+ * user-visible page names.  The component directory structure is used to group
+ * files into flows, but the *name* of each flow is taken from the nav menu
+ * `title="..."` attribute whenever a match can be found.
  *
  * Strategy
  * --------
- * 1. Walk every FE parsed file and identify its *leaf* component directory.
- *    For nested dirs like `Billing/OfficeAuthorizations/Form.jsx` the leaf
- *    is `OfficeAuthorizations`, not `Billing`.
- * 2. If a top-level dir has sub-directories that are also component dirs
- *    (e.g. Billing/{BillingOrders, OfficeAuthorizations, OfficeBillingOrders}),
- *    each sub-dir becomes its own flow.  The parent dir only gets files that
- *    live directly inside it (not in a sub-dir).
- * 3. Filter out infra/utility dirs.
- * 4. For each surviving dir, find matching BE files (models, controllers,
- *    serializers, policies, services) by snake_case name matching.
- * 5. Return SeedFlow[] used by flow-detector.
+ * 1. Parse nav/sidebar files to extract UI labels (e.g. "Remote Authorizations").
+ * 2. Walk every FE parsed file and identify its *leaf* component directory.
+ * 3. For each directory, check the nav-label override map first; fall back to
+ *    deriving a name from the directory name.
+ * 4. Filter out infra/utility dirs.
+ * 5. For each surviving dir, find matching BE files by snake_case name matching.
+ * 6. Return SeedFlow[] used by flow-detector.
  */
 
+import { readFileSync } from "node:fs";
 import type { ParsedFile } from "./tree-sitter.js";
 
 export interface SeedFlow {
-  /** Human-readable page/feature name, e.g. "Office Authorizations" */
+  /** Human-readable page/feature name, e.g. "Remote Authorizations" */
   name: string;
   /** All file paths (FE + BE) that belong to this flow */
   files: string[];
@@ -39,6 +37,15 @@ const UTILITY_DIRS = new Set([
   "assets", "icons", "images", "styles", "types", "constants",
   "lib", "hoc", "wrappers", "providers", "loading", "errors",
   "modals", "usecase",
+]);
+
+// Nav labels that are section headers, not individual page names — skip them
+const NAV_SKIP_LABELS = new Set([
+  "dashboard", "admin", "billing", "schedule", "settings", "devices",
+  "patients", "reports", "users", "practices", "alerts", "orders",
+  "transmissions", "recent transmissions", "teams", "reminders",
+  "phone numbers", "flag-enabled features", "practice features",
+  "cpt codes", "welcome letters",
 ]);
 
 // ---------------------------------------------------------------------------
@@ -55,7 +62,10 @@ export function extractSeedFlows(
   const feRepoSet = new Set(feRepoNames);
   const filesByPath = new Map(parsedFiles.map((f) => [f.path, f]));
 
-  // --- 1. Group FE files by their leaf component directory path ---
+  // --- 1. Extract nav labels from sidebar/nav files to build override map ---
+  const navOverrides = buildNavOverrides(parsedFiles, feRepoSet);
+
+  // --- 2. Group FE files by their leaf component directory path ---
   //   key = "PreAuthorizations" or "Billing/OfficeAuthorizations"
   const componentGroups = new Map<string, string[]>();
 
@@ -67,7 +77,7 @@ export function extractSeedFlows(
     componentGroups.get(dirKey)!.push(pf.path);
   }
 
-  // --- 2. Build seed flows ---
+  // --- 3. Build seed flows ---
   const seeds: SeedFlow[] = [];
   const beFiles = parsedFiles.filter((pf) => !feRepoSet.has(pf.repo));
 
@@ -75,6 +85,9 @@ export function extractSeedFlows(
     const leafName = dirKey.split("/").pop()!;
     if (UTILITY_DIRS.has(leafName.toLowerCase())) continue;
     if (fePaths.length === 0) continue;
+
+    // Prefer the UI nav label; fall back to dir-derived name
+    const name = navOverrides.get(dirKey) ?? toDisplayName(leafName);
 
     const snakePlural = toSnakeCase(leafName);
     const bePatterns = beFilePatterns(snakePlural);
@@ -92,17 +105,160 @@ export function extractSeedFlows(
       allFiles.map((p) => filesByPath.get(p)?.repo ?? "").filter(Boolean),
     )];
 
-    seeds.push({
-      name: toDisplayName(leafName),
-      files: allFiles,
-      repos,
-    });
+    seeds.push({ name, files: allFiles, repos });
   }
 
   // Merge seeds that resolve to the same display name
   const merged = mergeDuplicateSeeds(seeds);
   merged.sort((a, b) => b.files.length - a.files.length);
   return merged;
+}
+
+// ---------------------------------------------------------------------------
+// Nav label extraction
+// ---------------------------------------------------------------------------
+
+/**
+ * Scans all FE files from nav/sidebar components, extracts title="..." labels,
+ * then matches each label to a component directory key.
+ *
+ * Returns a Map<dirKey, uiLabel> used to override the auto-derived flow name.
+ */
+function buildNavOverrides(
+  parsedFiles: ParsedFile[],
+  feRepoSet: Set<string>,
+): Map<string, string> {
+  const navFiles = parsedFiles.filter((pf) => {
+    if (!feRepoSet.has(pf.repo)) return false;
+    const lower = pf.path.toLowerCase();
+    return (
+      lower.includes("sidebar") ||
+      lower.includes("side-bar") ||
+      lower.includes("navbar") ||
+      lower.includes("nav-bar") ||
+      lower.includes("navigation") ||
+      lower.includes("sidenav") ||
+      lower.includes("menu") ||
+      lower.includes("/nav/")
+    );
+  });
+
+  // Collect all unique UI labels from nav files
+  const navLabels: string[] = [];
+  for (const nf of navFiles) {
+    const labels = extractNavLabels(nf.path);
+    navLabels.push(...labels);
+  }
+
+  if (navLabels.length === 0) return new Map();
+
+  // Collect all component directory keys from FE files
+  const allDirKeys = new Set<string>();
+  for (const pf of parsedFiles) {
+    if (!feRepoSet.has(pf.repo)) continue;
+    const dk = extractLeafComponentDir(pf.path);
+    if (dk) allDirKeys.add(dk);
+  }
+
+  // Build override map: dirKey → best matching nav label
+  return matchNavLabels(navLabels, [...allDirKeys]);
+}
+
+/**
+ * Read a nav file and extract all `title="..."` string literals.
+ * Also handles `title={'...'}` and `title={"..."}`.
+ */
+function extractNavLabels(filePath: string): string[] {
+  let source: string;
+  try {
+    source = readFileSync(filePath, "utf8");
+  } catch {
+    return [];
+  }
+
+  const labels: string[] = [];
+  // Match title="...", title={'...'}, title={"..."}
+  const re = /title=["'{]([^"'{}]{2,60})["'}]/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(source)) !== null) {
+    const label = m[1].trim();
+    if (!label || NAV_SKIP_LABELS.has(label.toLowerCase())) continue;
+    // Skip labels that look like JSX expressions or variable references
+    if (label.includes("{") || label.includes("<") || label.includes("(")) continue;
+    // Must have at least one space (multi-word) or be clearly a page name
+    labels.push(label);
+  }
+  return [...new Set(labels)];
+}
+
+/**
+ * For each nav label, find the best matching component directory key using
+ * greedy assignment — highest-scoring (label, dirKey) pair is assigned first,
+ * each dirKey claimed only once, each label used only once.
+ *
+ * Returns Map<dirKey, navLabel>.
+ */
+function matchNavLabels(navLabels: string[], dirKeys: string[]): Map<string, string> {
+  // Score every (label, dirKey) combination
+  const candidates: Array<{ label: string; dirKey: string; score: number }> = [];
+
+  for (const label of navLabels) {
+    for (const dk of dirKeys) {
+      const score = scoreMatch(dk, label);
+      if (score >= 3) {
+        candidates.push({ label, dirKey: dk, score });
+      }
+    }
+  }
+
+  // Sort by score descending — best matches assigned first
+  candidates.sort((a, b) => b.score - a.score);
+
+  const overrides = new Map<string, string>(); // dirKey → navLabel
+  const usedLabels = new Set<string>();
+
+  for (const { label, dirKey, score: _score } of candidates) {
+    if (overrides.has(dirKey)) continue; // dirKey already claimed
+    if (usedLabels.has(label)) continue;  // label already used
+    overrides.set(dirKey, label);
+    usedLabels.add(label);
+  }
+
+  return overrides;
+}
+
+/**
+ * Score how well a nav label matches a component directory key.
+ *
+ * Uses ALL label words (no prefix stripping) so that "Office" in a label
+ * correctly boosts directories that contain "office" in their name.
+ *
+ * Scoring rules:
+ * - Each label word (≥3 chars) that appears in the leaf dir segment → +3
+ * - Each label word that appears anywhere in the dir key → +1
+ * - CamelCase of all label words exactly equals the leaf → +10 bonus
+ * - Label without spaces exactly equals the leaf → +10 bonus
+ */
+function scoreMatch(dirKey: string, navLabel: string): number {
+  const dk = dirKey.toLowerCase();
+  const leafSegment = dk.split("/").pop()!;
+  const words = navLabel.toLowerCase().split(/\s+/).filter((w) => w.length >= 3);
+
+  let score = 0;
+  for (const w of words) {
+    if (leafSegment.includes(w)) score += 3;
+    else if (dk.includes(w)) score += 1;
+  }
+
+  // CamelCase of label words matches leaf (e.g. "Missed Transmissions" → "missedtransmissions")
+  const camelLabel = words.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join("").toLowerCase();
+  if (leafSegment === camelLabel) score += 10;
+
+  // Label without spaces matches leaf (e.g. "Remote Reports" → "remotereports" vs "reports")
+  const labelNoSpaces = navLabel.toLowerCase().replace(/\s+/g, "");
+  if (leafSegment === labelNoSpaces) score += 10;
+
+  return score;
 }
 
 // ---------------------------------------------------------------------------
@@ -132,21 +288,15 @@ function extractLeafComponentDir(filePath: string): string | undefined {
     const afterMarker = normalised.slice(idx + marker.length);
     const parts = afterMarker.split("/");
 
-    // parts = ["Billing", "OfficeAuthorizations", "Form.jsx"]
-    // We want everything except the final filename, but only keep non-utility dirs
     const dirParts: string[] = [];
     for (let i = 0; i < parts.length - 1; i++) {
       const p = parts[i];
       if (!p || p.includes(".")) break;
-      if (UTILITY_DIRS.has(p.toLowerCase())) break; // stop at utility dirs
+      if (UTILITY_DIRS.has(p.toLowerCase())) break;
       dirParts.push(p);
     }
 
     if (dirParts.length === 0) continue;
-
-    // If there are sub-directories (e.g. Billing/OfficeAuthorizations),
-    // return the full path so each sub-page is its own flow.
-    // If it's just the top-level (e.g. Patients), return that.
     return dirParts.join("/");
   }
 
