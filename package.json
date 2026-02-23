@@ -11,6 +11,7 @@
     "build:engine": "pnpm --filter @srcmap/engine build",
     "build:dashboard": "pnpm --filter @srcmap/dashboard build",
     "start": "pnpm --filter @srcmap/engine start",
+    "srcmap": "pnpm --filter @srcmap/engine srcmap",
     "index": "pnpm --filter @srcmap/engine index",
     "index-repos": "pnpm --filter @srcmap/engine index",
     "eval": "cd eval && source .venv/bin/activate && python evaluate.py --ragas",
@@ -31,5 +32,8 @@
       "protobufjs",
       "sharp"
     ]
+  },
+  "dependencies": {
+    "commander": "^14.0.3"
   }
 }

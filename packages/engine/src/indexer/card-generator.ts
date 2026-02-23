@@ -20,17 +20,53 @@ async function callLlm(
   llm: LLMProvider,
   prompt: string,
   label: string,
+  maxTokens = 1024,
 ): Promise<string> {
   const now = Date.now();
   const wait = LLM_INTER_CALL_DELAY_MS - (now - lastLlmCallAt);
   if (wait > 0) await new Promise((r) => setTimeout(r, wait));
   lastLlmCallAt = Date.now();
 
-  const content = await llm.generate(prompt, { systemPrompt: SYSTEM_PROMPT, maxTokens: 1024 });
+  const content = await llm.generate(prompt, { systemPrompt: SYSTEM_PROMPT, maxTokens });
   const tokens = llm.estimateTokens(content);
   console.log(`  [llm] ${label} — ~${tokens} output tokens`);
   return content;
 }
+
+// ---------------------------------------------------------------------------
+// Card quality tiering — driven by git thermal heat score
+// ---------------------------------------------------------------------------
+
+/**
+ * Computes the average git heat score for a flow by averaging the heat of
+ * all its constituent files. Files absent from the thermal map score 0.
+ */
+export function getFlowHeat(
+  flowFiles: string[],
+  thermalMap: Map<string, number>,
+): number {
+  if (flowFiles.length === 0) return 0;
+  const total = flowFiles.reduce((sum, f) => sum + (thermalMap.get(f) ?? 0), 0);
+  return total / flowFiles.length;
+}
+
+/**
+ * Maps a heat score to a card quality tier:
+ *   premium    (> 0.6) — full LLM card, 1500 tokens
+ *   standard   (0.3–0.6) — standard LLM card, 800 tokens
+ *   structural (< 0.3) — structural markdown only, no LLM call
+ */
+export function cardTier(heat: number): "premium" | "standard" | "structural" {
+  if (heat > 0.6) return "premium";
+  if (heat > 0.3) return "standard";
+  return "structural";
+}
+
+const TIER_TOKENS: Record<"premium" | "standard" | "structural", number> = {
+  premium: 1500,
+  standard: 800,
+  structural: 0,
+};
 
 export interface GeneratedCard {
   id: string;
@@ -183,16 +219,25 @@ export async function generateCards(
   projectContextByRepo?: Map<string, string>,
   /** HEAD commit SHA per repo, used to stamp source_commit on generated cards. */
   commitShaByRepo?: Map<string, string>,
+  /** Git thermal map — drives quality tiering. Hot flows get premium LLM cards. */
+  thermalMap?: Map<string, number>,
 ): Promise<GeneratedCard[]> {
   const fileIndex = new Map(parsedFiles.map((f) => [f.path, f]));
+  const thermal = thermalMap ?? new Map<string, number>();
+
+  // Sort non-hub flows by heat descending so hot flows are processed and listed first
+  const nonHubFlows = flows
+    .filter((f) => !f.isHub)
+    .sort((a, b) => getFlowHeat(b.files, thermal) - getFlowHeat(a.files, thermal));
 
   const flowCards = await generateFlowCards(
-    flows.filter((f) => !f.isHub),
+    nonHubFlows,
     parsedFiles,
     edges,
     fileIndex,
     llm ?? null,
     projectContextByRepo,
+    thermal,
   );
 
   const modelCards = await generateModelCards(
@@ -246,8 +291,10 @@ async function generateFlowCards(
   fileIndex: Map<string, ParsedFile>,
   llm: LLMProvider | null,
   projectContextByRepo?: Map<string, string>,
+  thermalMap?: Map<string, number>,
 ): Promise<GeneratedCard[]> {
   const cards: GeneratedCard[] = [];
+  const thermal = thermalMap ?? new Map<string, number>();
 
   for (const flow of nonHubFlows) {
     const flowFiles = flow.files
@@ -264,12 +311,17 @@ async function generateFlowCards(
     // Merge project context from all repos involved in this flow
     const projectContext = mergeProjectContext(flow.repos, projectContextByRepo);
 
+    // Determine quality tier from heat score
+    const heat = getFlowHeat(flow.files, thermal);
+    const tier = cardTier(heat);
+
     let content: string;
 
-    if (llm) {
+    if (llm && tier !== "structural") {
       try {
+        const maxTokens = TIER_TOKENS[tier];
         const prompt = buildFlowCardPrompt(flow, flowFiles, flowEdges, projectContext);
-        content = await callLlm(llm, prompt, `flow "${flow.name}"`);
+        content = await callLlm(llm, prompt, `flow "${flow.name}"`, maxTokens);
       } catch (err) {
         console.warn(
           `[card-gen] LLM failed for flow "${flow.name}", using structural fallback:`,

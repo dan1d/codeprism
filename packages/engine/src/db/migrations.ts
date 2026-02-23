@@ -132,6 +132,8 @@ const migrations: Migration[] = [
       `);
     },
   },
+  // NOTE: v10 was intentionally removed/reverted before any production deployment.
+  // The version number is permanently retired — do not reuse it.
   {
     // Card verification tracking (inspired by Antigravity KI system)
     version: 11,
@@ -245,6 +247,74 @@ const migrations: Migration[] = [
           locked        INTEGER NOT NULL DEFAULT 0,
           generated_at  TEXT NOT NULL DEFAULT (datetime('now'))
         );
+      `);
+    },
+  },
+  {
+    // applied_baseline_hash for framework baseline staleness detection
+    version: 17,
+    up: (db) => {
+      db.exec(`ALTER TABLE project_docs ADD COLUMN applied_baseline_hash TEXT`);
+    },
+  },
+  {
+    // heat_score on file_index for thermal map (git commit frequency 0.0–1.0)
+    // file_path on project_docs for /ai-srcmap/ filesystem write path
+    version: 18,
+    up: (db) => {
+      db.exec(`
+        ALTER TABLE file_index ADD COLUMN heat_score REAL DEFAULT 0;
+        ALTER TABLE project_docs ADD COLUMN file_path TEXT;
+      `);
+    },
+  },
+  {
+    // Conversation intelligence schema
+    // transcript_imports  — deduplication of imported transcript files
+    // transcript_pr_links — file-overlap correlation to git PRs
+    // extracted_insights  — raw extracted insights before card promotion
+    // cards additions     — contributor_dev_id, source_conversation_id, expires_at
+    version: 19,
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS transcript_imports (
+          id            TEXT PRIMARY KEY,
+          file_path     TEXT NOT NULL,
+          content_hash  TEXT NOT NULL UNIQUE,
+          imported_at   TEXT NOT NULL DEFAULT (datetime('now')),
+          source_type   TEXT NOT NULL DEFAULT 'cursor'
+        );
+
+        CREATE TABLE IF NOT EXISTS transcript_pr_links (
+          id              TEXT PRIMARY KEY,
+          transcript_id   TEXT NOT NULL REFERENCES transcript_imports(id),
+          repo            TEXT NOT NULL,
+          commit_sha      TEXT,
+          pr_number       TEXT,
+          matched_files   TEXT NOT NULL DEFAULT '[]',
+          status          TEXT NOT NULL DEFAULT 'unknown',
+          linked_at       TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS extracted_insights (
+          id                    TEXT PRIMARY KEY,
+          transcript_id         TEXT NOT NULL REFERENCES transcript_imports(id),
+          card_id               TEXT,
+          category              TEXT NOT NULL,
+          statement             TEXT NOT NULL,
+          evidence_quote        TEXT NOT NULL,
+          confidence            REAL NOT NULL DEFAULT 0.5,
+          scope                 TEXT NOT NULL DEFAULT 'repo',
+          trust_score           REAL NOT NULL DEFAULT 0.5,
+          code_consistency_score REAL,
+          verification_basis    TEXT,
+          aspirational          INTEGER NOT NULL DEFAULT 0,
+          extracted_at          TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        ALTER TABLE cards ADD COLUMN contributor_dev_id TEXT;
+        ALTER TABLE cards ADD COLUMN source_conversation_id TEXT;
+        ALTER TABLE cards ADD COLUMN expires_at TEXT;
       `);
     },
   },

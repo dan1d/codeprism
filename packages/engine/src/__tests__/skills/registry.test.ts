@@ -1,28 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { resolveSkills, buildSkillContextPrefix, buildSkillCardHints } from "../../skills/registry.js";
-import type { StackProfile } from "../../indexer/stack-profiler.js";
-
-function makeProfile(overrides: Partial<StackProfile>): StackProfile {
-  return {
-    primaryLanguage: "unknown",
-    frameworks: [],
-    isLambda: false,
-    packageManager: "",
-    skillIds: [],
-    ...overrides,
-  };
-}
 
 describe("resolveSkills", () => {
   it("resolves rails skill for Rails profile", () => {
-    const profile = makeProfile({ primaryLanguage: "ruby", frameworks: ["rails"], skillIds: ["rails"] });
-    const skills = resolveSkills(profile);
+    const skills = resolveSkills(["rails"]);
     expect(skills.map((s) => s.id)).toContain("rails");
   });
 
   it("resolves fastapi + python skills for FastAPI profile", () => {
-    const profile = makeProfile({ primaryLanguage: "python", frameworks: ["fastapi"], skillIds: ["fastapi", "python"] });
-    const skills = resolveSkills(profile);
+    const skills = resolveSkills(["fastapi", "python"]);
     const ids = skills.map((s) => s.id);
     expect(ids).toContain("fastapi");
     expect(ids).toContain("python");
@@ -30,41 +16,35 @@ describe("resolveSkills", () => {
     expect(ids.indexOf("fastapi")).toBeLessThan(ids.indexOf("python"));
   });
 
-  it("resolves lambda skill when isLambda is true", () => {
-    const profile = makeProfile({ primaryLanguage: "python", skillIds: ["python", "lambda"] });
-    const skills = resolveSkills(profile);
+  it("resolves lambda skill when lambda ID is present", () => {
+    const skills = resolveSkills(["python", "lambda"]);
     expect(skills.map((s) => s.id)).toContain("lambda");
   });
 
-  it("returns empty array for unknown profile", () => {
-    const profile = makeProfile({ skillIds: [] });
-    const skills = resolveSkills(profile);
+  it("returns empty array for empty skillIds", () => {
+    const skills = resolveSkills([]);
     expect(skills).toHaveLength(0);
   });
 
   it("returns empty array for unrecognised skill IDs", () => {
-    const profile = makeProfile({ skillIds: ["cobol", "fortran"] as any });
-    const skills = resolveSkills(profile);
+    const skills = resolveSkills(["cobol", "fortran"]);
     expect(skills).toHaveLength(0);
   });
 });
 
 describe("buildSkillContextPrefix", () => {
-  it("returns empty string for unknown profile", () => {
-    const profile = makeProfile({});
-    expect(buildSkillContextPrefix(profile)).toBe("");
+  it("returns empty string for empty skillIds", () => {
+    expect(buildSkillContextPrefix([])).toBe("");
   });
 
-  it("includes Rails prefix for Rails profile", () => {
-    const profile = makeProfile({ skillIds: ["rails"] });
-    const prefix = buildSkillContextPrefix(profile);
+  it("includes Rails prefix for Rails skillIds", () => {
+    const prefix = buildSkillContextPrefix(["rails"]);
     expect(prefix).toContain("Rails");
     expect(prefix).toContain("ActiveRecord");
   });
 
   it("joins multiple skill prefixes with |", () => {
-    const profile = makeProfile({ skillIds: ["fastapi", "python"] });
-    const prefix = buildSkillContextPrefix(profile);
+    const prefix = buildSkillContextPrefix(["fastapi", "python"]);
     expect(prefix).toContain("|");
     expect(prefix).toContain("FastAPI");
     expect(prefix).toContain("Python");
@@ -72,44 +52,37 @@ describe("buildSkillContextPrefix", () => {
 });
 
 describe("buildSkillCardHints", () => {
-  it("returns Go-specific hints for Go profile", () => {
-    const profile = makeProfile({ primaryLanguage: "go", skillIds: ["go"] });
-    const hints = buildSkillCardHints(profile);
+  it("returns Go-specific hints for Go skillIds", () => {
+    const hints = buildSkillCardHints(["go"]);
     expect(hints).toContain("Go");
   });
 
   it("includes Lambda hints when Lambda skill is present", () => {
-    const profile = makeProfile({ skillIds: ["lambda"] });
-    const hints = buildSkillCardHints(profile);
+    const hints = buildSkillCardHints(["lambda"]);
     expect(hints).toContain("Lambda");
   });
 
-  it("returns empty string for unknown profile", () => {
-    const profile = makeProfile({});
-    expect(buildSkillCardHints(profile)).toBe("");
+  it("returns empty string for empty skillIds", () => {
+    expect(buildSkillCardHints([])).toBe("");
   });
 });
 
 describe("buildSkillSearchTag", () => {
-  // Import after vi.mock is resolved
-  it("returns empty string for unknown profile", async () => {
+  it("returns empty string for empty skillIds", async () => {
     const { buildSkillSearchTag } = await import("../../skills/registry.js");
-    const profile = makeProfile({ skillIds: [] });
-    expect(buildSkillSearchTag(profile)).toBe("");
+    expect(buildSkillSearchTag([])).toBe("");
   });
 
-  it("returns a pipe-joined tag string for Rails profile", async () => {
+  it("returns a pipe-joined tag string for Rails skillIds", async () => {
     const { buildSkillSearchTag } = await import("../../skills/registry.js");
-    const profile = makeProfile({ skillIds: ["rails"] });
-    const tag = buildSkillSearchTag(profile);
+    const tag = buildSkillSearchTag(["rails"]);
     expect(typeof tag).toBe("string");
     expect(tag.length).toBeGreaterThan(0);
   });
 
   it("combines multiple skill search tags with | separator", async () => {
     const { buildSkillSearchTag } = await import("../../skills/registry.js");
-    const profile = makeProfile({ skillIds: ["fastapi", "python"] });
-    const tag = buildSkillSearchTag(profile);
+    const tag = buildSkillSearchTag(["fastapi", "python"]);
     expect(tag).toContain("|");
   });
 });

@@ -103,7 +103,9 @@ describe("detectFlows — basic", () => {
 
 describe("detectFlows — hub detection", () => {
   it("marks a highly-connected file as a hub flow", () => {
-    // Create a file connected to 7+ other files (above HUB_DEGREE_THRESHOLD = 6)
+    // With PageRank, a hub is a file that many others point TO (high in-PageRank).
+    // Create 9 nodes all pointing at user.rb via model_association so user.rb
+    // receives most of the rank and lands in the top-10th percentile.
     const hub = makeParsedFile({
       path: "/app/models/user.rb",
       repo: "backend",
@@ -112,20 +114,21 @@ describe("detectFlows — hub detection", () => {
       classes: [{ name: "User", type: "model" as const }],
     });
 
-    const neighbors = Array.from({ length: 7 }, (_, i) =>
+    const dependents = Array.from({ length: 9 }, (_, i) =>
       makeParsedFile({ path: `/app/models/dep_${i}.rb`, repo: "backend" }),
     );
 
-    const edges: GraphEdge[] = neighbors.map((n, i) =>
+    // All dependents point TO the hub (belongs_to :user pattern)
+    const edges: GraphEdge[] = dependents.map((n) =>
       makeEdge({
-        sourceFile: hub.path,
-        targetFile: n.path,
+        sourceFile: n.path,
+        targetFile: hub.path,
         relation: "model_association",
         weight: 1,
       }),
     );
 
-    const flows = detectFlows(edges, [hub, ...neighbors]);
+    const flows = detectFlows(edges, [hub, ...dependents]);
     const hubFlow = flows.find((f) => f.isHub === true);
     expect(hubFlow).toBeDefined();
     expect(hubFlow?.files).toContain(hub.path);
@@ -138,14 +141,16 @@ describe("detectFlows — hub detection", () => {
 
 describe("detectFlows — flow naming", () => {
   it("derives flow name from dominant Ruby model in community", () => {
+    // Use import edges (not in HIGH_SIGNAL_RELATIONS) so hub detection does not
+    // claim these files before Louvain runs — we're testing community naming only.
     const patient = makeRubyModel("Patient", "backend", 3);
     const device = makeRubyModel("Device", "backend", 1);
     const controller = makeControllerFile("Patients", "backend");
 
     const edges: GraphEdge[] = [
-      makeEdge({ sourceFile: controller.path, targetFile: patient.path, relation: "controller_model", weight: 3 }),
-      makeEdge({ sourceFile: patient.path, targetFile: device.path, relation: "model_association", weight: 2 }),
-      makeEdge({ sourceFile: controller.path, targetFile: device.path, relation: "controller_model", weight: 1 }),
+      makeEdge({ sourceFile: controller.path, targetFile: patient.path, relation: "import", weight: 3 }),
+      makeEdge({ sourceFile: patient.path, targetFile: device.path, relation: "import", weight: 2 }),
+      makeEdge({ sourceFile: controller.path, targetFile: device.path, relation: "import", weight: 1 }),
     ];
 
     const flows = detectFlows(edges, [patient, device, controller]);
@@ -183,10 +188,12 @@ describe("detectFlows — multi-repo edges", () => {
     const feFile = makeParsedFile({ path: "/fe/src/components/Patient.vue", repo: "frontend", language: "vue" });
     const apiFile = makeParsedFile({ path: "/be/app/controllers/api/v1/patients_controller.rb", repo: "backend" });
 
+    // Use import edges so hub detection (which only fires on model_association /
+    // controller_model / route_controller) doesn't claim nodes before Louvain runs.
     const edges: GraphEdge[] = [
-      makeEdge({ sourceFile: beFile.path, targetFile: feFile.path, relation: "api_endpoint", weight: 2 }),
-      makeEdge({ sourceFile: beFile.path, targetFile: apiFile.path, relation: "controller_model", weight: 3 }),
-      makeEdge({ sourceFile: feFile.path, targetFile: apiFile.path, relation: "api_endpoint", weight: 1 }),
+      makeEdge({ sourceFile: beFile.path, targetFile: feFile.path, relation: "import", weight: 2 }),
+      makeEdge({ sourceFile: beFile.path, targetFile: apiFile.path, relation: "import", weight: 3 }),
+      makeEdge({ sourceFile: feFile.path, targetFile: apiFile.path, relation: "import", weight: 1 }),
     ];
 
     const flows = detectFlows(edges, [beFile, feFile, apiFile]);

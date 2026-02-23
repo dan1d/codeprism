@@ -7,7 +7,14 @@ import { goSkill } from "./go.js";
 import { pythonSkill } from "./python.js";
 import { fastapiSkill } from "./fastapi.js";
 import { lambdaSkill } from "./lambda.js";
-import type { StackProfile } from "../indexer/stack-profiler.js";
+import { laravelSkill } from "./laravel.js";
+import { djangoSkill } from "./django.js";
+import { nestjsSkill } from "./nestjs.js";
+import { ginSkill } from "./gin.js";
+import { svelteSkill } from "./svelte.js";
+import { angularSkill } from "./angular.js";
+import { springSkill } from "./spring.js";
+import { djangoRestSkill } from "./django_rest.js";
 
 const ALL_SKILLS: Skill[] = [
   railsSkill,
@@ -18,27 +25,38 @@ const ALL_SKILLS: Skill[] = [
   pythonSkill,
   fastapiSkill,
   lambdaSkill,
+  laravelSkill,
+  djangoSkill,
+  nestjsSkill,
+  ginSkill,
+  svelteSkill,
+  angularSkill,
+  springSkill,
+  djangoRestSkill,
 ];
 
 const SKILL_MAP = new Map<string, Skill>(ALL_SKILLS.map((s) => [s.id, s]));
 
 /**
- * Returns the skills that apply to a given StackProfile, ordered by relevance.
+ * Returns the skills that apply to a given list of skill IDs, ordered by relevance.
  * More specific skills (fastapi) come before more generic ones (python).
  */
-export function resolveSkills(profile: StackProfile): Skill[] {
-  const skills = profile.skillIds
-    .map((id) => SKILL_MAP.get(id))
+export function resolveSkills(skillIds: string[]): Skill[] {
+  return skillIds
+    .map((id) => {
+      const skill = SKILL_MAP.get(id);
+      if (!skill) console.warn(`[skills] Unknown skill ID "${id}" — not in registry`);
+      return skill;
+    })
     .filter((s): s is Skill => s !== undefined);
-  return skills;
 }
 
 /**
  * Returns the combined search context prefix from all applicable skills.
  * Prefixes are joined with " | ".
  */
-export function buildSkillContextPrefix(profile: StackProfile): string {
-  const skills = resolveSkills(profile);
+export function buildSkillContextPrefix(skillIds: string[]): string {
+  const skills = resolveSkills(skillIds);
   if (skills.length === 0) return "";
   return skills.map((s) => s.searchContextPrefix).join(" | ");
 }
@@ -46,8 +64,8 @@ export function buildSkillContextPrefix(profile: StackProfile): string {
 /**
  * Returns the combined card prompt hints from all applicable skills.
  */
-export function buildSkillCardHints(profile: StackProfile): string {
-  const skills = resolveSkills(profile);
+export function buildSkillCardHints(skillIds: string[]): string {
+  const skills = resolveSkills(skillIds);
   if (skills.length === 0) return "";
   return skills.map((s) => s.cardPromptHints).join("\n\n");
 }
@@ -62,8 +80,8 @@ export function buildSkillCardHints(profile: StackProfile): string {
  * StackProfile is available at query time (requires persisting `repo_profiles`
  * lookup in the search path, or passing the profile as a search option).
  */
-export function buildSkillSearchTag(profile: StackProfile): string {
-  const skills = resolveSkills(profile);
+export function buildSkillSearchTag(skillIds: string[]): string {
+  const skills = resolveSkills(skillIds);
   if (skills.length === 0) return "";
   return skills.map((s) => s.searchTag).join(" | ");
 }

@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { getDb } from "../db/connection.js";
 
@@ -73,12 +73,15 @@ function buildSkillIds(
 
   if (primaryLanguage === "ruby") {
     if (frameworks.includes("rails")) ids.push("rails");
-    // cuba has no dedicated skill
+    // sinatra and cuba have no dedicated skill yet
   } else if (primaryLanguage === "go") {
-    ids.push("go");
+    if (frameworks.includes("gin")) ids.push("gin");
+    ids.push("go"); // gin projects always also need the base go skill
   } else if (primaryLanguage === "python") {
     if (frameworks.includes("fastapi")) {
       ids.push("fastapi", "python");
+    } else if (frameworks.includes("django_rest")) {
+      ids.push("django_rest", "django", "python"); // DRF implies Django
     } else if (frameworks.includes("django")) {
       ids.push("django", "python");
     } else if (frameworks.includes("flask")) {
@@ -87,21 +90,32 @@ function buildSkillIds(
       ids.push("python");
     }
   } else if (primaryLanguage === "typescript" || primaryLanguage === "javascript") {
-    if (frameworks.includes("nextjs")) {
+    if (frameworks.includes("nestjs")) {
+      ids.push("nestjs"); // TODO: also push "typescript" base skill here once one is added to the registry
+    } else if (frameworks.includes("nextjs")) {
       ids.push("nextjs", "react");
     } else if (frameworks.includes("react")) {
       ids.push("react");
     } else if (frameworks.includes("vue")) {
       ids.push("vue");
+    } else if (frameworks.includes("svelte")) {
+      ids.push("svelte");
+    } else if (frameworks.includes("angular")) {
+      ids.push("angular");
     }
+    // express/fastify have no dedicated skill yet
   } else if (primaryLanguage === "rust") {
-    ids.push("rust");
+    // no rust skill in registry yet — emit nothing rather than a dead ID
   } else if (primaryLanguage === "php") {
     if (frameworks.includes("laravel")) {
-      ids.push("laravel", "php");
+      ids.push("laravel");
     }
+    // plain php has no dedicated skill yet
   } else if (primaryLanguage === "java") {
-    ids.push("java");
+    if (frameworks.includes("spring")) {
+      ids.push("spring");
+    }
+    // plain java has no dedicated skill yet
   }
 
   if (isLambda) ids.push("lambda");
@@ -130,21 +144,15 @@ function detectRuby(repoPath: string): StackProfile {
 }
 
 function detectGo(repoPath: string): StackProfile {
+  // Read go.mod — the require block lists all direct deps regardless of project layout.
+  // Scanning root-level .go files misses the standard cmd/internal/pkg directory structure.
+  const goMod = safeReadFile(join(repoPath, "go.mod"));
   const frameworks: string[] = [];
 
-  try {
-    const entries = readdirSync(repoPath);
-    for (const entry of entries) {
-      if (!entry.endsWith(".go")) continue;
-      const content = safeReadFile(join(repoPath, entry));
-      if (content.includes("gin-gonic/gin")) frameworks.push("gin");
-      if (content.includes("labstack/echo")) frameworks.push("echo");
-      if (content.includes("gofiber/fiber")) frameworks.push("fiber");
-      if (content.includes("go-chi/chi") || content.includes(`"chi"`)) frameworks.push("chi");
-    }
-  } catch {
-    // ignore read errors
-  }
+  if (goMod.includes("gin-gonic/gin")) frameworks.push("gin");
+  if (goMod.includes("labstack/echo")) frameworks.push("echo");
+  if (goMod.includes("gofiber/fiber")) frameworks.push("fiber");
+  if (goMod.includes("go-chi/chi")) frameworks.push("chi");
 
   const uniqueFrameworks = [...new Set(frameworks)];
   const isLambda = detectLambda(repoPath);
@@ -172,7 +180,14 @@ function detectPython(repoPath: string): StackProfile {
 
   if (lower.includes("fastapi")) frameworks.push("fastapi");
   if (lower.includes("flask")) frameworks.push("flask");
-  if (lower.includes("django")) frameworks.push("django");
+  // Check djangorestframework before django: "djangorestframework" contains "django",
+  // so checking django first would push both into frameworks (denormalized). DRF is the
+  // more specific signal; buildSkillIds handles the "DRF implies Django" inference.
+  if (lower.includes("djangorestframework")) {
+    frameworks.push("django_rest");
+  } else if (lower.includes("django")) {
+    frameworks.push("django");
+  }
   if (lower.includes("starlette")) frameworks.push("starlette");
 
   const isLambda = detectLambda(repoPath);
@@ -223,6 +238,9 @@ function detectNode(repoPath: string): StackProfile {
   if (depNames.includes("vue")) frameworks.push("vue");
   if (depNames.includes("express")) frameworks.push("express");
   if (depNames.includes("fastify")) frameworks.push("fastify");
+  if (depNames.includes("@nestjs/core")) frameworks.push("nestjs");
+  if (depNames.includes("svelte")) frameworks.push("svelte");
+  if (depNames.includes("@angular/core")) frameworks.push("angular");
 
   let packageManager = "npm";
   if (existsSync(join(repoPath, "pnpm-lock.yaml"))) {
@@ -282,18 +300,28 @@ function detectPhp(repoPath: string): StackProfile {
 }
 
 function detectJava(repoPath: string): StackProfile {
-  const hasPom = existsSync(join(repoPath, "pom.xml"));
-  const hasBuildGradle = existsSync(join(repoPath, "build.gradle"));
+  const pomContent = safeReadFile(join(repoPath, "pom.xml"));
+  // Support both Groovy DSL (build.gradle) and Kotlin DSL (build.gradle.kts)
+  const gradleContent =
+    safeReadFile(join(repoPath, "build.gradle")) +
+    safeReadFile(join(repoPath, "build.gradle.kts"));
+  const buildContent = pomContent + " " + gradleContent;
 
-  const packageManager = hasPom ? "maven" : hasBuildGradle ? "gradle" : "";
+  const frameworks: string[] = [];
+  if (buildContent.includes("spring-boot")) frameworks.push("spring");
+
   const isLambda = detectLambda(repoPath);
-  const skillIds = buildSkillIds("java", [], isLambda);
+  const skillIds = buildSkillIds("java", frameworks, isLambda);
+
+  const hasGradle =
+    existsSync(join(repoPath, "build.gradle")) ||
+    existsSync(join(repoPath, "build.gradle.kts"));
 
   return {
     primaryLanguage: "java",
-    frameworks: [],
+    frameworks,
     isLambda,
-    packageManager,
+    packageManager: hasGradle ? "gradle" : "maven",
     skillIds,
   };
 }
@@ -320,7 +348,8 @@ export function detectStackProfile(repoPath: string): StackProfile {
     if (existsSync(join(repoPath, "composer.json"))) return detectPhp(repoPath);
     if (
       existsSync(join(repoPath, "pom.xml")) ||
-      existsSync(join(repoPath, "build.gradle"))
+      existsSync(join(repoPath, "build.gradle")) ||
+      existsSync(join(repoPath, "build.gradle.kts"))
     )
       return detectJava(repoPath);
   } catch {

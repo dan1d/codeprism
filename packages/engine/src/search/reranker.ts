@@ -12,6 +12,13 @@ let rerankerPipeline: Awaited<ReturnType<typeof pipeline>> | null = null;
  * If the model fails to load (e.g. offline, no cache), this function throws
  * so that the caller can fall back to the original ordering.
  */
+/** Eagerly warms up the reranker pipeline so first-query latency is lower. */
+export function warmReranker(): void {
+  pipeline("text-classification", "cross-encoder/ms-marco-MiniLM-L-6-v2")
+    .then((p) => { rerankerPipeline = p; })
+    .catch(() => { /* non-fatal — will retry lazily on first use */ });
+}
+
 export async function rerankResults(
   query: string,
   candidates: SearchResult[],

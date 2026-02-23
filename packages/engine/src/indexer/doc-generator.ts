@@ -47,12 +47,65 @@ import {
   buildChangelogPrompt,
   buildPagesPrompt,
   buildBeOverviewPrompt,
+  buildBusinessPrompt,
+  buildProductPrompt,
+  buildCrossRepoPrompt,
+  buildFrameworkBaseline,
+  buildFrameworkArchitectureOnly,
   type DocType,
   type MemoryInput,
 } from "./doc-prompts.js";
+import { resolveSkills } from "../skills/index.js";
+import type { StackProfile } from "./stack-profiler.js";
+import type { GitSignals } from "./git-signals.js";
+import { getFileHeat, isInStaleDir } from "./git-signals.js";
 
 // Max lines to include per file in doc prompts (keep costs low)
 const MAX_DOC_FILE_LINES = 120;
+
+// ---------------------------------------------------------------------------
+// Phase 0 helpers — README seeding + heat-ordered file selection
+// ---------------------------------------------------------------------------
+
+/**
+ * Reads the first existing README from a repo root directory (no LLM, no cost).
+ * Returns up to 2000 chars to use as a prompt seed.
+ */
+export async function seedFromReadme(repoAbsPath: string): Promise<string> {
+  const candidates = ["README.md", "readme.md", "README.rst", "README"];
+  for (const name of candidates) {
+    try {
+      const raw = await import("node:fs/promises").then((m) =>
+        m.readFile(join(repoAbsPath, name), "utf-8"),
+      );
+      return raw.slice(0, 2000);
+    } catch {
+      // try next candidate
+    }
+  }
+  return "";
+}
+
+/**
+ * Sorts parsed files by git heat descending and filters out stale directories.
+ * Hot files (touched recently and often) float to the top of LLM prompts.
+ */
+export function selectByHeat(
+  files: ParsedFile[],
+  signals: GitSignals | null,
+  max = 8,
+): ParsedFile[] {
+  if (!signals) return files.slice(0, max);
+
+  return files
+    .filter((f) => !isInStaleDir(f.path, signals.staleDirectories))
+    .sort(
+      (a, b) =>
+        getFileHeat(b.path, signals.thermalMap) -
+        getFileHeat(a.path, signals.thermalMap),
+    )
+    .slice(0, max);
+}
 // Small inter-call delay — doc generation is less rate-sensitive than cards
 const DOC_INTER_CALL_DELAY_MS = 1000;
 
@@ -520,6 +573,10 @@ function upsertDoc(doc: {
     .get(doc.repo, doc.doc_type) as { id: string } | undefined;
 
   const id = existing?.id ?? nanoid();
+  // TODO: populate applied_baseline_hash (sha1 of the frameworkBaseline used) once
+  // baseline-staleness detection is implemented. The column exists (migration v17);
+  // wire it here and add a staleness check in docExists() to trigger regeneration
+  // when sha1(currentBaseline) != stored_hash.
   db.prepare(`
     INSERT INTO project_docs (id, repo, doc_type, title, content, stale, source_file_paths, updated_at)
     VALUES (?, ?, ?, ?, ?, 0, ?, datetime('now'))
@@ -601,6 +658,8 @@ export async function discoverBeOverview(
   repoPath: string,
   parsedFiles: ParsedFile[],
   llm: LLMProvider | null,
+  fePagesContext = "",
+  branchContext?: import("./doc-prompts.js").BranchContext,
 ): Promise<void> {
   if (!llm) return;
 
@@ -611,7 +670,7 @@ export async function discoverBeOverview(
 
   console.log(`  [be_overview] generating BE overview for ${repoName} (${files.length} files)`);
   try {
-    const prompt = buildBeOverviewPrompt(repoName, files);
+    const prompt = buildBeOverviewPrompt(repoName, files, fePagesContext, branchContext);
     const content = await callDocLlm(llm, prompt, `${repoName}/be_overview`, 1000);
     upsertDoc({
       repo: repoName,
@@ -640,6 +699,10 @@ export interface ProjectDocOptions {
   skipExisting?: boolean; // skip doc types that already exist and are fresh (default: true)
   forceRegenerate?: boolean; // regenerate all, even if fresh
   isFrontend?: boolean; // include styles doc
+  skillLabel?: string;
+  stackProfile?: StackProfile;
+  /** Branch diff context — injected into prompts when indexing a non-base branch */
+  branchContext?: import("./doc-prompts.js").BranchContext;
 }
 
 /**
@@ -654,9 +717,23 @@ export async function generateProjectDocs(
   parsedFiles: ParsedFile[],
   llm: LLMProvider,
   options: ProjectDocOptions = {},
-  skillLabel?: string,
 ): Promise<GeneratedProjectDoc[]> {
-  const { skipExisting = true, forceRegenerate = false, isFrontend } = options;
+  const { skipExisting = true, forceRegenerate = false, isFrontend, skillLabel, stackProfile, branchContext } = options;
+
+  // Build per-doc-type framework baselines from resolved skills.
+  // The section mix is intentionally asymmetric:
+  //   code_style gets Testing — test conventions are a coding style concern.
+  //   rules gets Performance — query/N+1 rules are enforced as domain constraints (not just style).
+  const resolvedSkills = stackProfile ? resolveSkills(stackProfile.skillIds) : [];
+  const codeStyleBaseline = resolvedSkills.length > 0
+    ? buildFrameworkBaseline(resolvedSkills.map((s) => s.bestPractices), { includeTesting: true })
+    : "";
+  const rulesBaseline = resolvedSkills.length > 0
+    ? buildFrameworkBaseline(resolvedSkills.map((s) => s.bestPractices), { includePerformance: true })
+    : "";
+  const frameworkArchBaseline = resolvedSkills.length > 0
+    ? buildFrameworkArchitectureOnly(resolvedSkills.map((s) => s.bestPractices))
+    : "";
 
   // Detect if this looks like a frontend repo
   const hasFrontendFiles = isFrontend ??
@@ -680,31 +757,31 @@ export async function generateProjectDocs(
       type: "readme",
       title: `${repoName} — README`,
       files: selectReadmeFiles(repoPath, parsedFiles),
-      buildPrompt: (f) => buildReadmePrompt(repoName, f),
+      buildPrompt: (f) => buildReadmePrompt(repoName, f, branchContext),
     },
     {
       type: "about",
       title: `${repoName} — About`,
       files: selectAboutFiles(repoPath, parsedFiles),
-      buildPrompt: (f) => buildAboutPrompt(repoName, f),
+      buildPrompt: (f) => buildAboutPrompt(repoName, f, branchContext),
     },
     {
       type: "architecture",
       title: `${repoName} — Architecture`,
       files: selectArchitectureFiles(repoPath, parsedFiles),
-      buildPrompt: (f) => buildArchitecturePrompt(repoName, f),
+      buildPrompt: (f) => buildArchitecturePrompt(repoName, f, branchContext),
     },
     {
       type: "code_style",
       title: `${repoName} — Code Style`,
       files: selectCodeStyleFiles(parsedFiles),
-      buildPrompt: (f) => buildCodeStylePrompt(repoName, f),
+      buildPrompt: (f) => buildCodeStylePrompt(repoName, f, codeStyleBaseline, branchContext),
     },
     {
       type: "rules",
       title: `${repoName} — Business Rules`,
       files: selectRulesFiles(repoPath, parsedFiles),
-      buildPrompt: (f) => buildRulesPrompt(repoName, f),
+      buildPrompt: (f) => buildRulesPrompt(repoName, f, rulesBaseline, branchContext),
     },
   ];
 
@@ -808,7 +885,7 @@ export async function generateProjectDocs(
   }
 
   // Specialist — generated last, requires about + architecture + rules to exist
-  await generateSpecialistDoc(repoName, skillLabel ?? "", llm, options);
+  await generateSpecialistDoc(repoName, skillLabel ?? "", llm, options, frameworkArchBaseline);
 
   return generated;
 }
@@ -823,6 +900,7 @@ async function generateSpecialistDoc(
   skillLabel: string,
   llm: LLMProvider,
   options: { skipExisting?: boolean; forceRegenerate?: boolean } = {},
+  frameworkBestPractices?: string,
 ): Promise<void> {
   const { skipExisting = true, forceRegenerate = false } = options;
 
@@ -851,7 +929,7 @@ async function generateSpecialistDoc(
   try {
     const content = await callDocLlm(
       llm,
-      buildSpecialistPrompt(repoName, skillLabel, aboutContent, archContent, rulesContent),
+      buildSpecialistPrompt(repoName, skillLabel, aboutContent, archContent, rulesContent, frameworkBestPractices),
       `${repoName}/specialist`,
       500,
     );
@@ -878,7 +956,7 @@ export function loadProjectContext(repoName: string): string {
   const docs = db
     .prepare(
       `SELECT doc_type, content FROM project_docs
-       WHERE repo = ? AND doc_type IN ('about', 'architecture', 'specialist', 'memory') AND stale = 0`,
+       WHERE repo = ? AND doc_type IN ('about', 'architecture', 'specialist', 'memory', 'business', 'product') AND stale = 0`,
     )
     .all(repoName) as { doc_type: string; content: string }[];
 
@@ -888,6 +966,8 @@ export function loadProjectContext(repoName: string): string {
   const about = docs.find((d) => d.doc_type === "about")?.content ?? "";
   const arch = docs.find((d) => d.doc_type === "architecture")?.content ?? "";
   const memory = docs.find((d) => d.doc_type === "memory")?.content;
+  const business = docs.find((d) => d.doc_type === "business")?.content;
+  const product = docs.find((d) => d.doc_type === "product")?.content;
 
   const parts: string[] = [];
 
@@ -905,6 +985,18 @@ export function loadProjectContext(repoName: string): string {
     }
   }
 
+  // Business context — critical invariants the AI must not violate
+  if (business) {
+    const words = business.split(/\s+/).slice(0, 200).join(" ");
+    parts.push(`### Business Context\n${words}`);
+  }
+
+  // Product context — user journeys (FE repos only)
+  if (product) {
+    const words = product.split(/\s+/).slice(0, 150).join(" ");
+    parts.push(`### Product Journeys\n${words}`);
+  }
+
   // Append recent team memory when available
   if (memory) {
     const words = memory.split(/\s+/).slice(0, 150).join(" ");
@@ -912,6 +1004,168 @@ export function loadProjectContext(repoName: string): string {
   }
 
   return parts.length > 0 ? `## Project Context\n\n${parts.join("\n\n")}\n\n` : "";
+}
+
+// ---------------------------------------------------------------------------
+// Business / Product / Cross-repo doc generation
+// ---------------------------------------------------------------------------
+
+/**
+ * Generates a Business.md doc capturing operational context, critical workflows,
+ * and business invariants. Sources from about + rules + service objects.
+ */
+export async function generateBusinessDoc(
+  repoName: string,
+  llm: LLMProvider,
+  readmeSeed = "",
+  options: { skipExisting?: boolean; forceRegenerate?: boolean } = {},
+): Promise<void> {
+  const { skipExisting = true, forceRegenerate = false } = options;
+  if (!forceRegenerate && skipExisting && docExists(repoName, "business")) {
+    console.log(`  [doc] business — skipped (already fresh)`);
+    return;
+  }
+
+  const db = getDb();
+  // Source: about + rules docs already in DB
+  const sourceDocs = db
+    .prepare(
+      `SELECT doc_type, content FROM project_docs
+       WHERE repo = ? AND doc_type IN ('about', 'rules') AND stale = 0`,
+    )
+    .all(repoName) as { doc_type: string; content: string }[];
+
+  if (sourceDocs.length === 0) {
+    console.log(`  [doc] business — skipped (no about/rules docs yet)`);
+    return;
+  }
+
+  const sourceFiles: SourceFile[] = sourceDocs.map((d) => ({
+    path: `${repoName}/${d.doc_type}.md`,
+    content: d.content.slice(0, 800),
+  }));
+
+  try {
+    const content = await callDocLlm(
+      llm,
+      buildBusinessPrompt(repoName, sourceFiles, readmeSeed),
+      `${repoName}/business`,
+      900,
+    );
+    upsertDoc({ repo: repoName, doc_type: "business", title: `${repoName} — Business`, content, sourceFilePaths: [] });
+    console.log(`  [doc] business — generated`);
+  } catch (err) {
+    console.warn(`  [doc] business — LLM failed: ${String(err).slice(0, 100)}`);
+  }
+}
+
+/**
+ * Generates a Product.md doc documenting user journeys from the FE router,
+ * navigation, and active page components.
+ */
+export async function generateProductDoc(
+  repoName: string,
+  repoPath: string,
+  parsedFiles: ParsedFile[],
+  llm: LLMProvider,
+  readmeSeed = "",
+  options: { skipExisting?: boolean; forceRegenerate?: boolean } = {},
+): Promise<void> {
+  const { skipExisting = true, forceRegenerate = false } = options;
+  if (!forceRegenerate && skipExisting && docExists(repoName, "product")) {
+    console.log(`  [doc] product — skipped (already fresh)`);
+    return;
+  }
+
+  const db = getDb();
+  const pagesDoc = (db
+    .prepare(`SELECT content FROM project_docs WHERE repo = ? AND doc_type = 'pages' AND stale = 0`)
+    .get(repoName) as { content: string } | undefined)?.content ?? "";
+
+  // Select active page components (not Storybook or test files)
+  const pageFiles = parsedFiles
+    .filter((f) => {
+      const p = f.path.toLowerCase();
+      return (
+        (f.fileRole === "domain" || f.fileRole === "entry_point") &&
+        !p.includes("stories") &&
+        !p.includes("storybook") &&
+        !p.includes("cypress") &&
+        !p.includes(".test.") &&
+        !p.includes(".spec.")
+      );
+    })
+    .filter((f) =>
+      f.path.endsWith(".tsx") || f.path.endsWith(".jsx") || f.path.endsWith(".vue") ||
+      f.path.endsWith(".ts") || f.path.endsWith(".js")
+    )
+    .slice(0, 8);
+
+  if (pageFiles.length === 0) {
+    console.log(`  [doc] product — skipped (no active page components found)`);
+    return;
+  }
+
+  const sourceFiles: SourceFile[] = pageFiles.map((f) => ({
+    path: f.path,
+    content: readTruncated(f.path, 60),
+  })).filter((f) => f.content);
+
+  try {
+    const content = await callDocLlm(
+      llm,
+      buildProductPrompt(repoName, sourceFiles, readmeSeed, pagesDoc),
+      `${repoName}/product`,
+      1000,
+    );
+    upsertDoc({ repo: repoName, doc_type: "product", title: `${repoName} — Product`, content, sourceFilePaths: pageFiles.map((f) => f.path) });
+    console.log(`  [doc] product — generated`);
+  } catch (err) {
+    console.warn(`  [doc] product — LLM failed: ${String(err).slice(0, 100)}`);
+  }
+}
+
+/**
+ * Generates a workspace-level CrossRepo.md that maps FE pages/journeys to BE
+ * API endpoints. Stored under repo = '_workspace' for workspace-level retrieval.
+ */
+export async function generateCrossRepoDoc(
+  feRepoName: string,
+  beRepoName: string,
+  llm: LLMProvider,
+  options: { skipExisting?: boolean; forceRegenerate?: boolean } = {},
+): Promise<void> {
+  const { skipExisting = true, forceRegenerate = false } = options;
+  if (!forceRegenerate && skipExisting && docExists("_workspace", "cross_repo")) {
+    console.log(`  [doc] cross_repo — skipped (already fresh)`);
+    return;
+  }
+
+  const db = getDb();
+  const getDoc = (repo: string, type: string) =>
+    (db.prepare(`SELECT content FROM project_docs WHERE repo = ? AND doc_type = ? AND stale = 0`).get(repo, type) as { content: string } | undefined)?.content ?? "";
+
+  const fePagesDoc = getDoc(feRepoName, "pages");
+  const feProductDoc = getDoc(feRepoName, "product");
+  const beApiDoc = getDoc(beRepoName, "api_contracts");
+
+  if (!fePagesDoc && !feProductDoc) {
+    console.log(`  [doc] cross_repo — skipped (no FE pages/product docs yet)`);
+    return;
+  }
+
+  try {
+    const content = await callDocLlm(
+      llm,
+      buildCrossRepoPrompt(`${feRepoName} → ${beRepoName}`, fePagesDoc, feProductDoc, beApiDoc),
+      `cross_repo`,
+      1000,
+    );
+    upsertDoc({ repo: "_workspace", doc_type: "cross_repo", title: "Cross-Repo Map", content, sourceFilePaths: [] });
+    console.log(`  [doc] cross_repo — generated`);
+  } catch (err) {
+    console.warn(`  [doc] cross_repo — LLM failed: ${String(err).slice(0, 100)}`);
+  }
 }
 
 // ---------------------------------------------------------------------------

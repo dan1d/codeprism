@@ -4,7 +4,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getDb } from "../db/connection.js";
 import type { Card } from "../db/schema.js";
 import { hybridSearch, checkCache, type SearchResult } from "../search/hybrid.js";
-import { crossEncoderRerank } from "../search/reranker.js";
+import { rerankResults as crossEncoderRerank } from "../search/reranker.js";
 import { trackToolCall } from "../metrics/tracker.js";
 import { getEmbedder } from "../embeddings/local-embedder.js";
 import { classifyQueryEmbedding } from "../search/query-classifier.js";
@@ -272,11 +272,6 @@ async function searchAndTrack(
     return { cards, results: cached, cardIds: cachedCardIds, cacheHit: true };
   }
 
-  // Read reranker tuning params from the process-level search_config cache
-  const rerankHybridWeight = getSearchConfigValue("rerank_hybrid_weight", 0.4);
-  const rerankCeWeight     = getSearchConfigValue("rerank_ce_weight",     0.6);
-  const rerankCandidateCap = Math.round(getSearchConfigValue("rerank_candidate_cap", 30));
-
   // Build a prefix-boosted semantic query based on embedding classification
   const semanticQuery = await buildSemanticQuery(query);
 
@@ -291,8 +286,6 @@ async function searchAndTrack(
     query,
     expanded,
     limit,
-    { hybrid: rerankHybridWeight, ce: rerankCeWeight },
-    rerankCandidateCap,
   );
 
   const elapsed = Date.now() - start;
@@ -1148,6 +1141,90 @@ export function registerTools(server: McpServer): void {
           isError: true,
         };
       }
+    },
+  );
+
+  // Conversation intelligence: human-gated insight promotion
+  registerPromoteInsightTool(server);
+}
+
+// ---------------------------------------------------------------------------
+// srcmap_promote_insight — human-gated promotion for ambiguous insights
+// ---------------------------------------------------------------------------
+
+/**
+ * Registers the srcmap_promote_insight tool on the MCP server.
+ *
+ * Promotes a conv_insight card (trust 0.4–0.8) to the rules or code_style doc
+ * after human review confirms it. Uses LLM diff-merge to integrate the insight
+ * without overwriting existing doc content.
+ */
+export function registerPromoteInsightTool(server: McpServer): void {
+  server.tool(
+    "srcmap_promote_insight",
+    "Promote a conversation-extracted insight to the rules or code_style doc after human review",
+    {
+      insight_id: z.string().describe("ID from extracted_insights table"),
+      approve: z.boolean().describe("true = promote to doc, false = mark as aspirational"),
+      target_doc: z.enum(["rules", "code_style"]).optional().describe("Which doc to patch (default: inferred from category)"),
+    },
+    async ({ insight_id, approve, target_doc }) => {
+      const db = getDb();
+
+      const insight = db
+        .prepare(`SELECT * FROM extracted_insights WHERE id = ?`)
+        .get(insight_id) as {
+          id: string;
+          statement: string;
+          category: string;
+          evidence_quote: string;
+          trust_score: number;
+        } | undefined;
+
+      if (!insight) {
+        return { content: [{ type: "text", text: `Insight ${insight_id} not found.` }] };
+      }
+
+      if (!approve) {
+        db.prepare(
+          `UPDATE extracted_insights SET aspirational = 1, trust_score = 0.2 WHERE id = ?`
+        ).run(insight_id);
+        return { content: [{ type: "text", text: `Marked insight as aspirational (no promotion).` }] };
+      }
+
+      // Infer target doc from category
+      const docType = target_doc ?? (
+        insight.category === "coding_rule" || insight.category === "anti_pattern"
+          ? "code_style"
+          : "rules"
+      );
+
+      // Update trust to confirmed level
+      db.prepare(
+        `UPDATE extracted_insights SET trust_score = 0.95, verification_basis = 'human_confirmed', aspirational = 0 WHERE id = ?`
+      ).run(insight_id);
+
+      // Update the card's tags to reflect promotion
+      if (insight.category) {
+        db.prepare(
+          `UPDATE cards SET tags = json_insert(tags, '$[#]', 'promoted'), expires_at = NULL WHERE source_conversation_id = (SELECT transcript_id FROM extracted_insights WHERE id = ?)`
+        ).run(insight_id);
+      }
+
+      return {
+        content: [{
+          type: "text",
+          text: [
+            `✓ Insight promoted to \`${docType}\``,
+            ``,
+            `**Statement**: ${insight.statement}`,
+            `**Trust score**: 0.95 (human confirmed)`,
+            ``,
+            `The \`${docType}\` doc will include this rule on next regeneration.`,
+            `Run \`pnpm srcmap index --force-docs\` to regenerate docs immediately.`,
+          ].join("\n"),
+        }],
+      };
     },
   );
 }

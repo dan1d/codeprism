@@ -4,6 +4,8 @@
  * is stored in the `project_docs` table and injected into card prompts.
  */
 
+import type { BestPractices } from "../skills/types.js";
+
 export type DocType =
   | "readme"
   | "about"
@@ -16,14 +18,175 @@ export type DocType =
   | "changelog"
   | "memory"
   | "pages"
-  | "be_overview";
+  | "be_overview"
+  | "business"
+  | "product"
+  | "cross_repo";
 
-const DOC_SYSTEM_PROMPT = `You are a senior software architect documenting a codebase for an AI coding assistant.
+export const DOC_SYSTEM_PROMPT = `You are a senior software architect documenting a codebase for an AI coding assistant.
 Write clear, concise markdown. Focus on what developers need to know to work confidently in this codebase.
 Do NOT fabricate details not visible in the provided source. If something is unclear, say so briefly.
 Maximum 600 words per document.`;
 
-export { DOC_SYSTEM_PROMPT };
+// ---------------------------------------------------------------------------
+// Branch context helper
+// ---------------------------------------------------------------------------
+
+export interface BranchContext {
+  branch: string;
+  /** Semantic class of the branch */
+  branchClass: "base" | "environment" | "feature";
+  /** Target deployment environment — only set for environment branches */
+  targetEnvironment?: "demo" | "staging" | "production" | "release" | "other" | null;
+  baseBranch: string;
+  changedFiles: string[];
+  commitsAhead: number;
+  /** Ticket IDs extracted from the branch name (e.g. ["ENG-756"]) */
+  ticketIds?: string[];
+  /** Optional ticket description injected via --ticket CLI flag */
+  ticketDescription?: string;
+  /**
+   * Cross-repo branch context: other repos in the workspace that are on the
+   * same epic/feature branch. Populated by buildWorkspaceBranchSignal().
+   */
+  crossRepoBranches?: Array<{
+    repo: string;
+    branch: string;
+    changedFiles: string[];
+    recentCommits: string[];
+  }>;
+  /** Repos that are still on their base branch and haven't picked up the epic */
+  behindRepos?: string[];
+}
+
+/**
+ * Builds a markdown block injected into prompts when indexing a non-base branch.
+ * The framing is tailored to the branch class:
+ *
+ *  environment (demo)       → "DEMO ENVIRONMENT: WIP features for demo/orlando"
+ *  environment (staging)    → "STAGING ENVIRONMENT: release candidate vs main"
+ *  environment (production) → "PRODUCTION ENVIRONMENT: stable deployed state"
+ *  feature                  → "FEATURE BRANCH: ticket-driven changes"
+ */
+export function buildBranchContextBlock(ctx: BranchContext): string {
+  const { branch, branchClass, targetEnvironment, baseBranch, changedFiles, commitsAhead, ticketIds = [], ticketDescription } = ctx;
+
+  const fileList = changedFiles.slice(0, 20).map((f) => `- \`${f}\``).join("\n");
+  const moreFiles = changedFiles.length > 20
+    ? `\n- _…and ${changedFiles.length - 20} more_`
+    : "";
+
+  const ticketLine = ticketIds.length > 0
+    ? `> **Tickets**: ${ticketIds.map((t) => `\`${t}\``).join(", ")}\n`
+    : "";
+
+  const ticketDescSection = ticketDescription
+    ? `\n**Ticket context**: ${ticketDescription.slice(0, 400)}\n`
+    : "";
+
+  // Build the header line based on branch class
+  let header: string;
+  let guidance: string;
+
+  if (branchClass === "environment") {
+    const envLabel =
+      targetEnvironment === "demo"       ? "DEMO ENVIRONMENT" :
+      targetEnvironment === "staging"    ? "STAGING ENVIRONMENT" :
+      targetEnvironment === "production" ? "PRODUCTION ENVIRONMENT" :
+      targetEnvironment === "release"    ? "RELEASE CANDIDATE" :
+      "ENVIRONMENT BRANCH";
+
+    const envNote =
+      targetEnvironment === "demo"
+        ? `This branch may contain WIP features not yet merged to \`${baseBranch}\`. ` +
+          `It exists to support a specific demo/client environment.`
+        : targetEnvironment === "staging"
+        ? `This branch tracks the current release candidate. Changes vs \`${baseBranch}\` ` +
+          `represent features awaiting production deployment.`
+        : targetEnvironment === "production"
+        ? `This branch reflects the live deployed state. Document only what is confirmed stable.`
+        : `This branch represents an environment-specific state.`;
+
+    header = `> ⚠️ **${envLabel}** — branch: \`${branch}\` (+${commitsAhead} commits vs \`${baseBranch}\`)`;
+    guidance = [
+      envNote,
+      ``,
+      `Focus on files changed vs \`${baseBranch}\` — these represent the delta that defines this environment.`,
+      `Do NOT assume the documentation applies to \`${baseBranch}\` — document the state of \`${branch}\`.`,
+    ].join("\n");
+  } else {
+    // feature branch
+    const ticketHint = ticketIds.length > 0
+      ? `implementing ${ticketIds.join(", ")}`
+      : "implementing a feature or fix";
+
+    header = `> 🔀 **FEATURE BRANCH** — \`${branch}\` ${ticketHint} (+${commitsAhead} commits vs \`${baseBranch}\`)`;
+    guidance = [
+      `This branch is ${ticketHint}. Document patterns visible in the changed files below.`,
+      `Note any new routes, models, components, or rules introduced by this branch that differ from \`${baseBranch}\`.`,
+    ].join("\n");
+  }
+
+  // Cross-repo section: other services on the same branch
+  const crossRepoSection = buildCrossRepoSection(ctx);
+
+  if (!changedFiles.length && commitsAhead === 0) {
+    return [header, ` — no changes detected vs \`${baseBranch}\``, `\n`, crossRepoSection].join("");
+  }
+
+  return [
+    header,
+    `>`,
+    ticketLine,
+    `> **Changed files vs \`${baseBranch}\`** (${changedFiles.length} total):`,
+    `>`,
+    `> ${fileList.replace(/\n/g, "\n> ")}${moreFiles}`,
+    ``,
+    guidance,
+    ticketDescSection,
+    crossRepoSection,
+    ``,
+  ].join("\n");
+}
+
+/**
+ * Builds a cross-repo awareness section showing which other services are on
+ * the same epic branch. Injected after the per-repo branch context so the LLM
+ * understands the full scope of the change across the workspace.
+ */
+function buildCrossRepoSection(ctx: BranchContext): string {
+  const { crossRepoBranches, behindRepos = [] } = ctx;
+  if (!crossRepoBranches?.length && !behindRepos.length) return "";
+
+  const lines: string[] = ["### Cross-repo branch status", ""];
+
+  if (crossRepoBranches?.length) {
+    lines.push(`The following sibling services are **also on \`${ctx.branch}\`**:`);
+    lines.push("");
+    for (const sibling of crossRepoBranches) {
+      lines.push(`**\`${sibling.repo}\`** — ${sibling.changedFiles.length} changed files`);
+      if (sibling.changedFiles.length > 0) {
+        lines.push(...sibling.changedFiles.slice(0, 8).map((f) => `  - \`${f}\``));
+        if (sibling.changedFiles.length > 8) {
+          lines.push(`  - _…and ${sibling.changedFiles.length - 8} more_`);
+        }
+      }
+      if (sibling.recentCommits.length > 0) {
+        lines.push(`  Recent commits:`);
+        lines.push(...sibling.recentCommits.slice(0, 3).map((c) => `  - ${c}`));
+      }
+      lines.push("");
+    }
+  }
+
+  if (behindRepos.length) {
+    lines.push(`The following services are **not yet on this branch** (still on their base branch):`);
+    lines.push(...behindRepos.map((r) => `- \`${r}\``));
+    lines.push("");
+  }
+
+  return lines.join("\n") + "\n";
+}
 
 interface SourceFile {
   path: string;
@@ -54,10 +217,11 @@ function sourceSection(files: SourceFile[]): string {
 // README
 // ---------------------------------------------------------------------------
 
-export function buildReadmePrompt(repoName: string, files: SourceFile[]): string {
+export function buildReadmePrompt(repoName: string, files: SourceFile[], branchContext?: BranchContext): string {
+  const branchBlock = branchContext ? buildBranchContextBlock(branchContext) : "";
   return `Generate a **README.md** for the \`${repoName}\` repository.
 
-## Source Files
+${branchBlock}## Source Files
 
 ${sourceSection(files)}
 
@@ -77,10 +241,11 @@ Start with a # heading with the project name. Be factual; do not invent steps no
 // ABOUT
 // ---------------------------------------------------------------------------
 
-export function buildAboutPrompt(repoName: string, files: SourceFile[]): string {
+export function buildAboutPrompt(repoName: string, files: SourceFile[], branchContext?: BranchContext): string {
+  const branchBlock = branchContext ? buildBranchContextBlock(branchContext) : "";
   return `Generate an **About.md** for the \`${repoName}\` repository — a business-focused description for AI coding assistants.
 
-## Source Files
+${branchBlock}## Source Files
 
 ${sourceSection(files)}
 
@@ -100,10 +265,11 @@ This document will be injected into AI prompts to give context about the busines
 // ARCHITECTURE
 // ---------------------------------------------------------------------------
 
-export function buildArchitecturePrompt(repoName: string, files: SourceFile[]): string {
+export function buildArchitecturePrompt(repoName: string, files: SourceFile[], branchContext?: BranchContext): string {
+  const branchBlock = branchContext ? buildBranchContextBlock(branchContext) : "";
   return `Generate an **Architecture.md** for the \`${repoName}\` repository.
 
-## Source Files
+${branchBlock}## Source Files
 
 ${sourceSection(files)}
 
@@ -124,10 +290,15 @@ Be specific about what is visible in the provided code. Do not speculate.`;
 // CODE STYLE
 // ---------------------------------------------------------------------------
 
-export function buildCodeStylePrompt(repoName: string, files: SourceFile[]): string {
+export function buildCodeStylePrompt(repoName: string, files: SourceFile[], frameworkBaseline?: string, branchContext?: BranchContext): string {
+  const baselineSection = frameworkBaseline
+    ? `## Framework Baseline\n\nThe following conventions are standard for this tech stack. Extend, override, or note exceptions based on what you observe in the project:\n\n${frameworkBaseline}\n\n`
+    : "";
+  const branchBlock = branchContext ? buildBranchContextBlock(branchContext) : "";
+
   return `Generate a **CodeStyle.md** for the \`${repoName}\` repository — coding conventions for AI assistants.
 
-## Source Files
+${branchBlock}${baselineSection}## Source Files
 
 ${sourceSection(files)}
 
@@ -141,17 +312,24 @@ Document the coding conventions visible in the source:
 5. **Testing patterns** — test file naming, factory/fixture usage (if visible)
 6. **Do's and Don'ts** — anything the codebase clearly enforces or avoids
 
-This will guide AI code generation to match the existing style.`;
+Note which framework baseline conventions are confirmed, extended, or overridden by the actual project patterns. This will guide AI code generation to match the existing style.`;
 }
 
 // ---------------------------------------------------------------------------
 // RULES
 // ---------------------------------------------------------------------------
 
-export function buildRulesPrompt(repoName: string, files: SourceFile[]): string {
+export function buildRulesPrompt(repoName: string, files: SourceFile[], frameworkBaseline?: string, branchContext?: BranchContext): string {
+  const baselineSection = frameworkBaseline
+    ? `## Framework Baseline\n\nThe following rules are standard for this tech stack. Note which are confirmed, extended, or overridden by the project's actual patterns:\n\n${frameworkBaseline}\n\n`
+    : "";
+  const branchBlock = branchContext ? buildBranchContextBlock(branchContext) : "";
+
   return `Generate a **Rules.md** for the \`${repoName}\` repository — business rules and domain constraints.
 
-## Source Files
+${branchBlock}
+
+${baselineSection}## Source Files
 
 ${sourceSection(files)}
 
@@ -163,6 +341,7 @@ Document the business rules and domain constraints visible in the code:
 3. **Business logic constraints** — state machines, conditional flows, invariants
 4. **Domain-specific rules** — any healthcare, billing, compliance, or domain rules visible
 5. **Gotchas** — non-obvious rules that would surprise a new developer
+6. **Framework alignment** — note which baseline security and authorization rules are confirmed by the project's actual patterns, and flag any project-specific overrides or gaps.
 
 Be specific and reference the actual field names and models you see in the code.`;
 }
@@ -226,8 +405,21 @@ List every leaf page you can identify. Do not include section headers, utility c
 // BE_OVERVIEW — LLM-generated backend API summary
 // ---------------------------------------------------------------------------
 
-export function buildBeOverviewPrompt(repoName: string, files: SourceFile[]): string {
+export function buildBeOverviewPrompt(
+  repoName: string,
+  files: SourceFile[],
+  fePagesContext = "",
+  branchContext?: BranchContext,
+): string {
+  const feSection = fePagesContext
+    ? `## What the Frontend Expects\n\nThe following pages/journeys have been discovered in the frontend. ` +
+      `Describe BE routes in terms of which FE pages they serve:\n\n${fePagesContext.slice(0, 600)}\n\n`
+    : "";
+  const branchBlock = branchContext ? buildBranchContextBlock(branchContext) : "";
+
   return `Analyze the backend routes and controllers of the \`${repoName}\` repository.
+
+${branchBlock}${feSection}
 
 ## Source Files
 
@@ -248,6 +440,106 @@ Be specific to what is visible in the provided files. Maximum 600 words.`;
 }
 
 // ---------------------------------------------------------------------------
+// BUSINESS — operational context for the codebase
+// ---------------------------------------------------------------------------
+
+export function buildBusinessPrompt(
+  repoName: string,
+  files: SourceFile[],
+  readmeSeed = "",
+): string {
+  const seedSection = readmeSeed
+    ? `## Prior Context from README\n\n${readmeSeed.slice(0, 600)}\n\n`
+    : "";
+
+  return `Generate a **Business.md** for the \`${repoName}\` repository — operational context for AI coding assistants.
+
+${seedSection}## Source Files
+
+${sourceSection(files)}
+
+## Task
+
+Document the operational and business context visible in the code:
+1. **Stakeholders** — who owns and depends on this system (infer from model names, policy classes, job names)
+2. **Critical workflows** — the 2–4 most business-critical processes (billing, auth, patient management, etc.)
+3. **Business invariants** — rules that must never be violated (e.g. "an authorization must exist before dispensing")
+4. **Compliance signals** — any HIPAA, PCI, or regulatory patterns visible in the code
+5. **Failure impact** — what breaks for end users if this service goes down
+
+This document gives AI assistants the business context they need to avoid changes that are technically correct but operationally dangerous.`;
+}
+
+// ---------------------------------------------------------------------------
+// PRODUCT — FE user journeys (FE repos only)
+// ---------------------------------------------------------------------------
+
+export function buildProductPrompt(
+  repoName: string,
+  files: SourceFile[],
+  readmeSeed = "",
+  pagesDoc = "",
+): string {
+  const seedSection = readmeSeed
+    ? `## Prior Context from README\n\n${readmeSeed.slice(0, 400)}\n\n`
+    : "";
+  const pagesSection = pagesDoc
+    ? `## Discovered Pages\n\n${pagesDoc.slice(0, 800)}\n\n`
+    : "";
+
+  return `Generate a **Product.md** for the \`${repoName}\` frontend repository — user journey documentation for AI coding assistants.
+
+${seedSection}${pagesSection}## Source Files
+
+${sourceSection(files)}
+
+## Task
+
+Document the product experience visible in the router, navigation, and active page components:
+1. **Core user journeys** — the 3–5 most important end-to-end flows a user completes (e.g. "Submit pre-authorization", "Onboard a new patient")
+2. **Page inventory** — key pages and what user action each enables
+3. **Navigation model** — how users move between sections (sidebar, tabs, wizards)
+4. **Key interactions** — forms, wizards, data tables that drive the primary value of the product
+5. **Frontend constraints** — patterns the UI enforces (required fields, step-gating, permission-gated sections)
+
+Focus on what the user does and why — not how the code works internally.
+Do NOT reference Cypress, Storybook, or test infrastructure.`;
+}
+
+// ---------------------------------------------------------------------------
+// CROSS_REPO — workspace-level FE→BE mapping
+// ---------------------------------------------------------------------------
+
+export function buildCrossRepoPrompt(
+  workspaceName: string,
+  fePagesDoc: string,
+  feProductDoc: string,
+  beApiContractsDoc: string,
+): string {
+  return `Generate a **CrossRepo.md** workspace document that maps FE user journeys to BE API endpoints.
+
+## FE Pages
+${fePagesDoc.slice(0, 800)}
+
+## FE Product Journeys
+${feProductDoc.slice(0, 600)}
+
+## BE API Contracts
+${beApiContractsDoc.slice(0, 1000)}
+
+## Task
+
+Produce a cross-service mapping for AI coding assistants:
+1. **Journey → Endpoint map** — for each major FE user journey, list the BE endpoints it calls (method + path)
+2. **Shared contracts** — data shapes passed between FE and BE (request/response schemas)
+3. **Auth boundary** — how authentication tokens flow from FE to BE
+4. **Known gaps** — FE pages that reference endpoints not visible in the BE contracts doc
+5. **Cross-repo change risk** — which FE journeys would break if a specific BE endpoint changed
+
+Keep this factual; do not speculate about endpoints not visible in the provided docs.`;
+}
+
+// ---------------------------------------------------------------------------
 // Refresh prompt (used by POST /api/refresh for incremental updates)
 // ---------------------------------------------------------------------------
 
@@ -255,16 +547,28 @@ export function buildRefreshDocPrompt(
   docType: DocType,
   repoName: string,
   files: SourceFile[],
+  frameworkBaseline?: string,
 ): string {
   switch (docType) {
     case "readme":       return buildReadmePrompt(repoName, files);
     case "about":        return buildAboutPrompt(repoName, files);
     case "architecture": return buildArchitecturePrompt(repoName, files);
-    case "code_style":   return buildCodeStylePrompt(repoName, files);
-    case "rules":        return buildRulesPrompt(repoName, files);
+    case "code_style":   return buildCodeStylePrompt(repoName, files, frameworkBaseline);
+    case "rules":        return buildRulesPrompt(repoName, files, frameworkBaseline);
     case "styles":       return buildStylesPrompt(repoName, files);
     case "pages":        return buildPagesPrompt(repoName, files);
     case "be_overview":  return buildBeOverviewPrompt(repoName, files);
+    case "business":     return buildBusinessPrompt(repoName, files);
+    case "product":      return buildProductPrompt(repoName, files);
+    case "specialist":
+    case "api_contracts":
+    case "changelog":
+    case "memory":
+    case "cross_repo":
+      // These doc types require special generation logic (generateSpecialistDoc, git log,
+      // cross-repo context, etc.). The refresh endpoint cannot handle them generically —
+      // throw so the caller skips and logs the error.
+      throw new Error(`Doc type "${docType}" cannot be refreshed via buildRefreshDocPrompt`);
     default:             return buildReadmePrompt(repoName, files);
   }
 }
@@ -279,7 +583,12 @@ export function buildSpecialistPrompt(
   aboutDoc: string,
   archDoc: string,
   rulesDoc: string,
+  frameworkBestPractices?: string,
 ): string {
+  const frameworkSection = frameworkBestPractices
+    ? `\n## Framework Expertise (${stackLabel})\n${frameworkBestPractices}\n`
+    : "";
+
   return `You are creating a Specialist Identity Card for an AI coding assistant.
 This card will be prepended to EVERY prompt that operates on the "${repoName}" repository.
 It must be accurate, specific, and immediately useful. Maximum 400 words.
@@ -294,7 +603,7 @@ ${archDoc.slice(0, 800)}
 
 ## Business Rules (excerpt)
 ${rulesDoc.slice(0, 600)}
-
+${frameworkSection}
 Generate a specialist card with these exact sections:
 1. **Domain** — 2 sentences: what the system does and who uses it
 2. **Core Entities** — bullet list of the 5–8 most important models/services/components with one-line descriptions
@@ -377,4 +686,89 @@ ${insightLines || "(none yet)"}
 
 ## Most-Queried Flows (last 30 days)
 ${flowLines || "(no query data yet)"}`;
+}
+
+// ---------------------------------------------------------------------------
+// Framework baseline — formats skill bestPractices for injection into prompts
+// ---------------------------------------------------------------------------
+
+/** @deprecated — use BestPractices from skills/types.ts directly. Kept for backward compat. */
+export type { BestPractices as FrameworkBestPractices };
+
+/**
+ * Formats a skill's bestPractices into a compact markdown string suitable
+ * for injection into code_style and rules doc prompts.
+ * Multiple skills are merged and de-duplicated. Each section is capped at 8
+ * bullets to prevent bloat when 3+ framework stacks are combined.
+ */
+export function buildFrameworkBaseline(
+  practicesList: BestPractices[],
+  options: { includeTesting?: boolean; includePerformance?: boolean } = {},
+): string {
+  if (practicesList.length === 0) return "";
+
+  const { includeTesting = false, includePerformance = false } = options;
+
+  const merge = (key: keyof BestPractices): string[] => {
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const p of practicesList) {
+      for (const item of p[key]) {
+        if (!seen.has(item)) {
+          seen.add(item);
+          result.push(item);
+        }
+      }
+    }
+    return result;
+  };
+
+  const sections: string[] = [];
+
+  const arch = merge("architecture").slice(0, 8);
+  if (arch.length > 0) sections.push(`**Architecture**\n${arch.map((s) => `- ${s}`).join("\n")}`);
+
+  const style = merge("codeStyle").slice(0, 8);
+  if (style.length > 0) sections.push(`**Code Style**\n${style.map((s) => `- ${s}`).join("\n")}`);
+
+  const security = merge("security").slice(0, 8);
+  if (security.length > 0) sections.push(`**Security**\n${security.map((s) => `- ${s}`).join("\n")}`);
+
+  const antiPatterns = merge("antiPatterns").slice(0, 8);
+  if (antiPatterns.length > 0) sections.push(`**Anti-Patterns**\n${antiPatterns.map((s) => `- ${s}`).join("\n")}`);
+
+  if (includeTesting) {
+    const testing = merge("testing").slice(0, 8);
+    if (testing.length > 0) sections.push(`**Testing**\n${testing.map((s) => `- ${s}`).join("\n")}`);
+  }
+
+  if (includePerformance) {
+    const perf = merge("performance").slice(0, 8);
+    if (perf.length > 0) sections.push(`**Performance**\n${perf.map((s) => `- ${s}`).join("\n")}`);
+  }
+
+  return sections.join("\n\n");
+}
+
+/**
+ * Returns only the Architecture section of the framework baseline.
+ * Designed for the specialist prompt where token budget is tighter
+ * and architectural personality is more useful than style/security details.
+ */
+export function buildFrameworkArchitectureOnly(practicesList: BestPractices[]): string {
+  if (practicesList.length === 0) return "";
+
+  const seen = new Set<string>();
+  const bullets: string[] = [];
+  for (const p of practicesList) {
+    for (const item of p.architecture) {
+      if (!seen.has(item)) {
+        seen.add(item);
+        bullets.push(item);
+      }
+    }
+  }
+  const capped = bullets.slice(0, 10);
+  if (capped.length === 0) return "";
+  return `**Architecture**\n${capped.map((s) => `- ${s}`).join("\n")}`;
 }

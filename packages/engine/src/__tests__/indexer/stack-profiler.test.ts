@@ -53,8 +53,6 @@ describe("detectStackProfile", () => {
   it("detects Go from go.mod", () => {
     repoDir = makeRepo({
       "go.mod": "module github.com/example/app\n\ngo 1.21\n\nrequire (\n\tgithub.com/gin-gonic/gin v1.9.1\n)\n",
-      // A root-level .go file importing gin so the profiler can detect the framework
-      "main.go": 'package main\n\nimport "github.com/gin-gonic/gin"\n\nfunc main() { r := gin.Default(); r.Run() }\n',
     });
     const profile = detectStackProfile(repoDir);
     expect(profile.primaryLanguage).toBe("go");
@@ -115,10 +113,11 @@ describe("detectStackProfile", () => {
   });
 
   it("detects Django from requirements.txt", () => {
-    repoDir = makeRepo({ "requirements.txt": "Django==4.2.0\ndjangorestframework==3.14.0\n" });
+    repoDir = makeRepo({ "requirements.txt": "Django==4.2.0\ncelery==5.3.0\n" });
     const profile = detectStackProfile(repoDir);
     expect(profile.primaryLanguage).toBe("python");
     expect(profile.frameworks).toContain("django");
+    expect(profile.frameworks).not.toContain("django_rest");
   });
 
   it("detects Flask from requirements.txt", () => {
@@ -165,10 +164,9 @@ describe("detectStackProfile", () => {
     expect(profile.primaryLanguage).toBe("java");
   });
 
-  it("detects Go echo framework from source file", () => {
+  it("detects Go echo framework from go.mod", () => {
     repoDir = makeRepo({
-      "go.mod": "module example.com/app\n\ngo 1.21\n",
-      "main.go": 'package main\n\nimport "github.com/labstack/echo/v4"\n',
+      "go.mod": "module example.com/app\n\ngo 1.21\n\nrequire (\n\tgithub.com/labstack/echo/v4 v4.11.0\n)\n",
     });
     const profile = detectStackProfile(repoDir);
     expect(profile.primaryLanguage).toBe("go");
@@ -208,6 +206,110 @@ describe("detectStackProfile", () => {
     expect(profile.frameworks).toEqual([]);
     expect(profile.isLambda).toBe(false);
     expect(profile.skillIds).toEqual([]);
+  });
+
+  // --- new skill detection ---
+
+  it("detects nestjs from package.json", () => {
+    repoDir = makeRepo({
+      "package.json": JSON.stringify({
+        dependencies: { "@nestjs/core": "^10.0.0", typescript: "^5.0.0" },
+      }),
+    });
+    const profile = detectStackProfile(repoDir);
+    expect(profile.frameworks).toContain("nestjs");
+    expect(profile.skillIds).toContain("nestjs");
+  });
+
+  it("detects svelte from package.json", () => {
+    repoDir = makeRepo({
+      "package.json": JSON.stringify({ dependencies: { svelte: "^4.0.0" } }),
+    });
+    const profile = detectStackProfile(repoDir);
+    expect(profile.frameworks).toContain("svelte");
+    expect(profile.skillIds).toContain("svelte");
+  });
+
+  it("detects angular from package.json", () => {
+    repoDir = makeRepo({
+      "package.json": JSON.stringify({
+        dependencies: { "@angular/core": "^17.0.0", typescript: "^5.0.0" },
+      }),
+    });
+    const profile = detectStackProfile(repoDir);
+    expect(profile.frameworks).toContain("angular");
+    expect(profile.skillIds).toContain("angular");
+  });
+
+  it("detects gin and emits both gin and go skill IDs", () => {
+    repoDir = makeRepo({
+      "go.mod": "module example.com/app\n\ngo 1.21\n\nrequire (\n\tgithub.com/gin-gonic/gin v1.9.1\n)\n",
+    });
+    const profile = detectStackProfile(repoDir);
+    expect(profile.frameworks).toContain("gin");
+    expect(profile.skillIds).toContain("gin");
+    expect(profile.skillIds).toContain("go");
+  });
+
+  it("detects spring from pom.xml", () => {
+    repoDir = makeRepo({
+      "pom.xml":
+        "<project><parent><artifactId>spring-boot-starter-parent</artifactId></parent></project>",
+    });
+    const profile = detectStackProfile(repoDir);
+    expect(profile.frameworks).toContain("spring");
+    expect(profile.skillIds).toContain("spring");
+  });
+
+  it("detects spring from build.gradle", () => {
+    repoDir = makeRepo({
+      "build.gradle": "plugins { id 'org.springframework.boot' version '3.2.0' }\ndependencies { implementation 'org.springframework.boot:spring-boot-starter-web' }",
+    });
+    const profile = detectStackProfile(repoDir);
+    expect(profile.frameworks).toContain("spring");
+    expect(profile.skillIds).toContain("spring");
+    expect(profile.packageManager).toBe("gradle");
+  });
+
+  it("detects spring from build.gradle.kts (Kotlin DSL)", () => {
+    repoDir = makeRepo({
+      "build.gradle.kts": `plugins { id("org.springframework.boot") version "3.2.0" }\ndependencies { implementation("org.springframework.boot:spring-boot-starter-web") }`,
+    });
+    const profile = detectStackProfile(repoDir);
+    expect(profile.frameworks).toContain("spring");
+    expect(profile.skillIds).toContain("spring");
+    expect(profile.packageManager).toBe("gradle");
+  });
+
+  it("detects django_rest from requirements.txt and implies django + python skill IDs", () => {
+    repoDir = makeRepo({
+      "requirements.txt": "django>=4.2\ndjangorestframework>=3.14\n",
+    });
+    const profile = detectStackProfile(repoDir);
+    expect(profile.frameworks).toContain("django_rest");
+    // DRF detection is exclusive: "django" is NOT pushed separately into frameworks
+    // (buildSkillIds handles the "DRF implies Django" skill ID inference)
+    expect(profile.frameworks).not.toContain("django");
+    expect(profile.skillIds).toContain("django_rest");
+    expect(profile.skillIds).toContain("django");
+    expect(profile.skillIds).toContain("python");
+  });
+
+  it("does not emit dead java skill ID for plain Java project", () => {
+    repoDir = makeRepo({ "pom.xml": "<project></project>" });
+    const profile = detectStackProfile(repoDir);
+    expect(profile.primaryLanguage).toBe("java");
+    expect(profile.skillIds).not.toContain("java");
+    expect(profile.skillIds).not.toContain("spring");
+  });
+
+  it("does not emit dead rust skill ID", () => {
+    repoDir = makeRepo({
+      "Cargo.toml": "[package]\nname = \"myapp\"\nversion = \"0.1.0\"\n",
+    });
+    const profile = detectStackProfile(repoDir);
+    expect(profile.primaryLanguage).toBe("rust");
+    expect(profile.skillIds).not.toContain("rust");
   });
 });
 

@@ -31,6 +31,8 @@ export interface FileIndexEntry {
   branch: string;
   commit_sha: string;
   parsed_data: string;
+  /** Normalized git commit frequency 0.0 (cold) – 1.0 (hot). Migration v18. */
+  heat_score: number;
   updated_at: string;
 }
 
@@ -80,13 +82,44 @@ export interface ProjectDoc {
     | "api_contracts"
     | "specialist"
     | "changelog"
-    | "memory";
+    | "memory"
+    | "pages"
+    | "be_overview";
   title: string;
   content: string;
   stale: number;
   source_file_paths: string; // JSON array of file paths used to generate this doc
+  /** SHA-1 of the frameworkBaseline string used during generation.
+   *  TODO: populate in upsertDoc once baseline-staleness detection is implemented (migration v17). */
+  applied_baseline_hash?: string | null;
+  /** Filesystem path where this doc was last written under /ai-srcmap/. Migration v18. */
+  file_path?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface TranscriptImport {
+  id: string;
+  file_path: string;
+  content_hash: string;
+  imported_at: string;
+  source_type: "cursor" | "claude_code" | "markdown";
+}
+
+export interface ExtractedInsight {
+  id: string;
+  transcript_id: string;
+  card_id: string | null;
+  category: "coding_rule" | "anti_pattern" | "architecture_decision" | "domain_knowledge" | "team_preference" | "gotcha";
+  statement: string;
+  evidence_quote: string;
+  confidence: number;
+  scope: string;
+  trust_score: number;
+  code_consistency_score: number | null;
+  verification_basis: string | null;
+  aspirational: number;
+  extracted_at: string;
 }
 
 export interface RepoProfile {

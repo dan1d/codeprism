@@ -10,7 +10,8 @@ import type { Card, ProjectDoc } from "../db/schema.js";
 import { calculateMetrics } from "./calculator.js";
 import { hybridSearch } from "../search/hybrid.js";
 import { createLLMProvider } from "../llm/provider.js";
-import { buildRefreshDocPrompt, DOC_SYSTEM_PROMPT, type DocType } from "../indexer/doc-prompts.js";
+import { buildRefreshDocPrompt, buildFrameworkBaseline, DOC_SYSTEM_PROMPT, type DocType } from "../indexer/doc-prompts.js";
+import { resolveSkills } from "../skills/index.js";
 import { getAllRepoSignalRecords } from "../search/repo-signals.js";
 
 const _require = createRequire(import.meta.url);
@@ -495,6 +496,24 @@ export async function registerDashboardRoutes(app: FastifyInstance): Promise<voi
     let skipped = 0;
     const errors: string[] = [];
 
+    // Cache framework baselines per repo to avoid repeated DB lookups within the same refresh batch
+    const repoBaselines = new Map<string, string>();
+    const getRepoBaseline = (repo: string): string => {
+      if (repoBaselines.has(repo)) return repoBaselines.get(repo)!;
+      const profileRow = db
+        .prepare("SELECT skill_ids FROM repo_profiles WHERE repo = ?")
+        .get(repo) as { skill_ids: string } | undefined;
+      if (!profileRow) { repoBaselines.set(repo, ""); return ""; }
+      let skillIds: string[] = [];
+      try { skillIds = JSON.parse(profileRow.skill_ids) as string[]; } catch { /* ignore */ }
+      const skills = resolveSkills(skillIds);
+      const baseline = skills.length > 0
+        ? buildFrameworkBaseline(skills.map((s) => s.bestPractices))
+        : "";
+      repoBaselines.set(repo, baseline);
+      return baseline;
+    };
+
     for (const doc of staleDocs) {
       let sourceFilePaths: string[] = [];
       try {
@@ -526,7 +545,8 @@ export async function registerDashboardRoutes(app: FastifyInstance): Promise<voi
       }
 
       try {
-        const prompt = buildRefreshDocPrompt(doc.doc_type as DocType, doc.repo, availableFiles);
+        const baseline = getRepoBaseline(doc.repo);
+        const prompt = buildRefreshDocPrompt(doc.doc_type as DocType, doc.repo, availableFiles, baseline);
         const newContent = await llm.generate(prompt, { systemPrompt: DOC_SYSTEM_PROMPT, maxTokens: 1200 });
 
         db.prepare(

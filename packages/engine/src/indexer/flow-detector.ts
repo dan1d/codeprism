@@ -1,5 +1,8 @@
 import { UndirectedGraph } from "graphology";
+import { DirectedGraph } from "graphology";
 import louvain from "graphology-communities-louvain";
+// CJS default export interop — same pattern as graphology-communities-louvain
+import pagerankLib from "graphology-metrics/centrality/pagerank.js";
 import type { GraphEdge } from "./graph-builder.js";
 import type { ParsedFile } from "./tree-sitter.js";
 import type { SeedFlow } from "./route-extractor.js";
@@ -21,7 +24,17 @@ type LouvainFn = (
 // CJS default export interop — louvain has no proper ESM exports field
 const runLouvain = louvain as unknown as LouvainFn;
 
-const HUB_DEGREE_THRESHOLD = 6;
+type PagerankFn = (
+  graph: InstanceType<typeof DirectedGraph>,
+  options?: { alpha?: number; maxIterations?: number; tolerance?: number },
+) => Record<string, number>;
+const runPagerank = pagerankLib as unknown as PagerankFn;
+
+/** Fraction of nodes considered hubs — top 10% by PageRank. */
+const HUB_PAGERANK_PERCENTILE = 0.90;
+/** Minimum PageRank score to ever be considered a hub (avoids flagging nodes
+ *  in tiny graphs where the 90th percentile is near zero). */
+const HUB_PAGERANK_MIN_SCORE = 0.005;
 const MIN_COMMUNITY_SIZE = 3;
 
 /** Path/directory segments that carry no domain meaning on their own. */
@@ -155,26 +168,45 @@ export function detectFlows(
 // ---------------------------------------------------------------------------
 
 function detectHubs(edges: GraphEdge[]): Set<string> {
-  // Count weighted degree across ALL high-signal relation types
-  // (not just model_association, so polymorphic models also become hubs)
+  // Only high-signal structural edges contribute — import/require noise excluded
   const HIGH_SIGNAL_RELATIONS = new Set([
     "model_association",
     "controller_model",
     "route_controller",
   ]);
 
-  const degree = new Map<string, number>();
+  // Build a directed graph: edge goes sourceFile → targetFile.
+  // Files with high *in-PageRank* are true hubs — many things depend on them.
+  // Files with high out-degree (they depend on many things) are not hubs.
+  const graph = new DirectedGraph();
+
   for (const e of edges) {
     if (!HIGH_SIGNAL_RELATIONS.has(e.relation)) continue;
-    // Weight by edge weight so downweighted (shared_utility) edges count less
-    const w = e.weight ?? 1;
-    degree.set(e.sourceFile, (degree.get(e.sourceFile) ?? 0) + w);
-    degree.set(e.targetFile, (degree.get(e.targetFile) ?? 0) + w);
+    if (!graph.hasNode(e.sourceFile)) graph.addNode(e.sourceFile);
+    if (!graph.hasNode(e.targetFile)) graph.addNode(e.targetFile);
+
+    const key = `${e.sourceFile}\0${e.targetFile}`;
+    if (graph.hasDirectedEdge(e.sourceFile, e.targetFile)) {
+      const cur = graph.getEdgeAttribute(key, "weight") as number ?? 1;
+      graph.setEdgeAttribute(key, "weight", cur + (e.weight ?? 1));
+    } else {
+      graph.addDirectedEdgeWithKey(key, e.sourceFile, e.targetFile, {
+        weight: e.weight ?? 1,
+      });
+    }
   }
 
+  if (graph.order === 0) return new Set();
+
+  // Run PageRank (α = 0.85, standard damping factor)
+  const scores = runPagerank(graph, { alpha: 0.85 });
+  const sorted = Object.values(scores).sort((a, b) => a - b);
+  const threshold = sorted[Math.floor(sorted.length * HUB_PAGERANK_PERCENTILE)] ?? 0;
+  const cutoff = Math.max(threshold, HUB_PAGERANK_MIN_SCORE);
+
   const hubs = new Set<string>();
-  for (const [file, deg] of degree) {
-    if (deg >= HUB_DEGREE_THRESHOLD) hubs.add(file);
+  for (const [file, score] of Object.entries(scores)) {
+    if (score >= cutoff) hubs.add(file);
   }
   return hubs;
 }
