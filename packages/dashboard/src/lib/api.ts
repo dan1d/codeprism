@@ -1,7 +1,16 @@
 const BASE = typeof window !== "undefined" ? window.location.origin : "http://localhost:4000";
 
+function getSessionToken(): string | null {
+  return localStorage.getItem("srcmap_session");
+}
+
 async function fetchJSON<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, options);
+  const headers = new Headers(options?.headers);
+  const session = getSessionToken();
+  if (session) headers.set("X-Session-Token", session);
+  if (!headers.has("Content-Type") && options?.body) headers.set("Content-Type", "application/json");
+
+  const res = await fetch(`${BASE}${path}`, { ...options, headers });
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
     throw new Error(`${res.status}: ${text}`);
@@ -248,10 +257,72 @@ export const api = {
   publicStats: () =>
     fetchJSON<PublicStats>("/api/public-stats"),
 
-  createTenant: (name: string) =>
+  createTenant: (name: string, email?: string) =>
     fetchJSON<TenantInfo>("/api/tenants", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, email }),
     }),
+
+  // ---- Auth ----
+  requestMagicLink: (email: string, tenant: string) =>
+    fetchJSON<{ ok: boolean; message: string }>("/api/auth/magic-link", {
+      method: "POST",
+      body: JSON.stringify({ email, tenant }),
+    }),
+
+  verifyToken: (token: string) =>
+    fetchJSON<AuthResponse>("/api/auth/verify", {
+      method: "POST",
+      body: JSON.stringify({ token }),
+    }),
+
+  logout: () =>
+    fetchJSON<{ ok: boolean }>("/api/auth/logout", { method: "POST" }),
+
+  me: () =>
+    fetchJSON<{ userId: string; tenantSlug: string; email: string; role: string }>("/api/auth/me"),
+
+  // ---- Members ----
+  members: () =>
+    fetchJSON<MembersResponse>("/api/members"),
+
+  inviteMembers: (emails: string[]) =>
+    fetchJSON<InviteResponse>("/api/members/invite", {
+      method: "POST",
+      body: JSON.stringify({ emails }),
+    }),
+
+  deactivateMember: (userId: string) =>
+    fetchJSON<{ deactivated: string }>(`/api/members/${encodeURIComponent(userId)}`, { method: "DELETE" }),
 };
+
+// ---- Auth types ----
+export interface AuthResponse {
+  sessionToken: string;
+  user: { id: string; email: string; name: string };
+  tenant: { slug: string; name: string };
+}
+
+export interface TeamMember {
+  userId: string;
+  email: string;
+  name: string;
+  role: string;
+  status: string;
+  invitedAt: string;
+  acceptedAt: string | null;
+  queryCount: number;
+}
+
+export interface MembersResponse {
+  members: TeamMember[];
+  activeCount: number;
+  maxSeats: number | null;
+}
+
+export interface InviteResponse {
+  invited: number;
+  skipped: number;
+  details: Array<{ email: string; alreadyMember: boolean }>;
+}

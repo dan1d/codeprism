@@ -8,18 +8,19 @@
  * Run:
  *   - On server startup (for any branches deleted while the server was off)
  *   - After every merge/pull event (when the merged branch is typically deleted)
- *   - Optionally on a daily schedule via the watcher
  *
- * Safe: read-only git queries, all DB writes are inside transactions.
- * Never deletes cards that are valid on multiple branches — only removes
- * the deleted-branch entry from `valid_branches`.
+ * Safe: async git queries (never blocks event loop), all DB writes in a single transaction.
+ * Never deletes cards that are valid on multiple branches.
  */
 
-import { execSync } from "node:child_process";
+import { exec } from "node:child_process";
+import { promisify } from "node:util";
 import { existsSync } from "node:fs";
 import { getDb } from "../db/connection.js";
 
-interface GCResult {
+const execAsync = promisify(exec);
+
+export interface GCResult {
   repo: string;
   orphanedFileIndexRows: number;
   prunedBranchScopedCards: number;
@@ -28,24 +29,31 @@ interface GCResult {
 
 /**
  * Returns the set of branches that currently exist in a local git repo.
- * Includes both local branches and remote-tracking branches (origin/*).
- * `main` and `master` are always included even if git is unreachable.
+ * Includes local branches and remote-tracking branches (stripped of "origin/" prefix).
+ * `main` and `master` are always included as a safe fallback if git is unreachable.
+ *
+ * NOTE: remote branch data reflects the last `git fetch`. Branches deleted on the
+ * remote but not yet pruned locally will still appear as "live" — GC is therefore
+ * conservative in that direction (safe, but orphaned data may linger until next fetch).
  */
-function liveBranches(repoPath: string): Set<string> {
+async function liveBranches(repoPath: string): Promise<Set<string>> {
   const always = new Set(["main", "master"]);
   try {
-    const local = execSync("git branch --format=%(refname:short)", {
-      cwd: repoPath, encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"], timeout: 8_000,
-    }).trim();
-
-    const remote = execSync("git branch -r --format=%(refname:short)", {
-      cwd: repoPath, encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"], timeout: 8_000,
-    }).trim();
+    const [localResult, remoteResult] = await Promise.all([
+      execAsync("git branch --format=%(refname:short)", {
+        cwd: repoPath, timeout: 8_000,
+      }),
+      execAsync("git branch -r --format=%(refname:short)", {
+        cwd: repoPath, timeout: 8_000,
+      }),
+    ]);
 
     const branches = new Set<string>(["main", "master"]);
-    for (const line of [...local.split("\n"), ...remote.split("\n")]) {
+    const allLines = [
+      ...localResult.stdout.trim().split("\n"),
+      ...remoteResult.stdout.trim().split("\n"),
+    ];
+    for (const line of allLines) {
       const b = line.trim().replace(/^origin\//, "");
       if (b) branches.add(b);
     }
@@ -55,10 +63,14 @@ function liveBranches(repoPath: string): Set<string> {
   }
 }
 
+/** Prevent concurrent GC runs for the same repo. */
+const gcInProgress = new Set<string>();
+
 /**
  * Runs branch GC for a single repository.
+ * Returns early if GC is already running for this repo.
  */
-export function runBranchGC(repoName: string, repoPath: string): GCResult {
+export async function runBranchGC(repoName: string, repoPath: string): Promise<GCResult> {
   const result: GCResult = {
     repo: repoName,
     orphanedFileIndexRows: 0,
@@ -66,68 +78,71 @@ export function runBranchGC(repoName: string, repoPath: string): GCResult {
     deletedBranchOnlyCards: 0,
   };
 
+  if (gcInProgress.has(repoName)) return result;
   if (!existsSync(repoPath)) return result;
 
-  const live = liveBranches(repoPath);
-  const db = getDb();
+  gcInProgress.add(repoName);
+  try {
+    const live = await liveBranches(repoPath);
+    const db = getDb();
 
-  // ── 1. Orphaned file_index rows ──────────────────────────────────────────
-  // file_index is keyed by (path, repo, branch). Rows for deleted branches
-  // are stale metadata that bloat the DB and confuse cross-branch queries.
-  const fiRows = db
-    .prepare("SELECT DISTINCT branch FROM file_index WHERE repo = ?")
-    .all(repoName) as { branch: string }[];
+    // ── Combined transaction: file_index cleanup + card pruning ─────────────
+    // A single transaction ensures the two operations are always consistent.
+    // Readers see either both changes or neither.
 
-  const deletedBranches = fiRows.map((r) => r.branch).filter((b) => b && !live.has(b));
+    // Gather file_index branches to delete (read outside tx for clarity)
+    const fiRows = db
+      .prepare("SELECT DISTINCT branch FROM file_index WHERE repo = ?")
+      .all(repoName) as { branch: string }[];
 
-  if (deletedBranches.length > 0) {
-    const del = db.prepare("DELETE FROM file_index WHERE repo = ? AND branch = ?");
+    const deletedBranches = fiRows.map((r) => r.branch).filter((b) => b && !live.has(b));
+
+    // H1 fix: use json_each for exact match instead of LIKE wildcard
+    const scopedCards = db
+      .prepare(
+        `SELECT id, valid_branches FROM cards
+         WHERE valid_branches IS NOT NULL
+           AND EXISTS (
+             SELECT 1 FROM json_each(source_repos) WHERE value = ?
+           )`,
+      )
+      .all(repoName) as { id: string; valid_branches: string }[];
+
+    const delFileIndex = db.prepare("DELETE FROM file_index WHERE repo = ? AND branch = ?");
+    const updateBranches = db.prepare(
+      "UPDATE cards SET valid_branches = ?, stale = 1, updated_at = datetime('now') WHERE id = ?",
+    );
+    const deleteCard = db.prepare("DELETE FROM cards WHERE id = ?");
+
+    // M4 fix: single combined transaction
     const tx = db.transaction(() => {
       for (const branch of deletedBranches) {
-        const r = del.run(repoName, branch);
+        const r = delFileIndex.run(repoName, branch);
         result.orphanedFileIndexRows += r.changes;
       }
-    });
-    tx();
-  }
 
-  // ── 2. Branch-scoped cards ───────────────────────────────────────────────
-  // Cards with a non-null `valid_branches` JSON array are only meaningful on
-  // those specific branches. When all branches in the list are deleted:
-  //   - Remove the deleted branches from the array.
-  //   - If the array becomes empty → delete the card entirely.
-  //   - If branches remain → update valid_branches and mark stale.
-  const scopedCards = db
-    .prepare(
-      "SELECT id, valid_branches FROM cards WHERE valid_branches IS NOT NULL AND source_repos LIKE ?",
-    )
-    .all(`%${repoName}%`) as { id: string; valid_branches: string }[];
+      for (const card of scopedCards) {
+        let branches: string[];
+        try { branches = JSON.parse(card.valid_branches); }
+        catch { continue; }
 
-  const updateBranches = db.prepare(
-    "UPDATE cards SET valid_branches = ?, stale = 1, updated_at = datetime('now') WHERE id = ?",
-  );
-  const deleteCard = db.prepare("DELETE FROM cards WHERE id = ?");
+        const surviving = branches.filter((b) => live.has(b));
+        if (surviving.length === branches.length) continue;
 
-  const tx2 = db.transaction(() => {
-    for (const card of scopedCards) {
-      let branches: string[];
-      try { branches = JSON.parse(card.valid_branches); }
-      catch { continue; }
-
-      const surviving = branches.filter((b) => live.has(b));
-
-      if (surviving.length === branches.length) continue; // nothing to do
-
-      if (surviving.length === 0) {
-        deleteCard.run(card.id);
-        result.deletedBranchOnlyCards++;
-      } else {
-        updateBranches.run(JSON.stringify(surviving), card.id);
-        result.prunedBranchScopedCards++;
+        if (surviving.length === 0) {
+          deleteCard.run(card.id);
+          result.deletedBranchOnlyCards++;
+        } else {
+          updateBranches.run(JSON.stringify(surviving), card.id);
+          result.prunedBranchScopedCards++;
+        }
       }
-    }
-  });
-  tx2();
+    });
+
+    tx();
+  } finally {
+    gcInProgress.delete(repoName);
+  }
 
   if (
     result.orphanedFileIndexRows > 0 ||
@@ -145,18 +160,13 @@ export function runBranchGC(repoName: string, repoPath: string): GCResult {
 }
 
 /**
- * Runs branch GC for all repos that have file_index data.
- * Used on server startup and after pull/merge events.
- *
- * @param repoMap - map of repo name → absolute path on disk
+ * Runs branch GC for all repos. Used on server startup and after merge events.
  */
-export function runAllBranchGC(
-  repoMap: Map<string, string>,
-): GCResult[] {
+export async function runAllBranchGC(repoMap: Map<string, string>): Promise<GCResult[]> {
   const results: GCResult[] = [];
   for (const [name, path] of repoMap) {
     try {
-      results.push(runBranchGC(name, path));
+      results.push(await runBranchGC(name, path));
     } catch (err) {
       console.error(`[branch-gc] Error for ${name}:`, err instanceof Error ? err.message : err);
     }

@@ -2,20 +2,25 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import fp from "fastify-plugin";
 import { getTenantBySlug, getTenantByApiKey } from "./registry.js";
 import { enterTenantScope } from "../db/connection.js";
+import { autoRegisterDev, isKnownMember, wouldExceedSeatLimit } from "../services/members.js";
 
 declare module "fastify" {
   interface FastifyRequest {
     tenant?: string;
+    devEmail?: string;
   }
 }
 
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const PUBLIC_ROUTES = new Set([
   "GET /api/health",
   "POST /api/tenants",
   "GET /api/public-stats",
   "POST /api/telemetry",
+  "POST /api/auth/magic-link",
+  "POST /api/auth/verify",
 ]);
 
 function isPublicRoute(method: string, url: string): boolean {
@@ -42,12 +47,6 @@ function checkAdminAuth(request: FastifyRequest): boolean {
   return authHeader === `Bearer ${adminKey}`;
 }
 
-/**
- * Resolves tenant slug from the request using (in priority order):
- * 1. Path prefix: /acme/api/... or /acme/mcp/... -> slug = "acme"
- * 2. X-Tenant header (validated format)
- * 3. Authorization: Bearer sk_... -> API key lookup
- */
 function resolveTenantSlug(request: FastifyRequest): string | null {
   const pathMatch = request.url.match(/^\/([a-z0-9][a-z0-9-]*)\/(api|mcp)\//);
   if (pathMatch) return pathMatch[1];
@@ -64,8 +63,17 @@ function resolveTenantSlug(request: FastifyRequest): string | null {
   return null;
 }
 
+function extractDevEmail(request: FastifyRequest): string | undefined {
+  const header = request.headers["x-dev-email"];
+  if (typeof header === "string" && EMAIL_RE.test(header.trim())) {
+    return header.trim().toLowerCase();
+  }
+  return undefined;
+}
+
 async function tenantPlugin(app: FastifyInstance): Promise<void> {
   app.decorateRequest("tenant", undefined);
+  app.decorateRequest("devEmail", undefined);
 
   const multiTenant = process.env["SRCMAP_MULTI_TENANT"] === "true";
   if (!multiTenant) return;
@@ -94,6 +102,21 @@ async function tenantPlugin(app: FastifyInstance): Promise<void> {
 
       request.tenant = tenant.slug;
       request.log = request.log.child({ tenant: tenant.slug });
+
+      const devEmail = extractDevEmail(request);
+      if (devEmail) {
+        request.devEmail = devEmail;
+
+        // Auto-register unknown devs, but enforce seat limit on free plan
+        if (!isKnownMember(devEmail, tenant.slug)) {
+          if (wouldExceedSeatLimit(tenant.slug)) {
+            return reply.code(403).send({
+              error: `Seat limit reached (${tenant.max_seats} active developers). Upgrade your plan or deactivate unused members.`,
+            });
+          }
+          autoRegisterDev(devEmail, tenant.slug);
+        }
+      }
 
       enterTenantScope(tenant.slug);
     },

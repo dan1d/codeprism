@@ -1,18 +1,16 @@
 import { useState } from "react";
-import { Copy, Check, ArrowRight } from "lucide-react";
+import { Copy, Check, ArrowRight, ArrowLeft, Users, Sparkles, SkipForward } from "lucide-react";
 import { api, type TenantInfo } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
-
   const handleCopy = () => {
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
   };
-
   return (
     <button
       onClick={handleCopy}
@@ -27,25 +25,68 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
+function StepIndicator({ current, total }: { current: number; total: number }) {
+  return (
+    <div className="flex items-center gap-2 mb-8">
+      {Array.from({ length: total }, (_, i) => (
+        <div
+          key={i}
+          className={cn(
+            "h-1 flex-1 rounded-full transition-colors",
+            i <= current ? "bg-accent" : "bg-[#21262d]"
+          )}
+        />
+      ))}
+    </div>
+  );
+}
+
 export function Onboard() {
+  const [step, setStep] = useState(0);
   const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<TenantInfo | null>(null);
+  const [inviteEmails, setInviteEmails] = useState("");
+  const [inviting, setInviting] = useState(false);
+  const [inviteResult, setInviteResult] = useState<{ invited: number; skipped: number } | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleCreateWorkspace = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim() || !email.trim()) return;
 
     setLoading(true);
     setError(null);
     try {
-      const tenant = await api.createTenant(name.trim());
+      const tenant = await api.createTenant(name.trim(), email.trim());
       setResult(tenant);
+      setStep(1);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create workspace");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleInvite = async () => {
+    if (!result) return;
+    const emails = inviteEmails
+      .split(/[,\n]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (emails.length === 0) return;
+
+    setInviting(true);
+    try {
+      // We need to auth first to call invite — use magic link flow
+      // For now, send invites via the admin API key from the tenant creation
+      const res = await api.inviteMembers(emails);
+      setInviteResult({ invited: res.invited, skipped: res.skipped });
+    } catch {
+      setInviteResult({ invited: 0, skipped: 0 });
+    } finally {
+      setInviting(false);
     }
   };
 
@@ -55,7 +96,10 @@ export function Onboard() {
           mcpServers: {
             srcmap: {
               url: result.mcpUrl,
-              headers: { Authorization: `Bearer ${result.apiKey}` },
+              headers: {
+                Authorization: `Bearer ${result.apiKey}`,
+                "X-Dev-Email": email,
+              },
             },
           },
         },
@@ -67,103 +111,208 @@ export function Onboard() {
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-lg px-6 py-16">
-        <h1 className="mb-2 text-2xl font-bold text-[#e1e4e8]">
-          Get started with srcmap
-        </h1>
-        <p className="mb-8 text-sm text-[#8b949e]">
-          Create a workspace to connect your AI tools.
-        </p>
+        <StepIndicator current={step} total={4} />
 
-        {!result ? (
-          <form onSubmit={handleSubmit}>
-            <label
-              htmlFor="team-name"
-              className="mb-2 block text-sm font-medium text-[#e1e4e8]"
-            >
-              Company or team name
-            </label>
-            <input
-              id="team-name"
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Acme Corp"
-              autoFocus
-              className={cn(
-                "w-full rounded-lg border border-[#30363d] bg-[#0f1117] px-4 py-3",
-                "text-[#e1e4e8] placeholder:text-[#484f58]",
-                "focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-              )}
-            />
-            {error && (
-              <p className="mt-2 text-sm text-[#f85149]">{error}</p>
-            )}
-            <button
-              type="submit"
-              disabled={loading || !name.trim()}
-              className={cn(
-                "mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-accent px-6 py-3",
-                "text-sm font-semibold text-white transition-colors",
-                "hover:bg-[#79b8ff] disabled:opacity-50 disabled:cursor-not-allowed"
-              )}
-            >
-              {loading ? "Creating..." : "Create workspace"}
-              {!loading && <ArrowRight className="h-4 w-4" />}
-            </button>
-          </form>
-        ) : (
-          <div className="space-y-6">
-            <div className="rounded-lg border border-[#3fb950]/30 bg-[#3fb950]/5 p-4">
-              <p className="text-sm font-medium text-[#3fb950]">
-                Workspace created successfully
-              </p>
+        {/* Step 0: Create workspace */}
+        {step === 0 && (
+          <>
+            <h1 className="mb-2 text-2xl font-bold text-[#e1e4e8]">
+              Create your workspace
+            </h1>
+            <p className="mb-8 text-sm text-[#8b949e]">
+              Set up srcmap for your team. Takes less than a minute.
+            </p>
+
+            <form onSubmit={handleCreateWorkspace} className="space-y-4">
+              <div>
+                <label htmlFor="team-name" className="mb-1 block text-sm font-medium text-[#e1e4e8]">
+                  Company or team name
+                </label>
+                <input
+                  id="team-name"
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Acme Corp"
+                  autoFocus
+                  className={cn(
+                    "w-full rounded-lg border border-[#30363d] bg-[#0f1117] px-4 py-3",
+                    "text-[#e1e4e8] placeholder:text-[#484f58]",
+                    "focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                  )}
+                />
+              </div>
+              <div>
+                <label htmlFor="admin-email" className="mb-1 block text-sm font-medium text-[#e1e4e8]">
+                  Your email (admin)
+                </label>
+                <input
+                  id="admin-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@company.com"
+                  className={cn(
+                    "w-full rounded-lg border border-[#30363d] bg-[#0f1117] px-4 py-3",
+                    "text-[#e1e4e8] placeholder:text-[#484f58]",
+                    "focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                  )}
+                />
+              </div>
+              {error && <p className="text-sm text-[#f85149]">{error}</p>}
+              <button
+                type="submit"
+                disabled={loading || !name.trim() || !email.trim()}
+                className={cn(
+                  "flex w-full items-center justify-center gap-2 rounded-lg bg-accent px-6 py-3",
+                  "text-sm font-semibold text-black transition-colors",
+                  "hover:bg-[#79b8ff] disabled:opacity-50 disabled:cursor-not-allowed"
+                )}
+              >
+                {loading ? "Creating..." : "Create workspace"}
+                {!loading && <ArrowRight className="h-4 w-4" />}
+              </button>
+            </form>
+          </>
+        )}
+
+        {/* Step 1: API Key + MCP Config */}
+        {step === 1 && result && (
+          <>
+            <div className="rounded-lg border border-[#3fb950]/30 bg-[#3fb950]/5 p-4 mb-6">
+              <p className="text-sm font-medium text-[#3fb950]">Workspace created successfully</p>
             </div>
 
-            <div className="space-y-4">
+            <h2 className="mb-4 text-lg font-semibold text-[#e1e4e8]">Your API Key</h2>
+
+            <div className="space-y-4 mb-6">
               <div>
                 <div className="mb-1 flex items-center justify-between">
                   <span className="text-sm text-[#8b949e]">API Key</span>
                   <CopyButton text={result.apiKey} />
                 </div>
-                <code className="block rounded-lg border border-[#30363d] bg-[#0f1117] px-4 py-3 font-mono-nums text-sm text-[#e1e4e8] break-all">
+                <code className="block rounded-lg border border-[#30363d] bg-[#0f1117] px-4 py-3 font-mono text-sm text-[#e1e4e8] break-all">
                   {result.apiKey}
                 </code>
+                <p className="mt-1 text-xs text-[#d29922]">
+                  Save this key now. It won't be shown again.
+                </p>
               </div>
 
               <div>
-                <div className="mb-1 flex items-center justify-between">
-                  <span className="text-sm text-[#8b949e]">MCP URL</span>
-                  <CopyButton text={result.mcpUrl} />
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-sm text-[#e1e4e8]">
+                    Add to <code className="text-accent">.cursor/mcp.json</code>
+                  </span>
+                  <CopyButton text={mcpJson} />
                 </div>
-                <code className="block rounded-lg border border-[#30363d] bg-[#0f1117] px-4 py-3 font-mono-nums text-sm text-[#e1e4e8] break-all">
-                  {result.mcpUrl}
-                </code>
+                <pre className="rounded-lg border border-[#30363d] bg-[#0f1117] p-4 text-xs text-[#e1e4e8] overflow-x-auto">
+                  {mcpJson}
+                </pre>
               </div>
             </div>
 
-            <div>
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-sm text-[#e1e4e8]">
-                  Add this to your <code className="text-accent">.cursor/mcp.json</code>:
-                </span>
-                <CopyButton text={mcpJson} />
-              </div>
-              <pre className="rounded-lg border border-[#30363d] bg-[#0f1117] p-4 text-sm text-[#e1e4e8] overflow-x-auto">
-                {mcpJson}
-              </pre>
-            </div>
-
-            <a
-              href={result.dashboardUrl}
+            <button
+              onClick={() => setStep(2)}
               className={cn(
-                "flex w-full items-center justify-center gap-2 rounded-lg border border-[#30363d] bg-[#161b22] px-6 py-3",
-                "text-sm font-semibold text-[#e1e4e8] hover:border-[#8b949e] transition-colors"
+                "flex w-full items-center justify-center gap-2 rounded-lg bg-accent px-6 py-3",
+                "text-sm font-semibold text-black transition-colors hover:bg-[#79b8ff]"
               )}
             >
-              Open Dashboard
+              Continue
               <ArrowRight className="h-4 w-4" />
-            </a>
-          </div>
+            </button>
+          </>
+        )}
+
+        {/* Step 2: Invite team */}
+        {step === 2 && (
+          <>
+            <h2 className="mb-2 text-lg font-semibold text-[#e1e4e8] flex items-center gap-2">
+              <Users size={18} /> Invite your team
+            </h2>
+            <p className="mb-6 text-sm text-[#8b949e]">
+              Invite developers to join your workspace. They'll receive an email with setup instructions.
+            </p>
+
+            <textarea
+              value={inviteEmails}
+              onChange={(e) => setInviteEmails(e.target.value)}
+              placeholder={"alice@company.com\nbob@company.com\ncharlie@company.com"}
+              rows={5}
+              className={cn(
+                "w-full rounded-lg border border-[#30363d] bg-[#0f1117] px-4 py-3 mb-4",
+                "text-sm text-[#e1e4e8] placeholder:text-[#484f58] resize-none",
+                "focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+              )}
+            />
+
+            {inviteResult && (
+              <div className="rounded-lg border border-[#3fb950]/30 bg-[#3fb950]/5 p-3 mb-4">
+                <p className="text-sm text-[#3fb950]">
+                  {inviteResult.invited} invitation(s) sent{inviteResult.skipped > 0 ? `, ${inviteResult.skipped} already members` : ""}
+                </p>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={handleInvite}
+                disabled={inviting || !inviteEmails.trim()}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-2 rounded-lg bg-accent px-6 py-3",
+                  "text-sm font-semibold text-black transition-colors",
+                  "hover:bg-[#79b8ff] disabled:opacity-50 disabled:cursor-not-allowed"
+                )}
+              >
+                {inviting ? "Sending..." : "Send invitations"}
+              </button>
+              <button
+                onClick={() => setStep(3)}
+                className={cn(
+                  "flex items-center gap-1 rounded-lg border border-[#30363d] px-4 py-3",
+                  "text-sm text-[#8b949e] hover:text-[#e1e4e8] hover:border-[#8b949e] transition-colors"
+                )}
+              >
+                <SkipForward size={14} /> Skip
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* Step 3: Complete */}
+        {step === 3 && result && (
+          <>
+            <div className="text-center mb-8">
+              <Sparkles className="h-10 w-10 text-accent mx-auto mb-4" />
+              <h2 className="text-xl font-bold text-[#e1e4e8]">You're all set!</h2>
+              <p className="text-sm text-[#8b949e] mt-2">
+                Your workspace is ready. Developers who accept their invitations will appear in your Team page.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <a
+                href={result.dashboardUrl}
+                className={cn(
+                  "flex w-full items-center justify-center gap-2 rounded-lg bg-accent px-6 py-3",
+                  "text-sm font-semibold text-black transition-colors hover:bg-[#79b8ff]"
+                )}
+              >
+                Open Dashboard
+                <ArrowRight className="h-4 w-4" />
+              </a>
+              <button
+                onClick={() => setStep(1)}
+                className={cn(
+                  "flex w-full items-center justify-center gap-2 rounded-lg border border-[#30363d] px-6 py-3",
+                  "text-sm text-[#8b949e] hover:text-[#e1e4e8] hover:border-[#8b949e] transition-colors"
+                )}
+              >
+                <ArrowLeft className="h-4 w-4" /> Back to API key
+              </button>
+            </div>
+          </>
         )}
       </div>
     </div>

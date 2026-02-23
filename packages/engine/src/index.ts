@@ -17,10 +17,13 @@ import { startWatcher } from "./watcher/index.js";
 import { loadWorkspaceConfig } from "./config/workspace-config.js";
 import { getRegisteredRepos } from "./services/repos.js";
 import { runAllBranchGC } from "./sync/branch-gc.js";
-import { initTenantRegistry, closeTenantRegistry, createTenant, listTenants, deleteTenant, rotateApiKey } from "./tenant/registry.js";
+import { initTenantRegistry, closeTenantRegistry, createTenant, listTenants, deleteTenant, rotateApiKey, getTenantBySlug } from "./tenant/registry.js";
 import { tenantMiddleware } from "./tenant/middleware.js";
 import { receiveTelemetry } from "./telemetry/receiver.js";
 import { getAggregateStats } from "./telemetry/receiver.js";
+import { createMagicLink, verifyMagicLink, ensureUser, createSession, validateSession, destroySession } from "./services/auth.js";
+import { inviteMembers, listMembers, activateMember, deactivateMember, getActiveSeatCount } from "./services/members.js";
+import { sendMagicLinkEmail, sendInvitationEmail } from "./services/email.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -84,23 +87,34 @@ async function main(): Promise<void> {
   });
 
   if (isMultiTenant) {
-    app.post<{ Body: { name: string } }>(
+    app.post<{ Body: { name: string; email?: string } }>(
       "/api/tenants",
       { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } },
       async (request, reply) => {
-        const { name } = request.body ?? {};
+        const { name, email } = request.body ?? {};
         if (!name || typeof name !== "string" || name.trim().length < 2) {
           return reply
             .code(400)
             .send({ error: "name is required (min 2 characters)" });
         }
         try {
-          const result = createTenant(name.trim());
+          const result = createTenant(name.trim(), email?.trim());
+
+          // Auto-register admin if email provided
+          if (email?.trim()) {
+            const user = ensureUser(email.trim());
+            const { getRegistryDb_ } = await import("./tenant/registry.js");
+            const rDb = getRegistryDb_();
+            rDb.prepare(
+              "INSERT OR IGNORE INTO team_members (user_id, tenant_slug, role, status, accepted_at) VALUES (?, ?, 'admin', 'active', datetime('now'))",
+            ).run(user.id, result.slug);
+          }
+
           return reply.code(201).send({
             slug: result.slug,
             name: result.name,
             apiKey: result.apiKey,
-            mcpUrl: `${request.protocol}://${request.hostname}/${result.slug}/mcp`,
+            mcpUrl: `${request.protocol}://${request.hostname}/${result.slug}/mcp/sse`,
             dashboardUrl: `${request.protocol}://${request.hostname}/${result.slug}/`,
           });
         } catch (err) {
@@ -138,6 +152,132 @@ async function main(): Promise<void> {
         const newKey = rotateApiKey(request.params.slug);
         if (!newKey) return reply.code(404).send({ error: "Tenant not found" });
         return reply.send({ slug: request.params.slug, apiKey: newKey });
+      },
+    );
+  }
+
+  // ── Auth routes (public, multi-tenant only) ──────────────────────
+  if (isMultiTenant) {
+    app.post<{ Body: { email: string; tenant: string } }>(
+      "/api/auth/magic-link",
+      { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
+      async (request, reply) => {
+        const { email, tenant: tenantSlug } = request.body ?? {};
+        if (!email || !tenantSlug) {
+          return reply.code(400).send({ error: "email and tenant are required" });
+        }
+        const tenant = getTenantBySlug(tenantSlug);
+        if (!tenant) return reply.code(404).send({ error: "Tenant not found" });
+
+        const token = createMagicLink(email.trim(), tenantSlug);
+        await sendMagicLinkEmail(email.trim(), token, tenantSlug, tenant.name);
+        return reply.send({ ok: true, message: "Check your email for a sign-in link." });
+      },
+    );
+
+    app.post<{ Body: { token: string } }>(
+      "/api/auth/verify",
+      async (request, reply) => {
+        const { token } = request.body ?? {};
+        if (!token) return reply.code(400).send({ error: "token is required" });
+
+        const result = verifyMagicLink(token);
+        if (!result) return reply.code(401).send({ error: "Invalid or expired link" });
+
+        const user = ensureUser(result.email);
+        activateMember(user.id, result.tenantSlug);
+
+        const sessionToken = createSession(user.id, result.tenantSlug);
+        const tenant = getTenantBySlug(result.tenantSlug);
+
+        return reply.send({
+          sessionToken,
+          user: { id: user.id, email: user.email, name: user.name },
+          tenant: { slug: result.tenantSlug, name: tenant?.name ?? "" },
+        });
+      },
+    );
+
+    app.post("/api/auth/logout", async (request, reply) => {
+      const sessionToken = (request.headers["x-session-token"] as string) ?? "";
+      if (sessionToken) destroySession(sessionToken);
+      return reply.send({ ok: true });
+    });
+
+    app.get("/api/auth/me", async (request, reply) => {
+      const sessionToken = (request.headers["x-session-token"] as string) ?? "";
+      const session = sessionToken ? validateSession(sessionToken) : null;
+      if (!session) return reply.code(401).send({ error: "Not authenticated" });
+      return reply.send(session);
+    });
+
+    // ── Member management routes ──────────────────────────────────
+    app.get("/api/members", async (request, reply) => {
+      const sessionToken = (request.headers["x-session-token"] as string) ?? "";
+      const session = sessionToken ? validateSession(sessionToken) : null;
+      if (!session) return reply.code(401).send({ error: "Not authenticated" });
+
+      const members = listMembers(session.tenantSlug);
+      const activeCount = getActiveSeatCount(session.tenantSlug);
+      const tenant = getTenantBySlug(session.tenantSlug);
+
+      return reply.send({
+        members,
+        activeCount,
+        maxSeats: tenant?.max_seats ?? null,
+      });
+    });
+
+    app.post<{ Body: { emails: string[] } }>(
+      "/api/members/invite",
+      async (request, reply) => {
+        const sessionToken = (request.headers["x-session-token"] as string) ?? "";
+        const session = sessionToken ? validateSession(sessionToken) : null;
+        if (!session) return reply.code(401).send({ error: "Not authenticated" });
+        if (session.role !== "admin") return reply.code(403).send({ error: "Admin access required" });
+
+        const { emails } = request.body ?? {};
+        if (!Array.isArray(emails) || emails.length === 0) {
+          return reply.code(400).send({ error: "emails array is required" });
+        }
+        if (emails.length > 50) {
+          return reply.code(400).send({ error: "Maximum 50 invitations at once" });
+        }
+
+        const tenant = getTenantBySlug(session.tenantSlug);
+        const results = inviteMembers(emails, session.tenantSlug);
+
+        // Send invitation emails in background
+        for (const r of results) {
+          if (!r.alreadyMember && r.token) {
+            sendInvitationEmail(
+              r.email, r.token, session.tenantSlug,
+              tenant?.name ?? session.tenantSlug, session.email,
+            ).catch((err) => console.warn(`[email] Failed to send invite to ${r.email}:`, err));
+          }
+        }
+
+        const invited = results.filter((r) => !r.alreadyMember).length;
+        const skipped = results.filter((r) => r.alreadyMember).length;
+        return reply.code(201).send({ invited, skipped, details: results.map((r) => ({ email: r.email, alreadyMember: r.alreadyMember })) });
+      },
+    );
+
+    app.delete<{ Params: { userId: string } }>(
+      "/api/members/:userId",
+      async (request, reply) => {
+        const sessionToken = (request.headers["x-session-token"] as string) ?? "";
+        const session = sessionToken ? validateSession(sessionToken) : null;
+        if (!session) return reply.code(401).send({ error: "Not authenticated" });
+        if (session.role !== "admin") return reply.code(403).send({ error: "Admin access required" });
+
+        if (request.params.userId === session.userId) {
+          return reply.code(400).send({ error: "Cannot deactivate yourself" });
+        }
+
+        const removed = deactivateMember(request.params.userId, session.tenantSlug);
+        if (!removed) return reply.code(404).send({ error: "Member not found" });
+        return reply.send({ deactivated: request.params.userId });
       },
     );
   }
@@ -269,12 +409,10 @@ async function main(): Promise<void> {
   }
   const stopWatcher = startWatcher(watchedRepos);
 
-  // Run branch GC on startup to purge orphaned data from deleted branches
-  // (branches merged/deleted while the server was offline are cleaned up here)
-  setImmediate(() => {
-    const repoMap = new Map(watchedRepos.map((r) => [r.name, r.path]));
-    runAllBranchGC(repoMap);
-  });
+  // Run branch GC on startup to purge orphaned data from deleted branches.
+  // Runs async in the background — does not block server startup.
+  const repoMap = new Map(watchedRepos.map((r) => [r.name, r.path]));
+  void runAllBranchGC(repoMap);
 
   // ── Graceful shutdown ──────────────────────────────────────────────
 

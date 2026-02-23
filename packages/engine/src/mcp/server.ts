@@ -4,11 +4,13 @@ import type { FastifyInstance } from "fastify";
 import { registerTools } from "./tools/index.js";
 import { registerResources } from "./resources.js";
 import { runWithTenantDb } from "../db/connection.js";
+import { runWithDevEmail } from "./dev-context.js";
 
 interface SseSession {
   transport: SSEServerTransport;
   server: McpServer;
   tenant?: string;
+  devEmail?: string;
 }
 
 const sessions = new Map<string, SseSession>();
@@ -89,10 +91,16 @@ export async function createMcpServer(): Promise<McpContext> {
           reply.raw,
         );
 
+        const devEmailHeader = req.headers["x-dev-email"];
+        const devEmail = typeof devEmailHeader === "string" && devEmailHeader.includes("@")
+          ? devEmailHeader.trim().toLowerCase()
+          : undefined;
+
         sessions.set(transport.sessionId, {
           transport,
           server,
           tenant: req.tenant,
+          devEmail,
         });
 
         reply.raw.on("close", () => {
@@ -100,10 +108,11 @@ export async function createMcpServer(): Promise<McpContext> {
           server.close().catch(() => {});
         });
 
+        const connectFn = () => runWithDevEmail(devEmail, () => server.connect(transport));
         if (req.tenant) {
-          await runWithTenantDb(req.tenant, () => server.connect(transport));
+          await runWithTenantDb(req.tenant, connectFn);
         } else {
-          await server.connect(transport);
+          await connectFn();
         }
       });
 
@@ -118,7 +127,9 @@ export async function createMcpServer(): Promise<McpContext> {
 
         reply.hijack();
         const handle = () =>
-          session.transport.handlePostMessage(req.raw, reply.raw, req.body);
+          runWithDevEmail(session.devEmail, () =>
+            session.transport.handlePostMessage(req.raw, reply.raw, req.body),
+          );
 
         if (session.tenant) {
           await runWithTenantDb(session.tenant, handle);

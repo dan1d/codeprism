@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { calculateMetrics } from "./calculator.js";
 import { getInstanceInfo, updateInstanceInfo, getSettings, updateSettings } from "../services/instance.js";
 import { listRepos, getRepoOverview, getRepoBranches, getRepoSignals, getRegisteredRepos, registerRepo, unregisterRepo } from "../services/repos.js";
-import { watchNewRepo } from "../watcher/index.js";
+import { watchNewRepo, stopWatchingRepo } from "../watcher/index.js";
 import { listCards, getCard, listFlows, searchCards } from "../services/cards.js";
 import { listRules, insertTeamRule, updateRule, deleteRule, listRuleChecks, refineRule, importRules, runCheck } from "../services/rules.js";
 import { storeCheckoutContext, getActiveContext, type CheckoutContextInput } from "../services/context.js";
@@ -62,8 +62,10 @@ export async function registerDashboardRoutes(app: FastifyInstance): Promise<voi
   });
 
   app.delete<{ Params: { name: string } }>("/api/repos/register/:name", (request, reply) => {
-    unregisterRepo(request.params.name);
-    return reply.send({ removed: request.params.name });
+    const { name } = request.params;
+    unregisterRepo(name);
+    stopWatchingRepo(name); // stop fs.watch callbacks for the removed repo
+    return reply.send({ removed: name });
   });
 
   // Branch context — set automatically by the post-checkout git hook

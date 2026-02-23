@@ -11,6 +11,8 @@ export interface Tenant {
   api_key_hash: string;
   api_key_prefix: string;
   plan: string;
+  owner_email: string | null;
+  max_seats: number | null;
   created_at: string;
 }
 
@@ -19,6 +21,8 @@ export interface TenantPublic {
   name: string;
   api_key_prefix: string;
   plan: string;
+  owner_email: string | null;
+  max_seats: number | null;
   created_at: string;
 }
 
@@ -50,12 +54,55 @@ function getRegistryDb(): DatabaseType {
       api_key_hash   TEXT NOT NULL UNIQUE,
       api_key_prefix TEXT NOT NULL DEFAULT '',
       plan           TEXT NOT NULL DEFAULT 'free',
+      owner_email    TEXT,
+      max_seats      INTEGER,
       created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS users (
+      id          TEXT PRIMARY KEY,
+      email       TEXT NOT NULL UNIQUE,
+      name        TEXT NOT NULL DEFAULT '',
+      created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS team_members (
+      user_id       TEXT NOT NULL REFERENCES users(id),
+      tenant_slug   TEXT NOT NULL REFERENCES tenants(slug) ON DELETE CASCADE,
+      role          TEXT NOT NULL DEFAULT 'member' CHECK(role IN ('admin', 'member')),
+      status        TEXT NOT NULL DEFAULT 'invited' CHECK(status IN ('invited', 'active', 'detected', 'deactivated')),
+      invited_at    TEXT NOT NULL DEFAULT (datetime('now')),
+      accepted_at   TEXT,
+      PRIMARY KEY (user_id, tenant_slug)
+    );
+
+    CREATE TABLE IF NOT EXISTS magic_links (
+      token        TEXT PRIMARY KEY,
+      email        TEXT NOT NULL,
+      tenant_slug  TEXT NOT NULL REFERENCES tenants(slug) ON DELETE CASCADE,
+      expires_at   TEXT NOT NULL,
+      used_at      TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS sessions (
+      token        TEXT PRIMARY KEY,
+      user_id      TEXT NOT NULL REFERENCES users(id),
+      tenant_slug  TEXT NOT NULL REFERENCES tenants(slug) ON DELETE CASCADE,
+      expires_at   TEXT NOT NULL,
+      created_at   TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
 
-  // Migrate from old plaintext api_key column if it exists
+  // Migrate: add new columns to existing tenants table if missing
   const columns = db.pragma("table_info(tenants)") as { name: string }[];
+  if (!columns.some((c) => c.name === "owner_email")) {
+    db.exec("ALTER TABLE tenants ADD COLUMN owner_email TEXT");
+  }
+  if (!columns.some((c) => c.name === "max_seats")) {
+    db.exec("ALTER TABLE tenants ADD COLUMN max_seats INTEGER");
+  }
+
+  // Migrate from old plaintext api_key column if it exists
   const hasOldColumn = columns.some((c) => c.name === "api_key");
   if (hasOldColumn) {
     const rows = db
@@ -118,16 +165,20 @@ function generateApiKey(): string {
  * Creates a new tenant. Returns the public tenant record plus the raw API key.
  * The raw key is only available at creation time -- it is never stored.
  */
-export function createTenant(name: string): TenantPublic & { apiKey: string } {
+export function createTenant(
+  name: string,
+  ownerEmail?: string,
+): TenantPublic & { apiKey: string } {
   const db = getRegistryDb();
   const slug = generateSlug(name, db);
   const rawKey = generateApiKey();
   const keyHash = hashApiKey(rawKey);
   const keyPrefix = rawKey.slice(0, 7);
+  const maxSeats = 3; // free plan default
 
   db.prepare(
-    "INSERT INTO tenants (slug, name, api_key_hash, api_key_prefix) VALUES (?, ?, ?, ?)",
-  ).run(slug, name, keyHash, keyPrefix);
+    "INSERT INTO tenants (slug, name, api_key_hash, api_key_prefix, owner_email, max_seats) VALUES (?, ?, ?, ?, ?, ?)",
+  ).run(slug, name, keyHash, keyPrefix, ownerEmail ?? null, maxSeats);
 
   const tenant = getTenantBySlug(slug)!;
   return {
@@ -135,6 +186,8 @@ export function createTenant(name: string): TenantPublic & { apiKey: string } {
     name: tenant.name,
     api_key_prefix: tenant.api_key_prefix,
     plan: tenant.plan,
+    owner_email: tenant.owner_email,
+    max_seats: tenant.max_seats,
     created_at: tenant.created_at,
     apiKey: rawKey,
   };
@@ -163,8 +216,13 @@ export function getTenantByApiKey(rawKey: string): Tenant | null {
 export function listTenants(): TenantPublic[] {
   const db = getRegistryDb();
   return db
-    .prepare("SELECT slug, name, api_key_prefix, plan, created_at FROM tenants ORDER BY created_at")
+    .prepare("SELECT slug, name, api_key_prefix, plan, owner_email, max_seats, created_at FROM tenants ORDER BY created_at")
     .all() as TenantPublic[];
+}
+
+/** Exposes the registry DB for user/member queries in auth/member services. */
+export function getRegistryDb_(): DatabaseType {
+  return getRegistryDb();
 }
 
 /**

@@ -8,6 +8,7 @@ import {
   Plus,
   Database,
   ShieldAlert,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
@@ -18,6 +19,7 @@ const NAV_ITEMS = [
   { to: "/dashboard/repos", icon: GitBranch, label: "Repositories" },
   { to: "/dashboard/knowledge", icon: BookOpen, label: "Knowledge Base" },
   { to: "/dashboard/rules", icon: ShieldAlert, label: "Team Rules" },
+  { to: "/dashboard/team", icon: Users, label: "Team" },
   { to: "/dashboard/analytics", icon: BarChart2, label: "Analytics" },
   { to: "/dashboard/settings", icon: Settings, label: "Settings" },
 ] as const;

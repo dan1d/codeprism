@@ -15,6 +15,7 @@ import {
 } from "../../services/search.js";
 import { safeParseJsonArray } from "../../services/utils.js";
 import { getActiveContext, buildContextQuery } from "../../services/context.js";
+import { getDevEmail } from "../dev-context.js";
 
 export function registerSearchTools(server: McpServer): void {
   server.registerTool(
@@ -31,7 +32,7 @@ export function registerSearchTools(server: McpServer): void {
     },
     async ({ query, branch, debug }) => {
       try {
-        const { cards, results, cacheHit } = await searchAndTrack(query, branch);
+        const { cards, results, cacheHit } = await searchAndTrack(query, branch, 5, randomUUID(), getDevEmail());
 
         if (cards.length === 0) {
           return { content: [{ type: "text" as const, text: `No cards found for: "${query}"` }] };
@@ -116,15 +117,16 @@ export function registerSearchTools(server: McpServer): void {
           .slice(0, 1000);
 
         const contextSessionId = randomUUID();
+        const devEmail = getDevEmail();
         const hydeQuery = await buildHydeQuery(cleaned);
-        const { results: primaryResults } = await searchAndTrack(hydeQuery, branch, 10, contextSessionId);
+        const { results: primaryResults } = await searchAndTrack(hydeQuery, branch, 10, contextSessionId, devEmail);
 
         const entities = extractEntityNames(description);
         const seenIds = new Set(primaryResults.map((r) => r.card.id));
         const allSearchResults: SearchResult[] = [...primaryResults];
 
         for (const entity of entities.slice(0, 3)) {
-          const { results: entityResults } = await searchAndTrack(entity, branch, 4, contextSessionId);
+          const { results: entityResults } = await searchAndTrack(entity, branch, 4, contextSessionId, devEmail);
           for (const r of entityResults) {
             if (!seenIds.has(r.card.id)) {
               seenIds.add(r.card.id);

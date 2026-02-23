@@ -251,6 +251,7 @@ export async function searchAndTrack(
   branch?: string,
   limit = 5,
   sessionId = randomUUID(),
+  devId?: string,
 ): Promise<{ cards: CardSummary[]; results: SearchResult[]; cardIds: string[]; cacheHit: boolean }> {
   const start = Date.now();
 
@@ -266,6 +267,7 @@ export async function searchAndTrack(
       cacheHit: true,
       latencyMs: elapsed,
       branch,
+      devId,
     });
     logViewedInteractions(query, cachedCardIds, sessionId);
     return { cards, results: cached, cardIds: cachedCardIds, cacheHit: true };
@@ -293,6 +295,7 @@ export async function searchAndTrack(
     cacheHit: false,
     latencyMs: elapsed,
     branch,
+    devId,
   });
   logViewedInteractions(query, cardIds, sessionId);
 

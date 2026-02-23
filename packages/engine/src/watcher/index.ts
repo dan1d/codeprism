@@ -10,18 +10,26 @@
  *                             so MCP queries are scoped without any manual command
  *
  *   3. .git/ORIG_HEAD created / changes
- *                           → git pull / merge / rebase detected
+ *                           → git pull / merge detected (deduped with 500 ms debounce)
  *                             → handleSync(merge) + auto-reindex
  *
  * No CLI commands required. The developer just writes code and the KB stays fresh.
  *
- * NOTE: fs.watch recursive option works on macOS and Windows natively.
- * On Linux it requires the kernel inotify interface — works in most distros.
- * If fs.watch throws, each top-level directory is watched individually as fallback.
+ * Platform notes:
+ *   - fs.watch recursive option works natively on macOS and Windows.
+ *   - On Linux, kernel inotify is used. If recursive watch fails, falls back to
+ *     watching known top-level subdirectories individually.
+ *   - git worktrees (.git as a file) are not yet supported for git-event detection
+ *     (source file watching still works).
+ *
+ * Multi-tenant: disabled automatically when SRCMAP_MULTI_TENANT=true because
+ *   watcher callbacks run outside the Fastify request context (no tenant DB scope).
  */
 
-import { watch, readFileSync, existsSync } from "node:fs";
-import { execSync } from "node:child_process";
+import { watch, existsSync } from "node:fs";
+import { readFile, readFileSync } from "node:fs";
+import { exec } from "node:child_process";
+import { promisify } from "node:util";
 import { resolve, extname, join, relative } from "node:path";
 import type { FSWatcher } from "node:fs";
 import { handleSync } from "../sync/receiver.js";
@@ -31,11 +39,13 @@ import { runIncrementalReindex, reindexState, getStaleCardCount } from "../servi
 import { getDb } from "../db/connection.js";
 import { runBranchGC } from "../sync/branch-gc.js";
 
+const execAsync = promisify(exec);
+const readFileAsync = promisify(readFile);
+
 // ---------------------------------------------------------------------------
 // Configuration
 // ---------------------------------------------------------------------------
 
-/** Source file extensions that trigger re-sync when changed. */
 const WATCH_EXTENSIONS = new Set([
   ".rb", ".erb", ".rake", ".ru",
   ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".vue", ".svelte",
@@ -44,27 +54,26 @@ const WATCH_EXTENSIONS = new Set([
   ".sql", ".json", ".yaml", ".yml", ".toml",
 ]);
 
-/** Filenames without extension that trigger re-sync. */
 const WATCH_FILENAMES = new Set([
   "Gemfile", "Gemfile.lock", "schema.rb", "routes.rb",
   "package.json", "go.mod", "Cargo.toml", "pyproject.toml",
 ]);
 
-/** Path segments that exclude a file from watching. */
 const IGNORE_SEGMENTS = new Set([
   "node_modules", ".git", "dist", "build", "tmp", "log",
   ".next", ".nuxt", ".turbo", "coverage", "__pycache__",
   "vendor", ".cache", ".parcel-cache",
 ]);
 
-/**
- * Number of stale cards that triggers an automatic background reindex.
- * Configurable via search_config key `auto_reindex_threshold`.
- */
 const DEFAULT_THRESHOLD = 5;
-
-/** Debounce window: collect file changes for this many ms before processing. */
 const DEBOUNCE_MS = 1_200;
+const ORIG_HEAD_DEBOUNCE_MS = 500;
+
+/** Flush immediately when pending queue exceeds this size (file storm guard). */
+const MAX_PENDING = 500;
+
+/** Skip content for files larger than this (avoids reading generated bundles etc.). */
+const MAX_FILE_BYTES = 1_024 * 1_024; // 1 MB
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -77,7 +86,7 @@ function shouldWatchFile(filepath: string): boolean {
   return WATCH_EXTENSIONS.has(extname(base)) || WATCH_FILENAMES.has(base);
 }
 
-function readGitHead(repoPath: string): string {
+function readGitHeadSync(repoPath: string): string {
   try {
     const raw = readFileSync(join(repoPath, ".git", "HEAD"), "utf-8").trim();
     if (raw.startsWith("ref: refs/heads/")) return raw.slice("ref: refs/heads/".length);
@@ -87,10 +96,16 @@ function readGitHead(repoPath: string): string {
   }
 }
 
+/** Cached prepared statement for threshold reads. Created lazily, once per DB instance. */
+let _thresholdStmt: { get: () => unknown } | null = null;
+
 function getThreshold(): number {
   try {
     const db = getDb();
-    const row = db.prepare("SELECT value FROM search_config WHERE key = 'auto_reindex_threshold'").get() as { value: string } | undefined;
+    if (!_thresholdStmt) {
+      _thresholdStmt = db.prepare("SELECT value FROM search_config WHERE key = 'auto_reindex_threshold'");
+    }
+    const row = _thresholdStmt.get() as { value: string } | undefined;
     const n = parseInt(row?.value ?? "", 10);
     return Number.isFinite(n) && n > 0 ? n : DEFAULT_THRESHOLD;
   } catch {
@@ -106,61 +121,12 @@ interface RepoWatcher {
   name: string;
   path: string;
   watchers: FSWatcher[];
-  /** Pending changed files, keyed by absolute path. Cleared after debounce fires. */
+  /** Pending changed files, keyed by absolute path (inside repo.path only). */
   pending: Map<string, "added" | "modified" | "deleted">;
   debounceTimer: ReturnType<typeof setTimeout> | null;
+  origHeadTimer: ReturnType<typeof setTimeout> | null;
   /** Last known branch name — used to detect switches. */
   lastBranch: string;
-}
-
-// ---------------------------------------------------------------------------
-// Debounced file-change handler
-// ---------------------------------------------------------------------------
-
-async function flushPending(repo: RepoWatcher): Promise<void> {
-  if (repo.pending.size === 0) return;
-
-  const changedFiles = [...repo.pending.entries()];
-  repo.pending.clear();
-
-  const branch = readGitHead(repo.path) || "unknown";
-
-  // Read file contents for added/modified files
-  const payload: Parameters<typeof handleSync>[0] = {
-    repo: repo.name,
-    branch,
-    eventType: "save",
-    changedFiles: changedFiles.map(([absPath, status]) => {
-      let content = "";
-      if (status !== "deleted") {
-        try { content = readFileSync(absPath, "utf-8"); } catch { content = ""; }
-      }
-      return {
-        path: relative(repo.path, absPath),
-        content,
-        status,
-      };
-    }),
-  };
-
-  try {
-    const result = await handleSync(payload);
-    if (result.invalidated > 0) {
-      console.log(`[watcher] ${repo.name}@${branch} — ${result.invalidated} card(s) marked stale (${changedFiles.length} file(s) changed)`);
-      maybeAutoReindex(repo.name);
-    }
-  } catch (err) {
-    // Never let watcher errors surface — it's a background process
-    console.error(`[watcher] sync error for ${repo.name}:`, err instanceof Error ? err.message : err);
-  }
-}
-
-function scheduleFlush(repo: RepoWatcher): void {
-  if (repo.debounceTimer) clearTimeout(repo.debounceTimer);
-  repo.debounceTimer = setTimeout(() => {
-    repo.debounceTimer = null;
-    void flushPending(repo);
-  }, DEBOUNCE_MS);
 }
 
 // ---------------------------------------------------------------------------
@@ -169,10 +135,8 @@ function scheduleFlush(repo: RepoWatcher): void {
 
 function maybeAutoReindex(repoName?: string): void {
   if (reindexState.status === "running") return;
-
   const threshold = getThreshold();
   const staleCount = getStaleCardCount(repoName);
-
   if (staleCount >= threshold) {
     console.log(`[watcher] ${staleCount} stale card(s) ≥ threshold ${threshold} — triggering auto-reindex for ${repoName ?? "all repos"}`);
     runIncrementalReindex(repoName);
@@ -180,11 +144,74 @@ function maybeAutoReindex(repoName?: string): void {
 }
 
 // ---------------------------------------------------------------------------
+// Debounced file-change handler (C1, H6 fixed: async I/O)
+// ---------------------------------------------------------------------------
+
+async function flushPending(repo: RepoWatcher): Promise<void> {
+  if (repo.pending.size === 0) return;
+
+  const changedFiles = [...repo.pending.entries()];
+  repo.pending.clear();
+
+  const branch = readGitHeadSync(repo.path) || "unknown";
+
+  // H6 fix: read files asynchronously with a concurrency cap
+  const MAX_CONCURRENT_READS = 8;
+  const withContent: { path: string; content: string; status: "added" | "modified" | "deleted" }[] = [];
+
+  for (let i = 0; i < changedFiles.length; i += MAX_CONCURRENT_READS) {
+    const batch = changedFiles.slice(i, i + MAX_CONCURRENT_READS);
+    const batchResults = await Promise.all(
+      batch.map(async ([absPath, status]) => {
+        let content = "";
+        if (status !== "deleted") {
+          try {
+            const buf = await readFileAsync(absPath);
+            if (buf.byteLength <= MAX_FILE_BYTES) content = buf.toString("utf-8");
+          } catch { content = ""; }
+        }
+        return { path: relative(repo.path, absPath), content, status };
+      }),
+    );
+    withContent.push(...batchResults);
+  }
+
+  try {
+    const result = await handleSync({
+      repo: repo.name,
+      branch,
+      eventType: "save",
+      changedFiles: withContent,
+    });
+    if (result.invalidated > 0) {
+      console.log(`[watcher] ${repo.name}@${branch} — ${result.invalidated} card(s) marked stale (${changedFiles.length} file(s) changed)`);
+      maybeAutoReindex(repo.name);
+    }
+  } catch (err) {
+    console.error(`[watcher] sync error for ${repo.name}:`, err instanceof Error ? err.message : err);
+  }
+}
+
+function scheduleFlush(repo: RepoWatcher): void {
+  // H5 fix: force immediate flush when pending Map hits the cap
+  if (repo.pending.size >= MAX_PENDING) {
+    if (repo.debounceTimer) { clearTimeout(repo.debounceTimer); repo.debounceTimer = null; }
+    void flushPending(repo);
+    return;
+  }
+  if (repo.debounceTimer) clearTimeout(repo.debounceTimer);
+  repo.debounceTimer = setTimeout(() => {
+    repo.debounceTimer = null;
+    void flushPending(repo);
+  }, DEBOUNCE_MS);
+}
+
+// ---------------------------------------------------------------------------
 // Git event detection
 // ---------------------------------------------------------------------------
 
 function handleHeadChange(repo: RepoWatcher): void {
-  const newBranch = readGitHead(repo.path);
+  const newBranch = readGitHeadSync(repo.path);
   if (!newBranch || newBranch === repo.lastBranch) return;
 
   const prevBranch = repo.lastBranch;
@@ -204,6 +231,7 @@ function handleHeadChange(repo: RepoWatcher): void {
     ` — context updated automatically`,
   );
 
+  // M6 fix: log errors instead of silently swallowing them
   try {
     storeCheckoutContext({
       branch: newBranch,
@@ -212,14 +240,25 @@ function handleHeadChange(repo: RepoWatcher): void {
       contextHint: ctx.contextHint,
       epicBranch: ctx.epicBranch,
     });
-  } catch { /* non-blocking */ }
+  } catch (err) {
+    console.error(`[watcher] failed to store checkout context for ${repo.name}:`, err instanceof Error ? err.message : err);
+  }
+}
+
+// H4 fix: debounced, deduped ORIG_HEAD handler
+function scheduleOrigHead(repo: RepoWatcher): void {
+  if (repo.origHeadTimer) clearTimeout(repo.origHeadTimer);
+  repo.origHeadTimer = setTimeout(() => {
+    repo.origHeadTimer = null;
+    void handleOrigHead(repo);
+  }, ORIG_HEAD_DEBOUNCE_MS);
 }
 
 async function handleOrigHead(repo: RepoWatcher): Promise<void> {
   const origHeadPath = join(repo.path, ".git", "ORIG_HEAD");
   if (!existsSync(origHeadPath)) return;
 
-  const branch = readGitHead(repo.path) || "unknown";
+  const branch = readGitHeadSync(repo.path) || "unknown";
   const ctx = extractBranchContext(branch);
   if (ctx.syncLevel === "skip") return;
 
@@ -227,32 +266,33 @@ async function handleOrigHead(repo: RepoWatcher): Promise<void> {
   console.log(`[watcher] ${repo.name}@${branch} — git ${eventType} detected (ORIG_HEAD changed)`);
 
   try {
-    // Get files changed by the merge/pull using git diff
-    const raw = execSync("git diff --name-status ORIG_HEAD HEAD", {
-      cwd: repo.path, encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"], timeout: 10_000,
-    }).trim();
-
+    // C1 fix: async git diff — does not block the event loop
+    const { stdout } = await execAsync("git diff --name-status ORIG_HEAD HEAD", {
+      cwd: repo.path, timeout: 10_000,
+    });
+    const raw = stdout.trim();
     if (!raw) return;
 
-    const changedFiles = raw.split("\n").filter(Boolean).flatMap((line) => {
+    const changedFiles: { path: string; content: string; status: "added" | "modified" | "deleted" }[] = [];
+    for (const line of raw.split("\n").filter(Boolean)) {
       const [code, ...pathParts] = line.split("\t");
       if (code?.startsWith("R") && pathParts.length === 2) {
-        return [
-          { path: pathParts[0]!, content: "", status: "deleted" as const },
-          { path: pathParts[1]!, content: "", status: "added" as const },
-        ];
+        changedFiles.push({ path: pathParts[0]!, content: "", status: "deleted" });
+        changedFiles.push({ path: pathParts[1]!, content: "", status: "added" });
+        continue;
       }
-      const path = pathParts[0];
-      if (!path) return [];
-      const status = code?.startsWith("A") ? "added" as const : code?.startsWith("D") ? "deleted" as const : "modified" as const;
-      // Read content for non-deleted files
+      const filePath = pathParts[0];
+      if (!filePath) continue;
+      const status = code?.startsWith("A") ? "added" : code?.startsWith("D") ? "deleted" : "modified";
       let content = "";
       if (status !== "deleted") {
-        try { content = readFileSync(join(repo.path, path), "utf-8"); } catch { content = ""; }
+        try {
+          const buf = await readFileAsync(join(repo.path, filePath));
+          if (buf.byteLength <= MAX_FILE_BYTES) content = buf.toString("utf-8");
+        } catch { content = ""; }
       }
-      return [{ path, content, status }];
-    });
+      changedFiles.push({ path: filePath, content, status: status as "added" | "modified" | "deleted" });
+    }
 
     if (changedFiles.length === 0) return;
 
@@ -260,8 +300,8 @@ async function handleOrigHead(repo: RepoWatcher): Promise<void> {
     console.log(`[watcher] ${repo.name}@${branch} merge sync: ${result.indexed} indexed, ${result.invalidated} stale`);
     if (result.invalidated > 0) maybeAutoReindex(repo.name);
 
-    // After a merge/pull the source branch is often deleted — run GC to clean up orphaned data
-    setImmediate(() => runBranchGC(repo.name, repo.path));
+    // After a merge/pull the source branch is often deleted — run GC asynchronously
+    void runBranchGC(repo.name, repo.path);
   } catch (err) {
     console.error(`[watcher] merge sync error for ${repo.name}:`, err instanceof Error ? err.message : err);
   }
@@ -281,15 +321,15 @@ function watchGitFiles(repo: RepoWatcher): FSWatcher[] {
     try {
       const w = watch(headPath, () => handleHeadChange(repo));
       watchers.push(w);
-    } catch { /* git dir not watchable */ }
+    } catch { /* HEAD not watchable */ }
   }
 
-  // Watch ORIG_HEAD for merge/pull/rebase events
-  // ORIG_HEAD may not exist yet — watch the parent dir and react when it appears
+  // Watch .git/ dir to detect ORIG_HEAD creation (merge/pull/rebase events).
+  // H4 fix: throttled via scheduleOrigHead debounce.
   if (existsSync(gitDir)) {
     try {
       const w = watch(gitDir, (_event, filename) => {
-        if (filename === "ORIG_HEAD") void handleOrigHead(repo);
+        if (filename === "ORIG_HEAD") scheduleOrigHead(repo);
       });
       watchers.push(w);
     } catch { /* ok */ }
@@ -301,30 +341,36 @@ function watchGitFiles(repo: RepoWatcher): FSWatcher[] {
 function watchSourceFiles(repo: RepoWatcher): FSWatcher[] {
   const watchers: FSWatcher[] = [];
 
-  const onFileEvent = (_event: string, filename: string | null) => {
+  const onFileEvent = (event: string, filename: string | null) => {
     if (!filename) return;
+
+    // C2 fix: validate that the resolved path stays within repo.path
     const absPath = resolve(repo.path, filename);
+    const repoRoot = repo.path.endsWith("/") ? repo.path : `${repo.path}/`;
+    if (!absPath.startsWith(repoRoot) && absPath !== repo.path) return;
+
     if (!shouldWatchFile(absPath)) return;
 
-    // Determine status: if file no longer exists → deleted
-    const status = existsSync(absPath) ? "modified" : "deleted";
+    // M3 fix: distinguish new files (rename event + exists) from modifications
+    const exists = existsSync(absPath);
+    const status = !exists ? "deleted" : event === "rename" ? "added" : "modified";
     repo.pending.set(absPath, status);
     scheduleFlush(repo);
   };
 
   try {
-    // recursive: true works on macOS and Windows natively
     const w = watch(repo.path, { recursive: true }, onFileEvent);
     w.on("error", () => { /* silently ignore watch errors */ });
     watchers.push(w);
   } catch {
-    // Fallback: watch known top-level subdirectories individually
-    const TOP_DIRS = ["app", "src", "lib", "config", "db", "spec", "test", "packages"];
+    // Linux fallback: watch known top-level subdirectories + repo root for manifest files
+    const TOP_DIRS = [".", "app", "src", "lib", "config", "db", "spec", "test", "packages"];
     for (const dir of TOP_DIRS) {
       const dirPath = join(repo.path, dir);
       if (!existsSync(dirPath)) continue;
       try {
-        const w = watch(dirPath, { recursive: true }, onFileEvent);
+        // L2 fix: include "." so root-level Gemfile, package.json etc. are caught
+        const w = watch(dirPath, { recursive: dir !== "." }, onFileEvent);
         w.on("error", () => {});
         watchers.push(w);
       } catch { /* ok */ }
@@ -344,9 +390,18 @@ const activeWatchers = new Map<string, RepoWatcher>();
  * Starts watching a set of repositories.
  * Safe to call multiple times — repos already watched are skipped.
  *
- * @returns Cleanup function that stops all watchers.
+ * @returns Cleanup function that stops **only** the watchers registered by this call.
  */
 export function startWatcher(repos: Array<{ name: string; path: string }>): () => void {
+  // C3 fix: disable in multi-tenant mode (watcher has no tenant DB context)
+  if (process.env["SRCMAP_MULTI_TENANT"] === "true") {
+    console.warn("[watcher] Multi-tenant mode active — automatic file watching disabled. Watchers would write to the wrong tenant DB.");
+    return () => {};
+  }
+
+  // H2 fix: track only the names added by this call, not the full singleton map
+  const addedNames = new Set<string>();
+
   for (const repo of repos) {
     if (activeWatchers.has(repo.name)) continue;
 
@@ -356,12 +411,14 @@ export function startWatcher(repos: Array<{ name: string; path: string }>): () =
       watchers: [],
       pending: new Map(),
       debounceTimer: null,
-      lastBranch: readGitHead(repo.path),
+      origHeadTimer: null,
+      lastBranch: readGitHeadSync(repo.path),
     };
 
     state.watchers.push(...watchGitFiles(state));
     state.watchers.push(...watchSourceFiles(state));
     activeWatchers.set(repo.name, state);
+    addedNames.add(repo.name);
 
     console.log(
       `[watcher] Watching ${repo.name} at ${repo.path}` +
@@ -369,23 +426,44 @@ export function startWatcher(repos: Array<{ name: string; path: string }>): () =
     );
   }
 
+  // H2 fix: closure only closes repos it registered
   return () => {
-    for (const [name, repo] of activeWatchers) {
+    for (const name of addedNames) {
+      const repo = activeWatchers.get(name);
+      if (!repo) continue;
       if (repo.debounceTimer) clearTimeout(repo.debounceTimer);
+      if (repo.origHeadTimer) clearTimeout(repo.origHeadTimer);
       for (const w of repo.watchers) {
         try { w.close(); } catch { /* ok */ }
       }
       activeWatchers.delete(name);
     }
+    addedNames.clear();
   };
 }
 
 /**
- * Adds a newly registered repo to the watcher at runtime.
- * Called when the user registers a new repo via the dashboard.
+ * Starts watching a newly registered repo at runtime (no server restart required).
+ * Called from the dashboard-api register endpoint.
  */
 export function watchNewRepo(repo: { name: string; path: string }): void {
   startWatcher([repo]);
+}
+
+/**
+ * H3 fix: Stops watching a specific repo and cleans up all its resources.
+ * Called when a repo is unregistered via the dashboard.
+ */
+export function stopWatchingRepo(name: string): void {
+  const repo = activeWatchers.get(name);
+  if (!repo) return;
+  if (repo.debounceTimer) clearTimeout(repo.debounceTimer);
+  if (repo.origHeadTimer) clearTimeout(repo.origHeadTimer);
+  for (const w of repo.watchers) {
+    try { w.close(); } catch { /* ok */ }
+  }
+  activeWatchers.delete(name);
+  console.log(`[watcher] Stopped watching ${name}`);
 }
 
 export { maybeAutoReindex };
