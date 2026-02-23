@@ -3,10 +3,12 @@ import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import type { FastifyInstance } from "fastify";
 import { registerTools } from "./tools.js";
 import { registerResources } from "./resources.js";
+import { runWithTenantDb } from "../db/connection.js";
 
 interface SseSession {
   transport: SSEServerTransport;
   server: McpServer;
+  tenant?: string;
 }
 
 const sessions = new Map<string, SseSession>();
@@ -78,7 +80,7 @@ export interface McpContext {
 export async function createMcpServer(): Promise<McpContext> {
   return {
     registerRoutes(app) {
-      app.get("/sse", async (_req, reply) => {
+      app.get("/sse", async (req, reply) => {
         reply.hijack();
 
         const server = buildServer();
@@ -87,14 +89,22 @@ export async function createMcpServer(): Promise<McpContext> {
           reply.raw,
         );
 
-        sessions.set(transport.sessionId, { transport, server });
+        sessions.set(transport.sessionId, {
+          transport,
+          server,
+          tenant: req.tenant,
+        });
 
         reply.raw.on("close", () => {
           sessions.delete(transport.sessionId);
           server.close().catch(() => {});
         });
 
-        await server.connect(transport);
+        if (req.tenant) {
+          await runWithTenantDb(req.tenant, () => server.connect(transport));
+        } else {
+          await server.connect(transport);
+        }
       });
 
       app.post("/messages", async (req, reply) => {
@@ -107,11 +117,14 @@ export async function createMcpServer(): Promise<McpContext> {
         }
 
         reply.hijack();
-        await session.transport.handlePostMessage(
-          req.raw,
-          reply.raw,
-          req.body,
-        );
+        const handle = () =>
+          session.transport.handlePostMessage(req.raw, reply.raw, req.body);
+
+        if (session.tenant) {
+          await runWithTenantDb(session.tenant, handle);
+        } else {
+          await handle();
+        }
       });
     },
 

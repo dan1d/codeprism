@@ -1,10 +1,11 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
-import { readFile, stat } from "node:fs/promises";
+import rateLimit from "@fastify/rate-limit";
+import { readFile, stat, unlink } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join, extname } from "node:path";
 
-import { getDb, closeAllDbs } from "./db/connection.js";
+import { getDb, closeAllDbs, closeTenantDb, getDataDir } from "./db/connection.js";
 import { runMigrations } from "./db/migrations.js";
 import { handleSync } from "./sync/receiver.js";
 import type { SyncPayload } from "./sync/receiver.js";
@@ -12,8 +13,10 @@ import { createMcpServer } from "./mcp/server.js";
 import { registerDashboardRoutes } from "./metrics/dashboard-api.js";
 import { warmReranker } from "./search/reranker.js";
 import { startTelemetryReporter, stopTelemetryReporter } from "./telemetry/reporter.js";
-import { initTenantRegistry, closeTenantRegistry } from "./tenant/registry.js";
+import { initTenantRegistry, closeTenantRegistry, createTenant, listTenants, deleteTenant, rotateApiKey } from "./tenant/registry.js";
 import { tenantMiddleware } from "./tenant/middleware.js";
+import { receiveTelemetry } from "./telemetry/receiver.js";
+import { getAggregateStats } from "./telemetry/receiver.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -51,10 +54,19 @@ async function main(): Promise<void> {
 
   // ── Fastify ────────────────────────────────────────────────────────
   const app = Fastify({ logger: true });
-  await app.register(cors);
+
+  const isMultiTenant = process.env["SRCMAP_MULTI_TENANT"] === "true";
+  const srcmapDomain = process.env["SRCMAP_DOMAIN"];
+
+  await app.register(cors, {
+    origin: isMultiTenant && srcmapDomain
+      ? [`https://${srcmapDomain}`, `https://*.${srcmapDomain}`]
+      : true,
+  });
+
+  await app.register(rateLimit, { global: false });
 
   // ── Multi-tenancy (opt-in via SRCMAP_MULTI_TENANT=true) ─────────
-  const isMultiTenant = process.env["SRCMAP_MULTI_TENANT"] === "true";
   if (isMultiTenant) {
     initTenantRegistry();
   }
@@ -70,6 +82,7 @@ async function main(): Promise<void> {
   if (isMultiTenant) {
     app.post<{ Body: { name: string } }>(
       "/api/tenants",
+      { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } },
       async (request, reply) => {
         const { name } = request.body ?? {};
         if (!name || typeof name !== "string" || name.trim().length < 2) {
@@ -78,16 +91,13 @@ async function main(): Promise<void> {
             .send({ error: "name is required (min 2 characters)" });
         }
         try {
-          const { createTenant } = await import("./tenant/registry.js");
-          const { getTenantDb } = await import("./db/connection.js");
-          const tenant = createTenant(name.trim());
-          getTenantDb(tenant.slug); // lazy-provisions DB + runs migrations
+          const result = createTenant(name.trim());
           return reply.code(201).send({
-            slug: tenant.slug,
-            name: tenant.name,
-            apiKey: tenant.api_key,
-            mcpUrl: `${request.protocol}://${request.hostname}/${tenant.slug}/mcp`,
-            dashboardUrl: `${request.protocol}://${request.hostname}/${tenant.slug}/`,
+            slug: result.slug,
+            name: result.name,
+            apiKey: result.apiKey,
+            mcpUrl: `${request.protocol}://${request.hostname}/${result.slug}/mcp`,
+            dashboardUrl: `${request.protocol}://${request.hostname}/${result.slug}/`,
           });
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
@@ -97,20 +107,33 @@ async function main(): Promise<void> {
     );
 
     app.get("/api/tenants", async (_request, reply) => {
-      const { listTenants } = await import("./tenant/registry.js");
       return reply.send(listTenants());
     });
 
     app.delete<{ Params: { slug: string } }>(
       "/api/tenants/:slug",
       async (request, reply) => {
-        const { deleteTenant } = await import("./tenant/registry.js");
-        const { closeTenantDb } = await import("./db/connection.js");
-        closeTenantDb(request.params.slug);
-        const deleted = deleteTenant(request.params.slug);
+        const slug = request.params.slug;
+        closeTenantDb(slug);
+        const deleted = deleteTenant(slug);
         if (!deleted)
           return reply.code(404).send({ error: "Tenant not found" });
-        return reply.send({ deleted: request.params.slug });
+
+        const dbPath = join(getDataDir(), "tenants", `${slug}.db`);
+        for (const ext of ["", "-wal", "-shm"]) {
+          await unlink(dbPath + ext).catch(() => {});
+        }
+
+        return reply.send({ deleted: slug });
+      },
+    );
+
+    app.post<{ Params: { slug: string } }>(
+      "/api/tenants/:slug/rotate-key",
+      async (request, reply) => {
+        const newKey = rotateApiKey(request.params.slug);
+        if (!newKey) return reply.code(404).send({ error: "Tenant not found" });
+        return reply.send({ slug: request.params.slug, apiKey: newKey });
       },
     );
   }
@@ -124,10 +147,11 @@ async function main(): Promise<void> {
   );
 
   app.get("/api/health", async (_request, reply) => {
-    const cardsRow = db
+    const healthDb = getDb();
+    const cardsRow = healthDb
       .prepare("SELECT COUNT(*) AS count FROM cards")
       .get() as { count: number };
-    const flowsRow = db
+    const flowsRow = healthDb
       .prepare("SELECT COUNT(DISTINCT flow) AS count FROM cards")
       .get() as { count: number };
 
@@ -138,23 +162,31 @@ async function main(): Promise<void> {
     });
   });
 
-  app.post<{ Body: unknown }>("/api/telemetry", async (request, reply) => {
-    const body = request.body as Record<string, unknown> | undefined;
-    if (!body || typeof body !== "object" || !body.instance_id || !body.stats) {
-      return reply.code(400).send({ error: "Invalid telemetry payload" });
-    }
-    try {
-      const { receiveTelemetry } = await import("./telemetry/receiver.js");
-      receiveTelemetry(body as Parameters<typeof receiveTelemetry>[0]);
-      return reply.send({ ok: true });
-    } catch {
-      return reply.send({ ok: true });
-    }
-  });
+  app.post<{ Body: unknown }>(
+    "/api/telemetry",
+    { bodyLimit: 16_384 },
+    async (request, reply) => {
+      const body = request.body as Record<string, unknown> | undefined;
+      if (
+        !body ||
+        typeof body !== "object" ||
+        typeof body.instance_id !== "string" ||
+        !body.stats ||
+        typeof body.stats !== "object"
+      ) {
+        return reply.code(400).send({ error: "Invalid telemetry payload" });
+      }
+      try {
+        receiveTelemetry(body as Parameters<typeof receiveTelemetry>[0]);
+        return reply.send({ ok: true });
+      } catch {
+        return reply.send({ ok: true });
+      }
+    },
+  );
 
   app.get("/api/public-stats", async (_request, reply) => {
     try {
-      const { getAggregateStats } = await import("./telemetry/receiver.js");
       return reply.send(getAggregateStats());
     } catch {
       return reply.send({
@@ -205,7 +237,7 @@ async function main(): Promise<void> {
   await app.listen({ port, host });
 
   const cardCount = (
-    db.prepare("SELECT COUNT(*) AS c FROM cards").get() as { c: number }
+    getDb().prepare("SELECT COUNT(*) AS c FROM cards").get() as { c: number }
   ).c;
   console.log(`[srcmap] Engine listening on http://${host}:${port}`);
   console.log(`[srcmap] Database ready – ${cardCount} cards indexed`);

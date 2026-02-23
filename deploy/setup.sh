@@ -3,7 +3,12 @@ set -euo pipefail
 
 # srcmap.ai VPS Setup Script
 # Tested on: Ubuntu 24.04 (Hetzner CX23)
-# Usage: curl -sSL https://raw.githubusercontent.com/.../setup.sh | bash
+#
+# Set SRCMAP_REPO_URL before running:
+#   export SRCMAP_REPO_URL=https://github.com/YOUR_ORG/srcmap.git
+#   curl -sSL https://raw.githubusercontent.com/.../setup.sh | bash
+
+SRCMAP_REPO_URL="${SRCMAP_REPO_URL:?Error: set SRCMAP_REPO_URL to your srcmap git repository URL}"
 
 echo "=== srcmap.ai VPS setup ==="
 
@@ -42,7 +47,7 @@ if [ -d "$APP_DIR/repo" ]; then
   cd "$APP_DIR/repo" && git pull
 else
   echo "Cloning srcmap..."
-  git clone https://github.com/yourusername/srcmap.git "$APP_DIR/repo"
+  git clone "$SRCMAP_REPO_URL" "$APP_DIR/repo"
 fi
 
 # 6. Create .env if not exists

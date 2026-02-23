@@ -17,9 +17,13 @@ services:
       - SRCMAP_COMPANY_NAME=${SRCMAP_COMPANY_NAME:-}
       - SRCMAP_TELEMETRY=${SRCMAP_TELEMETRY:-false}
       - SRCMAP_TELEMETRY_URL=${SRCMAP_TELEMETRY_URL:-}
+      - SRCMAP_ADMIN_KEY=${SRCMAP_ADMIN_KEY:-}
+      - SRCMAP_DOMAIN=${SRCMAP_DOMAIN:-localhost}
 
   caddy:
-    image: caddy:2-alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.caddy
     restart: unless-stopped
     ports:
       - "80:80"

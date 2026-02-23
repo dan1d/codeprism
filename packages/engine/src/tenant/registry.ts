@@ -1,6 +1,6 @@
 import Database from "better-sqlite3";
 import type { Database as DatabaseType } from "better-sqlite3";
-import { randomBytes } from "node:crypto";
+import { randomBytes, createHash } from "node:crypto";
 import { join } from "node:path";
 import { mkdirSync } from "node:fs";
 import { getDataDir } from "../db/connection.js";
@@ -8,7 +8,16 @@ import { getDataDir } from "../db/connection.js";
 export interface Tenant {
   slug: string;
   name: string;
-  api_key: string;
+  api_key_hash: string;
+  api_key_prefix: string;
+  plan: string;
+  created_at: string;
+}
+
+export interface TenantPublic {
+  slug: string;
+  name: string;
+  api_key_prefix: string;
   plan: string;
   created_at: string;
 }
@@ -17,6 +26,10 @@ let registryDb: DatabaseType | null = null;
 
 function getRegistryDbPath(): string {
   return join(getDataDir(), "tenants.db");
+}
+
+function hashApiKey(key: string): string {
+  return createHash("sha256").update(key).digest("hex");
 }
 
 /** Opens (or returns cached) the central tenant registry database. */
@@ -32,13 +45,30 @@ function getRegistryDb(): DatabaseType {
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS tenants (
-      slug       TEXT PRIMARY KEY,
-      name       TEXT NOT NULL,
-      api_key    TEXT NOT NULL UNIQUE,
-      plan       TEXT NOT NULL DEFAULT 'free',
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      slug           TEXT PRIMARY KEY,
+      name           TEXT NOT NULL,
+      api_key_hash   TEXT NOT NULL UNIQUE,
+      api_key_prefix TEXT NOT NULL DEFAULT '',
+      plan           TEXT NOT NULL DEFAULT 'free',
+      created_at     TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
+
+  // Migrate from old plaintext api_key column if it exists
+  const columns = db.pragma("table_info(tenants)") as { name: string }[];
+  const hasOldColumn = columns.some((c) => c.name === "api_key");
+  if (hasOldColumn) {
+    const rows = db
+      .prepare("SELECT slug, api_key FROM tenants WHERE api_key IS NOT NULL")
+      .all() as { slug: string; api_key: string }[];
+    const update = db.prepare(
+      "UPDATE tenants SET api_key_hash = ?, api_key_prefix = ? WHERE slug = ?",
+    );
+    for (const row of rows) {
+      update.run(hashApiKey(row.api_key), row.api_key.slice(0, 7), row.slug);
+    }
+    db.exec("ALTER TABLE tenants DROP COLUMN api_key");
+  }
 
   registryDb = db;
   return db;
@@ -73,27 +103,41 @@ function generateSlug(name: string, db: DatabaseType): string {
 
   if (!exists.get(base)) return base;
 
-  for (let i = 2; ; i++) {
+  for (let i = 2; i <= 1000; i++) {
     const candidate = `${base}-${i}`.slice(0, 40);
     if (!exists.get(candidate)) return candidate;
   }
+  throw new Error(`Slug space exhausted for base "${base}"`);
 }
 
 function generateApiKey(): string {
-  return `sk_${randomBytes(16).toString("hex")}`;
+  return `sk_${randomBytes(32).toString("hex")}`;
 }
 
-/** Creates a new tenant and returns its record. */
-export function createTenant(name: string): Tenant {
+/**
+ * Creates a new tenant. Returns the public tenant record plus the raw API key.
+ * The raw key is only available at creation time -- it is never stored.
+ */
+export function createTenant(name: string): TenantPublic & { apiKey: string } {
   const db = getRegistryDb();
   const slug = generateSlug(name, db);
-  const apiKey = generateApiKey();
+  const rawKey = generateApiKey();
+  const keyHash = hashApiKey(rawKey);
+  const keyPrefix = rawKey.slice(0, 7);
 
   db.prepare(
-    "INSERT INTO tenants (slug, name, api_key) VALUES (?, ?, ?)",
-  ).run(slug, name, apiKey);
+    "INSERT INTO tenants (slug, name, api_key_hash, api_key_prefix) VALUES (?, ?, ?, ?)",
+  ).run(slug, name, keyHash, keyPrefix);
 
-  return getTenantBySlug(slug)!;
+  const tenant = getTenantBySlug(slug)!;
+  return {
+    slug: tenant.slug,
+    name: tenant.name,
+    api_key_prefix: tenant.api_key_prefix,
+    plan: tenant.plan,
+    created_at: tenant.created_at,
+    apiKey: rawKey,
+  };
 }
 
 export function getTenantBySlug(slug: string): Tenant | null {
@@ -105,18 +149,37 @@ export function getTenantBySlug(slug: string): Tenant | null {
   );
 }
 
-export function getTenantByApiKey(apiKey: string): Tenant | null {
+/** Looks up a tenant by raw API key (hashes it first, compares against stored hash). */
+export function getTenantByApiKey(rawKey: string): Tenant | null {
   const db = getRegistryDb();
+  const keyHash = hashApiKey(rawKey);
   return (
-    (db.prepare("SELECT * FROM tenants WHERE api_key = ?").get(apiKey) as
+    (db.prepare("SELECT * FROM tenants WHERE api_key_hash = ?").get(keyHash) as
       | Tenant
       | undefined) ?? null
   );
 }
 
-export function listTenants(): Tenant[] {
+export function listTenants(): TenantPublic[] {
   const db = getRegistryDb();
-  return db.prepare("SELECT * FROM tenants ORDER BY created_at").all() as Tenant[];
+  return db
+    .prepare("SELECT slug, name, api_key_prefix, plan, created_at FROM tenants ORDER BY created_at")
+    .all() as TenantPublic[];
+}
+
+/**
+ * Rotates the API key for a tenant.
+ * Returns the new raw key (shown once), or null if tenant not found.
+ */
+export function rotateApiKey(slug: string): string | null {
+  const db = getRegistryDb();
+  const newKey = generateApiKey();
+  const keyHash = hashApiKey(newKey);
+  const keyPrefix = newKey.slice(0, 7);
+  const result = db
+    .prepare("UPDATE tenants SET api_key_hash = ?, api_key_prefix = ? WHERE slug = ?")
+    .run(keyHash, keyPrefix, slug);
+  return result.changes > 0 ? newKey : null;
 }
 
 /** Deletes a tenant from the registry. Returns true if a row was removed. */

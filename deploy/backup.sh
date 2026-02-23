@@ -6,13 +6,24 @@ set -euo pipefail
 
 BACKUP_DIR="/opt/srcmap/backups"
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-DATA_DIR="/var/lib/docker/volumes/deploy_srcmap-data/_data"
+COMPOSE_FILE="${COMPOSE_FILE:-/opt/srcmap/repo/deploy/docker-compose.prod.yml}"
+SERVICE_NAME="srcmap"
 
 mkdir -p "$BACKUP_DIR"
 
-# SQLite safe backup using .backup command
 echo "Backing up srcmap databases..."
-for db in "$DATA_DIR"/*.db "$DATA_DIR"/tenants/*.db; do
+
+# Use docker compose cp to safely extract DB files from the running container
+CONTAINER_DATA="/data"
+TEMP_DIR=$(mktemp -d)
+trap 'rm -rf "$TEMP_DIR"' EXIT
+
+docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" \
+  sh -c "find $CONTAINER_DATA -name '*.db' -print0" | \
+  xargs -0 -I{} docker compose -f "$COMPOSE_FILE" cp \
+    "$SERVICE_NAME:{}" "$TEMP_DIR/"
+
+for db in "$TEMP_DIR"/*.db; do
   [ -f "$db" ] || continue
   BASENAME=$(basename "$db")
   sqlite3 "$db" ".backup '$BACKUP_DIR/${BASENAME%.db}-$TIMESTAMP.db'"

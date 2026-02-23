@@ -43,19 +43,15 @@ describe("runMigrations", () => {
     expect(tables).toContain("schema_version");
   });
 
-  it("records each applied migration version in schema_version", () => {
+  it("records version 1 in schema_version", () => {
     runMigrations(db);
     const versions = db
       .prepare("SELECT version FROM schema_version ORDER BY version")
       .all()
       .map((r: unknown) => (r as { version: number }).version);
 
-    // We have migrations v1 through v5 as of writing
     expect(versions).toContain(1);
-    expect(versions).toContain(2);
-    expect(versions).toContain(3);
-    expect(versions).toContain(4);
-    expect(versions).toContain(5);
+    expect(versions).toHaveLength(1);
   });
 
   it("is idempotent — running twice does not error or duplicate versions", () => {
@@ -90,7 +86,7 @@ describe("runMigrations", () => {
     expect(cols).toContain("tags");
   });
 
-  it("adds file_role column to file_index table (migration v4)", () => {
+  it("creates file_index table with file_role and heat_score columns", () => {
     runMigrations(db);
     const cols = db
       .prepare("PRAGMA table_info(file_index)")
@@ -100,7 +96,7 @@ describe("runMigrations", () => {
     expect(cols).toContain("file_role");
   });
 
-  it("creates the project_docs table (migration v5) with correct columns", () => {
+  it("creates the project_docs table with all columns", () => {
     runMigrations(db);
     const cols = db
       .prepare("PRAGMA table_info(project_docs)")

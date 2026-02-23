@@ -175,100 +175,215 @@ export interface CardInteraction {
 /* ------------------------------------------------------------------ */
 
 const TABLES = `
+CREATE TABLE IF NOT EXISTS schema_version (
+  version     INTEGER PRIMARY KEY,
+  applied_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- ── Cards ────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS cards (
-  id TEXT PRIMARY KEY,
-  flow TEXT NOT NULL,
-  title TEXT NOT NULL,
-  content TEXT NOT NULL,
-  card_type TEXT NOT NULL DEFAULT 'auto_generated',
-  source_files TEXT NOT NULL DEFAULT '[]',
-  source_repos TEXT NOT NULL DEFAULT '[]',
-  valid_branches TEXT,
-  commit_sha TEXT,
-  created_by TEXT,
-  stale INTEGER DEFAULT 0,
-  usage_count INTEGER DEFAULT 0,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  id                     TEXT PRIMARY KEY,
+  flow                   TEXT NOT NULL,
+  title                  TEXT NOT NULL,
+  content                TEXT NOT NULL,
+  card_type              TEXT NOT NULL DEFAULT 'auto_generated',
+  source_files           TEXT NOT NULL DEFAULT '[]',
+  source_repos           TEXT NOT NULL DEFAULT '[]',
+  tags                   TEXT NOT NULL DEFAULT '[]',
+  identifiers            TEXT NOT NULL DEFAULT '',
+  valid_branches         TEXT,
+  commit_sha             TEXT,
+  source_commit          TEXT,
+  content_hash           TEXT,
+  created_by             TEXT,
+  contributor_dev_id     TEXT,
+  source_conversation_id TEXT,
+  expires_at             TEXT,
+  stale                  INTEGER NOT NULL DEFAULT 0,
+  usage_count            INTEGER NOT NULL DEFAULT 0,
+  specificity_score      REAL    NOT NULL DEFAULT 0.5,
+  verified_at            TEXT,
+  verification_count     INTEGER NOT NULL DEFAULT 0,
+  created_at             TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at             TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
-CREATE VIRTUAL TABLE IF NOT EXISTS card_embeddings USING vec0(
-  card_id TEXT,
-  embedding FLOAT[384]
-);
-
+-- ── File index ───────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS file_index (
-  path TEXT NOT NULL,
-  repo TEXT NOT NULL,
-  branch TEXT NOT NULL DEFAULT 'main',
-  commit_sha TEXT NOT NULL DEFAULT '',
+  path        TEXT NOT NULL,
+  repo        TEXT NOT NULL,
+  branch      TEXT NOT NULL DEFAULT 'main',
+  commit_sha  TEXT NOT NULL DEFAULT '',
   parsed_data TEXT NOT NULL DEFAULT '{}',
-  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  file_role   TEXT NOT NULL DEFAULT 'domain',
+  heat_score  REAL          DEFAULT 0,
+  updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
   PRIMARY KEY (path, repo, branch)
 );
 
+-- ── Graph ────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS graph_edges (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
   source_file TEXT NOT NULL,
   target_file TEXT NOT NULL,
-  relation TEXT NOT NULL,
-  metadata TEXT DEFAULT '{}',
-  repo TEXT NOT NULL
+  relation    TEXT NOT NULL,
+  metadata    TEXT DEFAULT '{}',
+  repo        TEXT NOT NULL
 );
 
+-- ── Metrics & branch events ──────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS metrics (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  timestamp TEXT NOT NULL DEFAULT (datetime('now')),
-  dev_id TEXT,
-  query TEXT NOT NULL,
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  timestamp       TEXT NOT NULL DEFAULT (datetime('now')),
+  dev_id          TEXT,
+  query           TEXT NOT NULL,
   query_embedding BLOB,
-  response_cards TEXT DEFAULT '[]',
+  response_cards  TEXT    DEFAULT '[]',
   response_tokens INTEGER DEFAULT 0,
-  cache_hit INTEGER DEFAULT 0,
-  latency_ms INTEGER DEFAULT 0,
-  branch TEXT
+  cache_hit       INTEGER DEFAULT 0,
+  latency_ms      INTEGER DEFAULT 0,
+  branch          TEXT
 );
 
 CREATE TABLE IF NOT EXISTS branch_events (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  timestamp TEXT NOT NULL DEFAULT (datetime('now')),
-  dev_id TEXT,
-  repo TEXT NOT NULL,
-  branch TEXT NOT NULL,
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  timestamp  TEXT NOT NULL DEFAULT (datetime('now')),
+  dev_id     TEXT,
+  repo       TEXT NOT NULL,
+  branch     TEXT NOT NULL,
   event_type TEXT NOT NULL,
   from_branch TEXT,
-  commit_sha TEXT
+  commit_sha  TEXT
 );
 
-CREATE TABLE IF NOT EXISTS schema_version (
-  version INTEGER PRIMARY KEY,
-  applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+CREATE TABLE IF NOT EXISTS card_interactions (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  timestamp  TEXT NOT NULL DEFAULT (datetime('now')),
+  query      TEXT NOT NULL,
+  card_id    TEXT NOT NULL,
+  outcome    TEXT NOT NULL DEFAULT 'viewed',
+  session_id TEXT
 );
 
-CREATE TABLE IF NOT EXISTS team_rules (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  description TEXT NOT NULL,
-  severity TEXT NOT NULL DEFAULT 'warning',
-  scope TEXT,
-  enabled INTEGER NOT NULL DEFAULT 1,
-  created_by TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+-- ── Config & repo metadata ───────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS search_config (
+  key        TEXT PRIMARY KEY,
+  value      TEXT NOT NULL,
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS repo_profiles (
+  repo             TEXT PRIMARY KEY,
+  primary_language TEXT NOT NULL DEFAULT '',
+  frameworks       TEXT NOT NULL DEFAULT '[]',
+  is_lambda        INTEGER NOT NULL DEFAULT 0,
+  package_manager  TEXT NOT NULL DEFAULT '',
+  skill_ids        TEXT NOT NULL DEFAULT '[]',
+  detected_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS repo_signals (
+  repo          TEXT PRIMARY KEY,
+  signals       TEXT NOT NULL DEFAULT '[]',
+  signal_source TEXT NOT NULL DEFAULT 'derived',
+  locked        INTEGER NOT NULL DEFAULT 0,
+  generated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS instance_profile (
+  id           INTEGER PRIMARY KEY CHECK (id = 1),
+  company_name TEXT NOT NULL DEFAULT '',
+  plan         TEXT NOT NULL DEFAULT 'self_hosted',
+  instance_id  TEXT NOT NULL DEFAULT (lower(hex(randomblob(8)))),
+  created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+INSERT OR IGNORE INTO instance_profile (id) VALUES (1);
+
+-- ── Project docs ─────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS project_docs (
+  id                   TEXT PRIMARY KEY,
+  repo                 TEXT NOT NULL,
+  doc_type             TEXT NOT NULL,
+  title                TEXT NOT NULL,
+  content              TEXT NOT NULL,
+  stale                INTEGER NOT NULL DEFAULT 0,
+  source_file_paths    TEXT NOT NULL DEFAULT '[]',
+  applied_baseline_hash TEXT,
+  file_path            TEXT,
+  created_at           TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at           TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- ── Evaluation ───────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS eval_cases (
+  id               TEXT PRIMARY KEY,
+  query            TEXT NOT NULL,
+  expected_card_id TEXT NOT NULL,
+  source           TEXT NOT NULL DEFAULT 'synthetic',
+  created_at       TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- ── Conversation intelligence ────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS transcript_imports (
+  id           TEXT PRIMARY KEY,
+  file_path    TEXT NOT NULL,
+  content_hash TEXT NOT NULL UNIQUE,
+  imported_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  source_type  TEXT NOT NULL DEFAULT 'cursor'
+);
+
+CREATE TABLE IF NOT EXISTS transcript_pr_links (
+  id            TEXT PRIMARY KEY,
+  transcript_id TEXT NOT NULL REFERENCES transcript_imports(id),
+  repo          TEXT NOT NULL,
+  commit_sha    TEXT,
+  pr_number     TEXT,
+  matched_files TEXT NOT NULL DEFAULT '[]',
+  status        TEXT NOT NULL DEFAULT 'unknown',
+  linked_at     TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS extracted_insights (
+  id                     TEXT PRIMARY KEY,
+  transcript_id          TEXT NOT NULL REFERENCES transcript_imports(id),
+  card_id                TEXT,
+  category               TEXT NOT NULL,
+  statement              TEXT NOT NULL,
+  evidence_quote         TEXT NOT NULL,
+  confidence             REAL NOT NULL DEFAULT 0.5,
+  scope                  TEXT NOT NULL DEFAULT 'repo',
+  trust_score            REAL NOT NULL DEFAULT 0.5,
+  code_consistency_score REAL,
+  verification_basis     TEXT,
+  aspirational           INTEGER NOT NULL DEFAULT 0,
+  extracted_at           TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- ── Team Rules ───────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS team_rules (
+  id          TEXT PRIMARY KEY,
+  name        TEXT NOT NULL,
+  description TEXT NOT NULL,
+  severity    TEXT NOT NULL DEFAULT 'warning',
+  scope       TEXT,
+  enabled     INTEGER NOT NULL DEFAULT 1,
+  created_by  TEXT,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS rule_checks (
-  id TEXT PRIMARY KEY,
-  repo TEXT NOT NULL,
-  branch TEXT NOT NULL,
-  base_branch TEXT NOT NULL DEFAULT 'main',
-  commit_sha TEXT,
-  violations TEXT NOT NULL DEFAULT '[]',
+  id            TEXT PRIMARY KEY,
+  repo          TEXT NOT NULL,
+  branch        TEXT NOT NULL,
+  base_branch   TEXT NOT NULL DEFAULT 'main',
+  commit_sha    TEXT,
+  violations    TEXT NOT NULL DEFAULT '[]',
   checked_rules INTEGER NOT NULL DEFAULT 0,
   files_checked INTEGER NOT NULL DEFAULT 0,
-  passed INTEGER NOT NULL DEFAULT 1,
-  triggered_by TEXT,
-  checked_at TEXT NOT NULL DEFAULT (datetime('now'))
+  passed        INTEGER NOT NULL DEFAULT 1,
+  triggered_by  TEXT,
+  checked_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
 `;
 
@@ -280,23 +395,56 @@ CREATE VIRTUAL TABLE IF NOT EXISTS cards_fts USING fts5(
 );
 `;
 
+const VIRTUAL = `
+CREATE VIRTUAL TABLE IF NOT EXISTS card_embeddings USING vec0(
+  card_id   TEXT,
+  embedding FLOAT[768]
+);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS card_title_embeddings USING vec0(
+  card_id   TEXT,
+  embedding FLOAT[768]
+);
+`;
+
 const INDICES = `
-CREATE INDEX IF NOT EXISTS idx_cards_flow ON cards(flow);
-CREATE INDEX IF NOT EXISTS idx_file_index_repo ON file_index(repo);
-CREATE INDEX IF NOT EXISTS idx_graph_edges_source ON graph_edges(source_file);
-CREATE INDEX IF NOT EXISTS idx_graph_edges_target ON graph_edges(target_file);
-CREATE INDEX IF NOT EXISTS idx_metrics_timestamp ON metrics(timestamp);
-CREATE INDEX IF NOT EXISTS idx_team_rules_enabled ON team_rules(enabled);
-CREATE INDEX IF NOT EXISTS idx_rule_checks_repo_checked_at ON rule_checks(repo, checked_at);
+CREATE INDEX IF NOT EXISTS idx_cards_flow
+  ON cards(flow);
+CREATE INDEX IF NOT EXISTS idx_file_index_repo
+  ON file_index(repo);
+CREATE INDEX IF NOT EXISTS idx_graph_edges_source
+  ON graph_edges(source_file);
+CREATE INDEX IF NOT EXISTS idx_graph_edges_target
+  ON graph_edges(target_file);
+CREATE INDEX IF NOT EXISTS idx_metrics_timestamp
+  ON metrics(timestamp);
+CREATE INDEX IF NOT EXISTS idx_card_interactions_card_id
+  ON card_interactions(card_id);
+CREATE INDEX IF NOT EXISTS idx_card_interactions_timestamp
+  ON card_interactions(timestamp);
+CREATE UNIQUE INDEX IF NOT EXISTS project_docs_repo_type
+  ON project_docs(repo, doc_type);
+CREATE INDEX IF NOT EXISTS idx_eval_cases_card
+  ON eval_cases(expected_card_id);
+CREATE INDEX IF NOT EXISTS idx_team_rules_enabled
+  ON team_rules(enabled);
+CREATE INDEX IF NOT EXISTS idx_rule_checks_repo_checked_at
+  ON rule_checks(repo, checked_at);
 `;
 
 /**
- * Creates all tables, virtual tables, and indices if they don't already exist.
- * Wraps regular DDL in a transaction; virtual-table DDL runs outside since
- * SQLite does not support creating virtual tables inside transactions.
+ * Creates the complete canonical schema from scratch.
+ * Virtual-table DDL (FTS5, vec0) runs outside the regular TABLES block since
+ * SQLite does not allow creating virtual tables inside a transaction.
  */
 export function initSchema(db: Database): void {
   db.exec(TABLES);
   db.exec(FTS);
+  try {
+    db.exec(VIRTUAL);
+  } catch {
+    // sqlite-vec may not be loaded in all environments (e.g. CI without the
+    // native binary). FTS and regular tables still work correctly without it.
+  }
   db.exec(INDICES);
 }

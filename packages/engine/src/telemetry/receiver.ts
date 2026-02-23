@@ -1,9 +1,7 @@
 import Database from "better-sqlite3";
-import { join, dirname } from "node:path";
+import { join } from "node:path";
 import { mkdirSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-
-const _moduleDir = dirname(fileURLToPath(import.meta.url));
+import { getDataDir } from "../db/connection.js";
 
 interface TelemetryPayload {
   instance_id: string;
@@ -23,8 +21,7 @@ let aggDb: InstanceType<typeof Database> | null = null;
 
 function getAggregateDb(): InstanceType<typeof Database> {
   if (aggDb) return aggDb;
-  const dataDir =
-    process.env["SRCMAP_DATA_DIR"] ?? join(_moduleDir, "..", "..", "..", "data");
+  const dataDir = getDataDir();
   mkdirSync(dataDir, { recursive: true });
   const db = new Database(join(dataDir, "aggregate.db"));
   db.pragma("journal_mode = WAL");

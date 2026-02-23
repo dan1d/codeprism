@@ -979,7 +979,7 @@ Rewrite this as a precise, LLM-readable rule description. Output ONLY the rewrit
       return reply.send({ passed: true, violations: [], message: "No active rules to check." });
     }
 
-    // Resolve the repo path from registered repos
+    // Resolve repo path — try UI-registered repos first, then workspace config
     const row = db.prepare("SELECT value FROM search_config WHERE key = 'extra_repos'").get() as { value: string } | undefined;
     const registeredRepos: Array<{ name: string; path: string }> = row ? JSON.parse(row.value) : [];
 
@@ -990,9 +990,25 @@ Rewrite this as a precise, LLM-readable rule description. Output ONLY the rewrit
       repoPath = registeredRepos[0]!.path;
     }
 
+    // Fallback: use workspace config repos (srcmap.config.json or auto-discovery)
+    if (!repoPath) {
+      try {
+        const { loadWorkspaceConfig } = await import("../config/workspace-config.js");
+        const { userWorkspaceRootFrom } = await import("../utils/workspace.js");
+        const wsRoot = userWorkspaceRootFrom(import.meta.url);
+        const wsConfig = loadWorkspaceConfig(wsRoot);
+        const wsRepos = wsConfig.repos;
+        if (repo) {
+          repoPath = wsRepos.find((r) => r.name === repo)?.path ?? null;
+        } else if (wsRepos.length > 0) {
+          repoPath = wsRepos[0]!.path;
+        }
+      } catch { /* workspace config not available — continue */ }
+    }
+
     if (!repoPath) {
       return reply.status(400).send({
-        error: "No repo path found. Register at least one repository in Repositories first.",
+        error: "No repo path found. Add a repository in the Repositories page, or ensure srcmap.config.json is configured.",
       });
     }
 

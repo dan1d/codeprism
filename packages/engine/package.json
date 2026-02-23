@@ -25,6 +25,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.77.0",
     "@fastify/cors": "latest",
+    "@fastify/rate-limit": "^10.3.0",
     "@google/generative-ai": "^0.24.1",
     "@huggingface/transformers": "latest",
     "@modelcontextprotocol/sdk": "latest",

@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Overview } from "@/pages/Overview";
@@ -21,31 +21,41 @@ function Layout({ children, companyName }: { children: React.ReactNode; companyN
   );
 }
 
-export default function App() {
+function DashboardRoutes() {
   const [instanceInfo, setInstanceInfo] = useState<InstanceInfo | null>(null);
+  const location = useLocation();
+  const isDashboard = location.pathname.startsWith("/dashboard");
 
   useEffect(() => {
-    api.instanceInfo().then(setInstanceInfo).catch(() => {});
-  }, []);
+    if (isDashboard) {
+      api.instanceInfo().then(setInstanceInfo).catch(() => {});
+    }
+  }, [isDashboard]);
 
   const companyName = instanceInfo?.companyName ?? "";
 
   return (
-    <BrowserRouter>
-      <Routes>
-        {/* Public pages (no sidebar) */}
-        <Route path="/" element={<Landing />} />
-        <Route path="/stats" element={<PublicStats />} />
-        <Route path="/onboard" element={<Onboard />} />
+    <Routes>
+      {/* Public pages (no sidebar) */}
+      <Route path="/" element={<Landing />} />
+      <Route path="/stats" element={<PublicStats />} />
+      <Route path="/onboard" element={<Onboard />} />
 
-        {/* Dashboard pages (with sidebar) */}
-        <Route path="/dashboard" element={<Layout companyName={companyName}><Overview /></Layout>} />
-        <Route path="/dashboard/repos" element={<Layout companyName={companyName}><Repositories /></Layout>} />
-        <Route path="/dashboard/knowledge" element={<Layout companyName={companyName}><KnowledgeBase /></Layout>} />
-        <Route path="/dashboard/rules" element={<Layout companyName={companyName}><Rules /></Layout>} />
-        <Route path="/dashboard/analytics" element={<Layout companyName={companyName}><Analytics /></Layout>} />
-        <Route path="/dashboard/settings" element={<Layout companyName={companyName}><SettingsPage instanceInfo={instanceInfo} onUpdate={setInstanceInfo} /></Layout>} />
-      </Routes>
+      {/* Dashboard pages (with sidebar) */}
+      <Route path="/dashboard" element={<Layout companyName={companyName}><Overview /></Layout>} />
+      <Route path="/dashboard/repos" element={<Layout companyName={companyName}><Repositories /></Layout>} />
+      <Route path="/dashboard/knowledge" element={<Layout companyName={companyName}><KnowledgeBase /></Layout>} />
+      <Route path="/dashboard/rules" element={<Layout companyName={companyName}><Rules /></Layout>} />
+      <Route path="/dashboard/analytics" element={<Layout companyName={companyName}><Analytics /></Layout>} />
+      <Route path="/dashboard/settings" element={<Layout companyName={companyName}><SettingsPage instanceInfo={instanceInfo} onUpdate={setInstanceInfo} /></Layout>} />
+    </Routes>
+  );
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <DashboardRoutes />
     </BrowserRouter>
   );
 }
