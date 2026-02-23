@@ -187,17 +187,51 @@ rulesCmd
   });
 
 // ---------------------------------------------------------------------------
+// srcmap sync
+// ---------------------------------------------------------------------------
+
+program
+  .command("sync")
+  .description(
+    "Notify the running srcmap server about git changes (post-merge / post-pull). " +
+    "Detects ORIG_HEAD..HEAD diff automatically and classifies the branch. " +
+    "Demo branches are silently skipped. Always exits 0 — never blocks git."
+  )
+  .option("--repo <name>", "repository name override (default: inferred from git remote)")
+  .option("--port <n>", "srcmap server port (default: SRCMAP_PORT env or 4000)", parseInt)
+  .option(
+    "--event-type <type>",
+    "event type: save | merge | pull | rebase | checkout (default: auto-detected from branch)"
+  )
+  .option(
+    "--prev-head <sha>",
+    "previous HEAD sha or branch name (passed by post-checkout hook as $1 to detect parent epic)"
+  )
+  .option("--dry-run", "show what would be sent without contacting the server", false)
+  .action(async (opts: { repo?: string; port?: number; eventType?: string; prevHead?: string; dryRun: boolean }) => {
+    const { runSync } = await import("./sync.js");
+    await runSync(process.cwd(), {
+      repo: opts.repo,
+      port: opts.port,
+      eventType: opts.eventType as "save" | "merge" | "pull" | "rebase" | "checkout" | undefined,
+      prevHead: opts.prevHead,
+      dryRun: opts.dryRun,
+    });
+  });
+
+// ---------------------------------------------------------------------------
 // srcmap install-hook
 // ---------------------------------------------------------------------------
 
 program
   .command("install-hook")
   .description(
-    "Install a git pre-push hook in the current repository that runs `srcmap check` before every push. " +
-    "Exits 1 and blocks the push if any error-severity rules are violated."
+    "Install git hooks (pre-push, post-merge, post-checkout, post-rewrite) in the current repository. " +
+    "pre-push runs `srcmap check` and blocks on error-severity violations. " +
+    "post-merge / post-checkout / post-rewrite run `srcmap sync` to keep cards fresh automatically."
   )
-  .option("--base <branch>", "base branch to diff against in the hook", "main")
-  .option("--strict", "block on warnings too", false)
+  .option("--base <branch>", "base branch to diff against in the pre-push hook", "main")
+  .option("--strict", "block push on warnings too", false)
   .action(async (opts: { base: string; strict: boolean }) => {
     const { installHook } = await import("./install-hook.js");
     await installHook(process.cwd(), opts);

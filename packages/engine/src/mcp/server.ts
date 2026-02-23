@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import type { FastifyInstance } from "fastify";
-import { registerTools } from "./tools.js";
+import { registerTools } from "./tools/index.js";
 import { registerResources } from "./resources.js";
 import { runWithTenantDb } from "../db/connection.js";
 

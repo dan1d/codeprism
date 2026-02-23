@@ -151,6 +151,7 @@ export function SettingsPage({ instanceInfo, onUpdate }: SettingsPageProps) {
       await api.updateSettings({
         stale_threshold_days: settings["stale_threshold_days"] ?? "7",
         exclude_patterns: settings["exclude_patterns"] ?? "node_modules,.git,dist",
+        auto_reindex_threshold: settings["auto_reindex_threshold"] ?? "5",
       });
       setIndexingSave("saved");
     } catch {
@@ -273,6 +274,19 @@ export function SettingsPage({ instanceInfo, onUpdate }: SettingsPageProps) {
               placeholder="node_modules,.git,dist,*.test.ts"
               className="w-full px-3 py-2 rounded-md border border-[#30363d] bg-[#0f1117] text-xs text-[#c9d1d9] placeholder:text-[#484f58] focus:outline-none focus:border-accent/50 transition-colors font-mono"
             />
+          </FormRow>
+          <FormRow label="Auto-reindex threshold" hint="Stale card count that triggers a background reindex automatically">
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min="1"
+                max="100"
+                value={settings["auto_reindex_threshold"] ?? "5"}
+                onChange={(e) => updateSetting("auto_reindex_threshold", e.target.value)}
+                className="w-20 px-3 py-2 rounded-md border border-[#30363d] bg-[#0f1117] text-xs text-[#c9d1d9] focus:outline-none focus:border-accent/50 transition-colors"
+              />
+              <span className="text-xs text-[#8b949e]">stale cards</span>
+            </div>
           </FormRow>
           <div className="mt-4">
             <SaveButton state={indexingSave} onClick={() => void saveIndexing()} />

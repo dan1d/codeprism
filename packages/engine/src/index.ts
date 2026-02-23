@@ -13,6 +13,10 @@ import { createMcpServer } from "./mcp/server.js";
 import { registerDashboardRoutes } from "./metrics/dashboard-api.js";
 import { warmReranker } from "./search/reranker.js";
 import { startTelemetryReporter, stopTelemetryReporter } from "./telemetry/reporter.js";
+import { startWatcher } from "./watcher/index.js";
+import { loadWorkspaceConfig } from "./config/workspace-config.js";
+import { getRegisteredRepos } from "./services/repos.js";
+import { runAllBranchGC } from "./sync/branch-gc.js";
 import { initTenantRegistry, closeTenantRegistry, createTenant, listTenants, deleteTenant, rotateApiKey } from "./tenant/registry.js";
 import { tenantMiddleware } from "./tenant/middleware.js";
 import { receiveTelemetry } from "./telemetry/receiver.js";
@@ -248,10 +252,35 @@ async function main(): Promise<void> {
   // Start opt-in telemetry reporter
   startTelemetryReporter();
 
+  // ── Automatic file + git watcher (zero CLI required) ──────────────
+  // Collects repos from workspace config + any UI-registered repos.
+  // Watches source files for code changes and .git/ for branch/merge events.
+  const workspaceRoot = process.env["SRCMAP_WORKSPACE"] ?? process.cwd();
+  let watchedRepos: Array<{ name: string; path: string }> = [];
+  try {
+    const cfg = loadWorkspaceConfig(workspaceRoot);
+    watchedRepos = cfg.repos.map((r) => ({ name: r.name, path: r.path }));
+  } catch { /* workspace config optional */ }
+  // Merge in any UI-registered repos
+  for (const extra of getRegisteredRepos()) {
+    if (!watchedRepos.find((r) => r.name === extra.name)) {
+      watchedRepos.push(extra);
+    }
+  }
+  const stopWatcher = startWatcher(watchedRepos);
+
+  // Run branch GC on startup to purge orphaned data from deleted branches
+  // (branches merged/deleted while the server was offline are cleaned up here)
+  setImmediate(() => {
+    const repoMap = new Map(watchedRepos.map((r) => [r.name, r.path]));
+    runAllBranchGC(repoMap);
+  });
+
   // ── Graceful shutdown ──────────────────────────────────────────────
 
   const shutdown = async (): Promise<void> => {
     console.log("[srcmap] Shutting down…");
+    stopWatcher();
     stopTelemetryReporter();
     await app.close();
     closeTenantRegistry();
