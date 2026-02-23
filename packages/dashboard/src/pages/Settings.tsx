@@ -130,11 +130,14 @@ export function SettingsPage({ instanceInfo, onUpdate }: SettingsPageProps) {
   const saveLLM = async () => {
     setLlmSave("saving");
     try {
-      await api.updateSettings({
+      const payload: Record<string, string> = {
         llm_provider: settings["llm_provider"] ?? "",
         llm_model: settings["llm_model"] ?? "",
-        llm_api_key: settings["llm_api_key"] ?? "",
-      });
+      };
+      // Only send the key if the user entered a new one (not the masked display value)
+      const key = settings["llm_api_key"] ?? "";
+      if (key && !key.includes("•")) payload["llm_api_key"] = key;
+      await api.updateSettings(payload);
       setLlmSave("saved");
     } catch {
       setLlmSave("error");
@@ -225,7 +228,7 @@ export function SettingsPage({ instanceInfo, onUpdate }: SettingsPageProps) {
               className="w-full px-3 py-2 rounded-md border border-[#30363d] bg-[#0f1117] text-xs text-[#c9d1d9] placeholder:text-[#484f58] focus:outline-none focus:border-accent/50 transition-colors"
             />
           </FormRow>
-          <FormRow label="API key">
+          <FormRow label="API key" hint={settings["llm_api_key_configured"] === "true" ? "Key configured — clear to replace" : undefined}>
             <div className="relative">
               <input
                 type={showApiKey ? "text" : "password"}

@@ -11,12 +11,52 @@ import { getDb } from "../db/connection.js";
 import type { Card, ProjectDoc } from "../db/schema.js";
 import { calculateMetrics } from "./calculator.js";
 import { hybridSearch } from "../search/hybrid.js";
-import { createLLMProvider } from "../llm/provider.js";
+import { createLLMProvider, type LLMConfig } from "../llm/provider.js";
 import { buildRefreshDocPrompt, buildFrameworkBaseline, DOC_SYSTEM_PROMPT, type DocType } from "../indexer/doc-prompts.js";
 import { resolveSkills } from "../skills/index.js";
 import { getAllRepoSignalRecords } from "../search/repo-signals.js";
 
 const _require = createRequire(import.meta.url);
+
+// ---------------------------------------------------------------------------
+// LLM API key — masking helpers
+// The raw key is NEVER returned over the API. GET /api/settings returns a
+// masked display value (prefix + bullets + last 4 chars). PUT /api/settings
+// detects and skips masked values so the original is never overwritten.
+// ---------------------------------------------------------------------------
+
+const MASK_CHAR = "•";
+
+function maskApiKey(raw: string): string {
+  if (!raw) return "";
+  if (raw.length <= 11) return MASK_CHAR.repeat(raw.length);
+  return raw.slice(0, 7) + MASK_CHAR.repeat(8) + raw.slice(-4);
+}
+
+function isMasked(value: string): boolean {
+  return value.includes(MASK_CHAR);
+}
+
+/**
+ * Creates an LLM provider, reading from search_config first and falling back
+ * to environment variables. This ensures the UI-configured key is actually
+ * used by the server (not just stored).
+ */
+function getLLMFromDb(): ReturnType<typeof createLLMProvider> {
+  const db = getDb();
+  const get = (key: string): string | undefined => {
+    const row = db.prepare("SELECT value FROM search_config WHERE key = ?").get(key) as { value: string } | undefined;
+    return row?.value || undefined;
+  };
+  const provider = get("llm_provider") ?? process.env["SRCMAP_LLM_PROVIDER"];
+  const model    = get("llm_model")    ?? process.env["SRCMAP_LLM_MODEL"];
+  const apiKey   = get("llm_api_key")  ?? process.env["SRCMAP_LLM_API_KEY"];
+  return createLLMProvider({
+    provider: (provider as LLMConfig["provider"]) ?? "none",
+    model,
+    apiKey,
+  });
+}
 
 function getEngineVersion(): string {
   try {
@@ -226,17 +266,26 @@ export async function registerDashboardRoutes(app: FastifyInstance): Promise<voi
 
   // ---------------------------------------------------------------------------
   // GET /api/settings — retrieve key search_config values for settings page
+  // API keys are NEVER returned raw — masked display values only.
   // ---------------------------------------------------------------------------
   app.get("/api/settings", (_request, reply) => {
     const db = getDb();
     const rows = db.prepare("SELECT key, value FROM search_config").all() as Array<{ key: string; value: string }>;
     const config: Record<string, string> = {};
-    for (const row of rows) config[row.key] = row.value;
+    for (const row of rows) {
+      if (row.key === "llm_api_key") {
+        config["llm_api_key"] = row.value ? maskApiKey(row.value) : "";
+        config["llm_api_key_configured"] = row.value ? "true" : "false";
+      } else {
+        config[row.key] = row.value;
+      }
+    }
     return reply.send(config);
   });
 
   // ---------------------------------------------------------------------------
   // PUT /api/settings — update search_config key/value pairs
+  // Masked API key values are silently skipped to prevent overwriting the real key.
   // ---------------------------------------------------------------------------
   app.put("/api/settings", (request, reply) => {
     const updates = request.body as Record<string, string>;
@@ -246,6 +295,8 @@ export async function registerDashboardRoutes(app: FastifyInstance): Promise<voi
     );
     const tx = db.transaction((pairs: Record<string, string>) => {
       for (const [key, value] of Object.entries(pairs)) {
+        // Never overwrite a stored API key with a masked display value or an empty string
+        if (key === "llm_api_key" && (!value || isMasked(value))) continue;
         upsert.run(key, String(value));
       }
     });
@@ -474,7 +525,7 @@ export async function registerDashboardRoutes(app: FastifyInstance): Promise<voi
     const { repo: targetRepo } = (request.body as { repo?: string }) ?? {};
     const db = getDb();
 
-    const llm = createLLMProvider();
+    const llm = getLLMFromDb();
     if (!llm) {
       return reply.status(503).send({
         error: "LLM not configured. Set SRCMAP_LLM_PROVIDER and SRCMAP_LLM_API_KEY to enable refresh.",
@@ -879,7 +930,7 @@ export async function registerDashboardRoutes(app: FastifyInstance): Promise<voi
       return reply.status(400).send({ error: "description is required" });
     }
 
-    const llm = createLLMProvider();
+    const llm = getLLMFromDb();
     if (!llm) {
       return reply.status(503).send({ error: "No LLM configured. Add an LLM provider in Settings." });
     }
