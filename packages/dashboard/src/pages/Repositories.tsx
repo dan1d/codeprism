@@ -11,13 +11,47 @@ import {
   Layers,
   FileText,
   Clock,
+  BookOpen,
+  LayoutDashboard,
+  Server,
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { RepoBadges } from "@/components/layout/RepoBadge";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { LoadingState } from "@/components/shared/LoadingState";
-import { api, type RepoSummary } from "@/lib/api";
+import { api, type RepoSummary, type RepoOverview } from "@/lib/api";
 import { formatRelativeTime, cn } from "@/lib/utils";
+
+// ---------------------------------------------------------------------------
+// Helpers for parsing LLM doc content
+// ---------------------------------------------------------------------------
+
+/** Extract the first N prose sentences (skipping markdown headings). */
+function firstSentences(content: string, n = 3): string {
+  const lines = content.split("\n").filter((l) => !l.startsWith("#") && l.trim());
+  const para = lines.slice(0, 6).join(" ");
+  const sentences = para.match(/[^.!?]+[.!?]+/g) ?? [];
+  return sentences.slice(0, n).join(" ").trim();
+}
+
+/** Extract first non-heading paragraph from markdown. */
+function firstParagraph(content: string): string {
+  const paras = content.split(/\n{2,}/).filter((p) => !p.trimStart().startsWith("#") && p.trim());
+  return paras[0]?.trim() ?? "";
+}
+
+/** Parse `- **Page Name** — description` lines from pages doc markdown. */
+function parsePages(content: string): Array<{ name: string; desc: string }> {
+  const re = /^[-*]\s+\*{1,2}([^*]+)\*{1,2}\s*[—–-]+\s*(.+)$/gm;
+  const results: Array<{ name: string; desc: string }> = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(content)) !== null) {
+    const name = m[1]!.trim();
+    const desc = m[2]!.trim();
+    if (name.length > 1 && name.length < 60) results.push({ name, desc });
+  }
+  return results;
+}
 
 // ---------------------------------------------------------------------------
 // Repo Drawer
@@ -36,8 +70,25 @@ function RepoDrawer({ repo, onClose, onReindex, reindexing }: RepoDrawerProps) {
       ? Math.round(((repo.cardCount - repo.staleCards) / repo.cardCount) * 100)
       : 100;
 
+  const [overview, setOverview] = useState<RepoOverview | null>(null);
+  const [overviewLoading, setOverviewLoading] = useState(true);
+
+  useEffect(() => {
+    setOverviewLoading(true);
+    setOverview(null);
+    api.repoOverview(repo.repo)
+      .then(setOverview)
+      .catch(() => setOverview(null))
+      .finally(() => setOverviewLoading(false));
+  }, [repo.repo]);
+
+  const pages = overview?.pages ? parsePages(overview.pages.content) : [];
+  const aboutText = overview?.about ? firstSentences(overview.about.content, 3) : "";
+  const beText = overview?.be_overview ? firstParagraph(overview.be_overview.content) : "";
+  const hasAnyDoc = !!(overview?.about || overview?.pages || overview?.be_overview);
+
   return (
-    <div className="fixed inset-y-0 right-0 w-[440px] bg-[#0f1117] border-l border-[#30363d] z-50 flex flex-col shadow-2xl">
+    <div className="fixed inset-y-0 right-0 w-[480px] bg-[#0f1117] border-l border-[#30363d] z-50 flex flex-col shadow-2xl">
       {/* Header */}
       <div className="flex items-start justify-between p-5 border-b border-[#21262d]">
         <div>
@@ -99,30 +150,81 @@ function RepoDrawer({ repo, onClose, onReindex, reindexing }: RepoDrawerProps) {
           </div>
         </div>
 
-        {/* Last indexed */}
-        <div className="flex items-center gap-2 text-xs text-[#8b949e]">
-          <Clock size={12} />
-          <span>Last indexed: {formatRelativeTime(repo.lastIndexedAt)}</span>
+        {/* Last indexed + stack */}
+        <div className="flex items-center gap-4 text-xs text-[#8b949e]">
+          <span className="flex items-center gap-1.5">
+            <Clock size={12} />
+            {formatRelativeTime(repo.lastIndexedAt)}
+          </span>
+          {[repo.primaryLanguage, ...repo.frameworks].filter(Boolean).map((s) => (
+            <span
+              key={s}
+              className="px-2 py-0.5 rounded text-[11px] font-mono bg-[#1c2333] border border-[#30363d]"
+            >
+              {s}
+            </span>
+          ))}
         </div>
 
-        {/* Stack */}
-        {(repo.primaryLanguage || repo.frameworks.length > 0) && (
-          <div>
-            <h3 className="text-[10px] font-medium text-[#484f58] uppercase tracking-wider mb-2">
-              Stack
-            </h3>
-            <div className="flex flex-wrap gap-1.5">
-              {[repo.primaryLanguage, ...repo.frameworks]
-                .filter(Boolean)
-                .map((s) => (
-                  <span
-                    key={s}
-                    className="px-2 py-0.5 rounded text-[11px] font-mono bg-[#1c2333] text-[#8b949e] border border-[#30363d]"
-                  >
-                    {s}
-                  </span>
-                ))}
-            </div>
+        {/* ---- LLM-generated overview sections ---- */}
+        {overviewLoading ? (
+          <div className="space-y-3">
+            {[72, 56, 88].map((w) => (
+              <div key={w} className="h-3 rounded bg-[#1c2333] animate-pulse" style={{ width: `${w}%` }} />
+            ))}
+          </div>
+        ) : !hasAnyDoc ? (
+          <div className="rounded-lg border border-dashed border-[#30363d] p-4 text-center">
+            <p className="text-xs text-[#484f58]">
+              No overview generated yet.
+            </p>
+            <p className="text-[11px] text-[#484f58] mt-1">
+              Re-index with an LLM configured to generate project descriptions, page lists, and API summaries.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {/* About */}
+            {aboutText && (
+              <div>
+                <h3 className="flex items-center gap-1.5 text-[10px] font-medium text-[#484f58] uppercase tracking-wider mb-2">
+                  <BookOpen size={11} />
+                  About
+                </h3>
+                <p className="text-xs text-[#8b949e] leading-relaxed">{aboutText}</p>
+              </div>
+            )}
+
+            {/* Pages (FE repos) */}
+            {pages.length > 0 && (
+              <div>
+                <h3 className="flex items-center gap-1.5 text-[10px] font-medium text-[#484f58] uppercase tracking-wider mb-2">
+                  <LayoutDashboard size={11} />
+                  Pages ({pages.length})
+                </h3>
+                <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
+                  {pages.map(({ name, desc }) => (
+                    <div key={name} className="rounded bg-[#161b22] border border-[#30363d] px-2.5 py-1.5">
+                      <span className="text-[11px] font-medium text-[#c9d1d9]">{name}</span>
+                      {desc && (
+                        <p className="text-[10px] text-[#8b949e] mt-0.5 leading-snug line-clamp-2">{desc}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Backend overview (BE repos) */}
+            {beText && (
+              <div>
+                <h3 className="flex items-center gap-1.5 text-[10px] font-medium text-[#484f58] uppercase tracking-wider mb-2">
+                  <Server size={11} />
+                  API Overview
+                </h3>
+                <p className="text-xs text-[#8b949e] leading-relaxed line-clamp-4">{beText}</p>
+              </div>
+            )}
           </div>
         )}
       </div>

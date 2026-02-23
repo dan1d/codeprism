@@ -27,7 +27,7 @@ vi.mock("../../db/connection.js", () => ({
 // Import AFTER mock is set up
 const { mmrRerank } = await import("../../search/mmr.js");
 
-const DIM = 384;
+const DIM = 768;
 
 function insertEmbedding(db: TestDb, cardId: string, emb: Float32Array): void {
   db.prepare("INSERT INTO card_embeddings (card_id, embedding) VALUES (?, ?)").run(

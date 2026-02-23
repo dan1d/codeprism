@@ -19,6 +19,8 @@ export interface Card {
   stale: number;
   usage_count: number;
   specificity_score: number;
+  /** Space-separated class names and route signatures for BM25 identifier matching. */
+  identifiers: string;
   created_at: string;
   updated_at: string;
 }

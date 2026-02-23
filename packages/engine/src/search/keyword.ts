@@ -6,8 +6,20 @@ export interface KeywordResult {
 }
 
 /**
+ * FTS5 operators that must be excluded to prevent query injection.
+ * Tokens are left unquoted so the Porter stemmer can apply its stemming rules
+ * (quoted tokens in FTS5 bypass tokenizers and do exact-match only).
+ */
+const FTS5_OPERATORS = new Set(["AND", "OR", "NOT", "NEAR"]);
+
+/**
  * Sanitizes raw text into a safe FTS5 query by stripping URLs, special
- * characters, and FTS5 operators, then quoting each remaining token.
+ * characters, and FTS5 boolean operators, then joining tokens unquoted with OR.
+ *
+ * Tokens are intentionally NOT quoted so the Porter stemmer configured in
+ * migration v15 can stem them — "authorization" will match "authorized",
+ * "authorizes", etc. FTS5 operator injection is prevented by an explicit
+ * blocklist rather than quoting.
  */
 export function sanitizeFts5Query(raw: string): string {
   const cleaned = raw
@@ -16,13 +28,16 @@ export function sanitizeFts5Query(raw: string): string {
 
   const tokens = cleaned
     .split(/\s+/)
-    .filter((t) => t.length > 1)
+    .filter((t) => t.length > 1 && !FTS5_OPERATORS.has(t.toUpperCase()))
     .slice(0, 30);
 
   if (tokens.length === 0) return "";
 
-  return tokens.map((t) => `"${t}"`).join(" OR ");
+  // Unquoted tokens — Porter stemmer in cards_fts will apply
+  return tokens.join(" OR ");
 }
+
+export { FTS5_OPERATORS };
 
 /**
  * Performs full-text search against the `cards_fts` FTS5 virtual table.
@@ -34,9 +49,11 @@ export function keywordSearch(query: string, limit = 10): KeywordResult[] {
 
   const db = getDb();
 
+  // Column order: title(3.0), content(1.0), flow(2.0), source_repos(2.0), tags(1.5), identifiers(4.0)
+  // identifiers gets the highest weight — exact class/route names deserve maximum BM25 credit
   const rows = db
     .prepare(
-      "SELECT rowid, bm25(cards_fts, 3.0, 1.0, 2.0, 2.0, 1.5) as rank FROM cards_fts WHERE cards_fts MATCH ? ORDER BY rank LIMIT ?",
+      "SELECT rowid, bm25(cards_fts, 3.0, 1.0, 2.0, 2.0, 1.5, 4.0) as rank FROM cards_fts WHERE cards_fts MATCH ? ORDER BY rank LIMIT ?",
     )
     .all(ftsQuery, limit) as { rowid: number; rank: number }[];
 

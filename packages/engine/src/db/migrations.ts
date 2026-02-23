@@ -142,6 +142,112 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    // Porter stemming for FTS5: "authorized" matches "authorize"/"authorization"
+    version: 12,
+    up: (db) => {
+      db.exec("DROP TABLE IF EXISTS cards_fts");
+      db.exec(`
+        CREATE VIRTUAL TABLE cards_fts USING fts5(
+          title, content, flow, source_repos, tags,
+          content=cards, content_rowid=rowid,
+          tokenize='porter unicode61'
+        )
+      `);
+      db.exec("INSERT INTO cards_fts(cards_fts) VALUES('rebuild')");
+    },
+  },
+  {
+    // Content hash for deduplication; eval_cases for RAG quality evaluation
+    version: 13,
+    up: (db) => {
+      db.exec("ALTER TABLE cards ADD COLUMN content_hash TEXT");
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS eval_cases (
+          id           TEXT PRIMARY KEY,
+          query        TEXT NOT NULL,
+          expected_card_id TEXT NOT NULL,
+          source       TEXT NOT NULL DEFAULT 'synthetic',
+          created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_eval_cases_card
+          ON eval_cases(expected_card_id);
+      `);
+    },
+  },
+  {
+    // Title embeddings for improved short-query recall (dual-vector retrieval)
+    version: 14,
+    up: (db) => {
+      db.exec(`
+        CREATE VIRTUAL TABLE IF NOT EXISTS card_title_embeddings USING vec0(
+          card_id TEXT,
+          embedding FLOAT[384]
+        )
+      `);
+    },
+  },
+  {
+    // Three improvements in one migration:
+    // 1. identifiers column — class names + routes stored separately from content
+    //    so the semantic embedding vector stays uncontaminated.
+    // 2. Upgrade vec0 embedding tables from FLOAT[384] (all-MiniLM) to FLOAT[768]
+    //    (nomic-embed-text-v1.5). All cards must be re-embedded after this runs.
+    // 3. Rebuild FTS5 with identifiers column + Porter stemmer (already set in v12).
+    version: 15,
+    up: (db) => {
+      // Add identifiers column
+      db.exec("ALTER TABLE cards ADD COLUMN identifiers TEXT NOT NULL DEFAULT ''");
+
+      // Rebuild FTS5 to include identifiers with Porter stemmer
+      db.exec("DROP TABLE IF EXISTS cards_fts");
+      db.exec(`
+        CREATE VIRTUAL TABLE cards_fts USING fts5(
+          title, content, flow, source_repos, tags, identifiers,
+          content=cards, content_rowid=rowid,
+          tokenize='porter unicode61'
+        )
+      `);
+      db.exec("INSERT INTO cards_fts(cards_fts) VALUES('rebuild')");
+
+      // Upgrade vec0 tables to 768-dim for nomic-embed-text-v1.5
+      // (vec0 tables cannot be altered — drop and recreate)
+      db.exec("DROP TABLE IF EXISTS card_embeddings");
+      db.exec(`
+        CREATE VIRTUAL TABLE card_embeddings USING vec0(
+          card_id TEXT,
+          embedding FLOAT[768]
+        )
+      `);
+      db.exec("DROP TABLE IF EXISTS card_title_embeddings");
+      db.exec(`
+        CREATE VIRTUAL TABLE card_title_embeddings USING vec0(
+          card_id TEXT,
+          embedding FLOAT[768]
+        )
+      `);
+    },
+  },
+  {
+    // Dedicated repo_signals table replaces the repo_signals:{repo} search_config hack.
+    // Columns:
+    //   signals       – JSON string[]  – keyword tokens used in detectTextRepoAffinity()
+    //   signal_source – 'derived' | 'manual' — derived by engine; manual = team override
+    //   locked        – 1 = never overwrite on re-index (set by dashboard / manual edit)
+    //   generated_at  – ISO timestamp of last generation run
+    version: 16,
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS repo_signals (
+          repo          TEXT PRIMARY KEY,
+          signals       TEXT NOT NULL DEFAULT '[]',
+          signal_source TEXT NOT NULL DEFAULT 'derived',
+          locked        INTEGER NOT NULL DEFAULT 0,
+          generated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+      `);
+    },
+  },
 ];
 
 /**

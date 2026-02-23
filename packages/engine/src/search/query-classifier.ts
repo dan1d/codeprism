@@ -1,6 +1,5 @@
 import { getDb } from "../db/connection.js";
-
-const DIM = 384;
+import { EMBEDDING_DIM } from "../embeddings/local-embedder.js";
 
 export interface RepoClassification {
   /** Repo with highest similarity to the query embedding, or null if no centroids loaded */
@@ -53,10 +52,10 @@ export function getRepoCentroids(): Map<string, Float32Array> {
     for (const repo of repos) {
       let entry = repoVecs.get(repo);
       if (!entry) {
-        entry = { sum: new Float64Array(DIM), count: 0 };
+        entry = { sum: new Float64Array(EMBEDDING_DIM), count: 0 };
         repoVecs.set(repo, entry);
       }
-      for (let i = 0; i < DIM; i++) {
+      for (let i = 0; i < EMBEDDING_DIM; i++) {
         entry.sum[i]! += vec[i]!;
       }
       entry.count++;
@@ -66,15 +65,15 @@ export function getRepoCentroids(): Map<string, Float32Array> {
   const centroids = new Map<string, Float32Array>();
   for (const [repo, { sum, count }] of repoVecs) {
     if (count === 0) continue;
-    const centroid = new Float32Array(DIM);
+    const centroid = new Float32Array(EMBEDDING_DIM);
     let norm = 0;
-    for (let i = 0; i < DIM; i++) {
+    for (let i = 0; i < EMBEDDING_DIM; i++) {
       centroid[i] = sum[i]! / count;
       norm += centroid[i]! * centroid[i]!;
     }
     const mag = Math.sqrt(norm);
     if (mag > 0) {
-      for (let i = 0; i < DIM; i++) centroid[i]! /= mag;
+      for (let i = 0; i < EMBEDDING_DIM; i++) centroid[i]! /= mag;
     }
     centroids.set(repo, centroid);
   }

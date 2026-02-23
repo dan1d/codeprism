@@ -53,17 +53,17 @@ describe("computeSpecificity", () => {
   });
 
   it("returns total equal to the number of card embeddings", () => {
-    insertCardWithEmbedding(testDb, "c1", "backend", makeEmbedding(384, 1.0));
-    insertCardWithEmbedding(testDb, "c2", "backend", makeEmbedding(384, 0.5));
-    insertCardWithEmbedding(testDb, "c3", "frontend", makeOrthogonalEmbedding(384));
+    insertCardWithEmbedding(testDb, "c1", "backend", makeEmbedding(768, 1.0));
+    insertCardWithEmbedding(testDb, "c2", "backend", makeEmbedding(768, 0.5));
+    insertCardWithEmbedding(testDb, "c3", "frontend", makeOrthogonalEmbedding(768));
 
     const result = computeSpecificity();
     expect(result.total).toBe(3);
   });
 
   it("updates specificity_score in the cards table", () => {
-    insertCardWithEmbedding(testDb, "c1", "backend", makeEmbedding(384, 1.0));
-    insertCardWithEmbedding(testDb, "c2", "frontend", makeOrthogonalEmbedding(384));
+    insertCardWithEmbedding(testDb, "c1", "backend", makeEmbedding(768, 1.0));
+    insertCardWithEmbedding(testDb, "c2", "frontend", makeOrthogonalEmbedding(768));
 
     computeSpecificity();
 
@@ -82,7 +82,7 @@ describe("computeSpecificity", () => {
         testDb,
         `card-${i}`,
         i < 3 ? "backend" : "frontend",
-        i % 2 === 0 ? makeEmbedding(384, i + 1) : makeOrthogonalEmbedding(384),
+        i % 2 === 0 ? makeEmbedding(768, i + 1) : makeOrthogonalEmbedding(768),
       );
     }
 
@@ -101,8 +101,8 @@ describe("computeSpecificity", () => {
   it("assigns lower specificity to a card identical to the centroid (hub-like)", () => {
     // Cards in the same direction as the centroid = low specificity (similar to global average)
     // Cards pointing away from centroid = high specificity (more unique)
-    const hubEmbedding = makeEmbedding(384, 1.0);
-    const uniqueEmbedding = makeOrthogonalEmbedding(384);
+    const hubEmbedding = makeEmbedding(768, 1.0);
+    const uniqueEmbedding = makeOrthogonalEmbedding(768);
 
     insertCardWithEmbedding(testDb, "hub", "backend", hubEmbedding);
     insertCardWithEmbedding(testDb, "hub2", "backend", hubEmbedding);

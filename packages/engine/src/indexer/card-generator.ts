@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { Flow } from "./flow-detector.js";
 import type { ParsedFile, FileRole } from "./types.js";
 import type { GraphEdge } from "./graph-builder.js";
@@ -36,12 +37,66 @@ export interface GeneratedCard {
   flow: string;
   title: string;
   content: string;
+  contentHash: string;
+  /** Class names and route identifiers for BM25 — stored in its own DB column,
+   *  NOT appended to content, so the semantic embedding stays uncontaminated. */
+  identifiers: string;
   cardType: "flow" | "model" | "cross_service" | "hub" | "auto_generated";
   sourceFiles: string[];
   sourceRepos: string[];
   tags: string[];
   validBranches: string[] | null;
   commitSha: string | null;
+}
+
+/**
+ * Computes a SHA-256 hash of the card title + content for deduplication.
+ * Cards with the same hash across multiple repos will be merged.
+ */
+export function computeContentHash(title: string, content: string): string {
+  return createHash("sha256").update(title + content).digest("hex");
+}
+
+/**
+ * Builds a plain-text identifiers string from class names and route signatures.
+ * Stored in the dedicated `identifiers` DB column (not appended to content),
+ * so the semantic embedding vector stays uncontaminated by noisy identifier tokens.
+ * FTS5 indexes this column with the highest BM25 weight (4.0) so exact
+ * class-name / route queries get maximum keyword credit.
+ */
+export function buildIdentifiers(files: ParsedFile[]): string {
+  const names = [...new Set(files.flatMap((f) => f.classes.map((c) => c.name)))];
+  const routes = files.flatMap((f) =>
+    f.routes.map((r) => `${r.method} ${r.path}`),
+  ).slice(0, 10);
+  return [...names, ...routes].filter(Boolean).join(" ");
+}
+
+/** @deprecated Use buildIdentifiers — returns plain text for identifiers column. */
+export function buildIdentifierAppendix(files: ParsedFile[]): string {
+  return buildIdentifiers(files);
+}
+
+/**
+ * Deduplicates generated cards by content hash. When two cards have the same
+ * hash (identical title + content), their source_repos are merged and one card
+ * is kept. This prevents, e.g., `Report model` appearing 3× from different repos.
+ */
+function deduplicateCards(cards: GeneratedCard[]): GeneratedCard[] {
+  const seen = new Map<string, GeneratedCard>();
+  for (const card of cards) {
+    const existing = seen.get(card.contentHash);
+    if (existing) {
+      for (const repo of card.sourceRepos) {
+        if (!existing.sourceRepos.includes(repo)) {
+          existing.sourceRepos.push(repo);
+        }
+      }
+    } else {
+      seen.set(card.contentHash, card);
+    }
+  }
+  return [...seen.values()];
 }
 
 type FileCategory =
@@ -164,13 +219,14 @@ export async function generateCards(
     projectContextByRepo,
   );
 
-  const all = [...flowCards, ...modelCards, ...crossServiceCards, ...hubCards];
+  const allRaw = [...flowCards, ...modelCards, ...crossServiceCards, ...hubCards];
+  const all = deduplicateCards(allRaw);
 
   // Stamp source_commit for single-repo cards when SHA is available
   if (commitShaByRepo && commitShaByRepo.size > 0) {
     for (const card of all) {
       if (card.sourceRepos.length === 1) {
-        const sha = commitShaByRepo.get(card.sourceRepos[0]);
+        const sha = commitShaByRepo.get(card.sourceRepos[0]!);
         if (sha) card.commitSha = sha;
       }
     }
@@ -230,11 +286,14 @@ async function generateFlowCards(
     const domainFilePaths = flowFiles.map((f) => f.path);
     // Seeded page flows (contain spaces like "Pre Authorizations") don't need " flow" suffix
     const isPageFlow = flow.name.includes(" ");
+    const title = isPageFlow ? flow.name : `${flow.name} flow`;
     cards.push({
       id: nanoid(),
       flow: flow.name,
-      title: isPageFlow ? flow.name : `${flow.name} flow`,
+      title,
       content,
+      contentHash: computeContentHash(title, content),
+      identifiers: buildIdentifiers(flowFiles),
       cardType: "flow",
       sourceFiles: domainFilePaths,
       sourceRepos: flow.repos,
@@ -309,11 +368,14 @@ async function generateModelCards(
       content = buildModelMarkdown(model, modelEdges, fileIndex);
     }
 
+    const modelTitle = `${modelName} model`;
     cards.push({
       id: nanoid(),
       flow: modelName,
-      title: `${modelName} model`,
+      title: modelTitle,
       content,
+      contentHash: computeContentHash(modelTitle, content),
+      identifiers: buildIdentifiers([model, ...relatedFiles]),
       cardType: "model",
       sourceFiles: [model.path, ...relatedPaths],
       sourceRepos: [model.repo],
@@ -446,6 +508,8 @@ async function generateCrossServiceCards(
       flow: title,
       title,
       content,
+      contentHash: computeContentHash(title, content),
+      identifiers: buildIdentifiers([feParsed, beParsed]),
       cardType: "cross_service",
       sourceFiles: [pair.feFile, pair.beFile],
       sourceRepos: [...repos],
@@ -598,11 +662,14 @@ async function generateHubCards(
       content = buildHubMarkdown(hubFile, hubEdges, connectedFlows, fileIndex);
     }
 
+    const hubTitle = `${hubName} hub`;
     cards.push({
       id: nanoid(),
       flow: flow.name,
-      title: `${hubName} hub`,
+      title: hubTitle,
       content,
+      contentHash: computeContentHash(hubTitle, content),
+      identifiers: buildIdentifiers([hubFile]),
       cardType: "hub",
       sourceFiles: flow.files,
       sourceRepos: flow.repos,

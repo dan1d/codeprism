@@ -1,7 +1,6 @@
 import { getDb } from "../db/connection.js";
 import { invalidateRepoCentroidsCache } from "./query-classifier.js";
-
-const DIM = 384;
+import { EMBEDDING_DIM } from "../embeddings/local-embedder.js";
 
 function cosine(a: Float32Array | Float64Array, b: Float32Array | Float64Array): number {
   let dot = 0, normA = 0, normB = 0;
@@ -51,7 +50,7 @@ export function computeSpecificity(): { total: number; globalRange: [number, num
 
   const embeddings = new Map<string, Float32Array>();
   const cardRepos = new Map<string, string[]>();
-  const globalCentroid = new Float64Array(DIM);
+  const globalCentroid = new Float64Array(EMBEDDING_DIM);
 
   for (const row of rows) {
     const buf = row.embedding;
@@ -64,10 +63,10 @@ export function computeSpecificity(): { total: number; globalRange: [number, num
     try { repos = JSON.parse(row.source_repos); } catch { /* skip */ }
     cardRepos.set(row.card_id, repos);
 
-    for (let i = 0; i < DIM; i++) globalCentroid[i]! += vec[i]!;
+    for (let i = 0; i < EMBEDDING_DIM; i++) globalCentroid[i]! += vec[i]!;
   }
 
-  for (let i = 0; i < DIM; i++) globalCentroid[i]! /= rows.length;
+  for (let i = 0; i < EMBEDDING_DIM; i++) globalCentroid[i]! /= rows.length;
 
   // Per-repo centroids
   const repoCentroidSums = new Map<string, { sum: Float64Array; count: number }>();
@@ -76,10 +75,10 @@ export function computeSpecificity(): { total: number; globalRange: [number, num
     for (const repo of repos) {
       let entry = repoCentroidSums.get(repo);
       if (!entry) {
-        entry = { sum: new Float64Array(DIM), count: 0 };
+        entry = { sum: new Float64Array(EMBEDDING_DIM), count: 0 };
         repoCentroidSums.set(repo, entry);
       }
-      for (let i = 0; i < DIM; i++) entry.sum[i]! += vec[i]!;
+      for (let i = 0; i < EMBEDDING_DIM; i++) entry.sum[i]! += vec[i]!;
       entry.count++;
     }
   }
@@ -87,8 +86,8 @@ export function computeSpecificity(): { total: number; globalRange: [number, num
   const repoCentroids = new Map<string, Float64Array>();
   for (const [repo, { sum, count }] of repoCentroidSums) {
     if (count === 0) continue;
-    const centroid = new Float64Array(DIM);
-    for (let i = 0; i < DIM; i++) centroid[i] = sum[i]! / count;
+    const centroid = new Float64Array(EMBEDDING_DIM);
+    for (let i = 0; i < EMBEDDING_DIM; i++) centroid[i] = sum[i]! / count;
     repoCentroids.set(repo, centroid);
   }
 

@@ -48,7 +48,14 @@ vi.mock("../../search/query-classifier.js", () => ({
   })),
 }));
 
-const { hybridSearch, checkCache } = await import("../../search/hybrid.js");
+// Reranker: passthrough mock so tests are unaffected and fast (no model download)
+vi.mock("../../search/reranker.js", () => ({
+  rerankResults: vi.fn(async (_q: string, candidates: unknown[], topK: number) =>
+    (candidates as unknown[]).slice(0, topK),
+  ),
+}));
+
+const { hybridSearch, checkCache, computeRrfScore } = await import("../../search/hybrid.js");
 const { semanticSearch } = await import("../../search/semantic.js");
 const { keywordSearch } = await import("../../search/keyword.js");
 
@@ -319,7 +326,7 @@ describe("checkCache", () => {
     const id = insertTestCard(testDb, { id: "cache-hit-card", card_type: "flow" });
 
     // Mock embedder returns Float32Array(384).fill(0.1)
-    // Dot product with itself = 384 * 0.01 = 3.84 >> 0.92 threshold
+    // Dot product with itself = 768 * 0.01 = 7.68 >> 0.92 threshold
     const embVec = new Float32Array(384).fill(0.1);
     testDb.prepare(
       `INSERT INTO metrics (query, query_embedding, response_cards, response_tokens, cache_hit, latency_ms)
@@ -359,5 +366,36 @@ describe("checkCache", () => {
 
     const result = await checkCache("any query");
     expect(result).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// computeRrfScore — pure function, no DB/embedder deps
+// ---------------------------------------------------------------------------
+
+describe("computeRrfScore", () => {
+  it("returns 0 for an empty rank list", () => {
+    expect(computeRrfScore([])).toBe(0);
+  });
+
+  it("computes 1/(k+rank) for a single rank", () => {
+    expect(computeRrfScore([0])).toBeCloseTo(1 / 60);
+    expect(computeRrfScore([0], 60)).toBeCloseTo(1 / 60);
+    expect(computeRrfScore([4])).toBeCloseTo(1 / 64);
+  });
+
+  it("sums contributions across multiple lists (dual retrieval)", () => {
+    const semRank = 0;
+    const kwRank = 2;
+    const expected = 1 / (60 + semRank) + 1 / (60 + kwRank);
+    expect(computeRrfScore([semRank, kwRank])).toBeCloseTo(expected);
+  });
+
+  it("a card in two lists at rank 0 scores higher than one list at rank 0", () => {
+    expect(computeRrfScore([0, 0])).toBeGreaterThan(computeRrfScore([0]));
+  });
+
+  it("respects a custom k parameter", () => {
+    expect(computeRrfScore([0], 100)).toBeCloseTo(1 / 100);
   });
 });

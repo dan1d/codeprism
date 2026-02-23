@@ -11,6 +11,7 @@ import { calculateMetrics } from "./calculator.js";
 import { hybridSearch } from "../search/hybrid.js";
 import { createLLMProvider } from "../llm/provider.js";
 import { buildRefreshDocPrompt, DOC_SYSTEM_PROMPT, type DocType } from "../indexer/doc-prompts.js";
+import { getAllRepoSignalRecords } from "../search/repo-signals.js";
 
 const _require = createRequire(import.meta.url);
 
@@ -424,6 +425,40 @@ export async function registerDashboardRoutes(app: FastifyInstance): Promise<voi
     }
 
     return reply.send(rows);
+  });
+
+  /**
+   * GET /api/repo-overview?repo=<name>
+   * Returns the three key docs for a repo in a single request:
+   * about, pages, and be_overview.  Nulls for docs that don't exist yet.
+   */
+  app.get("/api/repo-overview", (request, reply) => {
+    const { repo } = request.query as { repo?: string };
+    if (!repo) return reply.status(400).send({ error: "repo query param required" });
+    const db = getDb();
+
+    const fetchDoc = (docType: string) =>
+      db
+        .prepare("SELECT id, repo, doc_type, title, content, updated_at FROM project_docs WHERE repo = ? AND doc_type = ?")
+        .get(repo, docType) as import("../db/schema.js").ProjectDoc | undefined ?? null;
+
+    return reply.send({
+      about: fetchDoc("about"),
+      pages: fetchDoc("pages"),
+      be_overview: fetchDoc("be_overview"),
+    });
+  });
+
+  /**
+   * GET /api/repo-signals
+   * Returns all stored repo signals for transparency and debugging.
+   * Teams can inspect which keywords drive repo affinity scoring and lock
+   * or override signals via the PUT /api/settings endpoint.
+   *
+   * Response: Array of { repo, signals, signalSource, locked, generatedAt }
+   */
+  app.get("/api/repo-signals", (_request, reply) => {
+    return reply.send(getAllRepoSignalRecords());
   });
 
   /**

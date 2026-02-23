@@ -24,6 +24,18 @@ const runLouvain = louvain as unknown as LouvainFn;
 const HUB_DEGREE_THRESHOLD = 6;
 const MIN_COMMUNITY_SIZE = 3;
 
+/** Path/directory segments that carry no domain meaning on their own. */
+const GENERIC_SEGMENT_NAMES = new Set([
+  "common", "api", "shared", "utils", "util",
+  "helpers", "helper", "base", "main", "index",
+  "v1", "v2", "v3", "v4",
+]);
+
+/** Standard Rails CRUD action names that are not interesting as qualifiers. */
+const STANDARD_CRUD_ACTIONS = new Set([
+  "index", "show", "create", "update", "destroy", "new", "edit", "initialize",
+]);
+
 const PATH_SEGMENT_PATTERNS = [
   /\/api\/([^/]+)/,
   /\/controllers\/([^/]+)/,
@@ -245,6 +257,7 @@ function buildCommunityFlows(
     const name = deduplicateName(
       deriveCommunityName(members, fileIndex),
       usedNames,
+      members,
     );
     const repos = collectRepos(members, fileIndex);
 
@@ -260,6 +273,35 @@ function buildCommunityFlows(
   return flows;
 }
 
+function isGenericName(name: string): boolean {
+  const lower = name.toLowerCase();
+  if (GENERIC_SEGMENT_NAMES.has(lower)) return true;
+  // Also catch deduplicated generics like "common_2", "v2_3"
+  const suffixMatch = lower.match(/^(.+?)_\d+$/);
+  if (suffixMatch && GENERIC_SEGMENT_NAMES.has(suffixMatch[1]!)) return true;
+  return false;
+}
+
+/**
+ * Finds the first non-standard (non-CRUD) public action name in the community.
+ * These are domain-specific actions like "batch", "export", "import", "approve".
+ */
+function findNonStandardAction(
+  members: string[],
+  fileIndex: Map<string, ParsedFile>,
+): string | undefined {
+  for (const filePath of members) {
+    const pf = fileIndex.get(filePath);
+    if (!pf) continue;
+    for (const fn of pf.functions) {
+      if (fn.visibility === "public" && !STANDARD_CRUD_ACTIONS.has(fn.name)) {
+        return fn.name;
+      }
+    }
+  }
+  return undefined;
+}
+
 function deriveCommunityName(
   members: string[],
   fileIndex: Map<string, ParsedFile>,
@@ -268,11 +310,25 @@ function deriveCommunityName(
   if (model) return pascalToSnake(model);
 
   const segmentName = dominantPathSegment(members);
-  if (segmentName) return segmentName;
+  if (segmentName && !isGenericName(segmentName)) return segmentName;
 
+  // segmentName is generic or absent — qualify with domain-specific signal
+  const nonStandardAction = findNonStandardAction(members, fileIndex);
+  if (nonStandardAction) return nonStandardAction;
+
+  // Try any Ruby class name even without minimum association count
+  for (const filePath of members) {
+    const pf = fileIndex.get(filePath);
+    if (pf?.language === "ruby" && pf.classes[0]?.name) {
+      return pascalToSnake(pf.classes[0].name);
+    }
+  }
+
+  // Fall back to the generic segment name or file basename as last resort
+  if (segmentName) return segmentName;
   const fallback = members[0] ?? "unknown";
-  const basename = fallback.replace(/^.*\//, "").replace(/\.[^.]+$/, "");
-  return basename.replace(/-/g, "_");
+  const baseName = fallback.replace(/^.*\//, "").replace(/\.[^.]+$/, "");
+  return baseName.replace(/-/g, "_");
 }
 
 function dominantPathSegment(members: string[]): string | undefined {
@@ -323,7 +379,7 @@ function buildHubFlows(
     const rawName = modelName
       ? pascalToSnake(modelName)
       : baseName.replace(/-/g, "_");
-    const name = deduplicateName(rawName, usedNames);
+    const name = deduplicateName(rawName, usedNames, [hubFile]);
 
     const hubEdgeCount = edges.filter(
       (e) => e.sourceFile === hubFile || e.targetFile === hubFile,
@@ -408,11 +464,40 @@ function pascalToSnake(pascal: string): string {
   );
 }
 
-function deduplicateName(name: string, usedNames: Set<string>): string {
+/**
+ * Resolves name collisions between communities. Instead of the opaque `_2`,
+ * `_3` numeric suffix, we try a set of semantic qualifiers in order:
+ *   1. The repo name (e.g. `patient_bp_monitor`)
+ *   2. A path-segment qualifier from the members (e.g. `patient_remote`)
+ *   3. Numeric fallback only as last resort
+ */
+function deduplicateName(
+  name: string,
+  usedNames: Set<string>,
+  members?: string[],
+): string {
   if (!usedNames.has(name)) {
     usedNames.add(name);
     return name;
   }
+
+  // Try a qualifier from the path segments that differ from the base name
+  if (members && members.length > 0) {
+    const qualifiers = members
+      .flatMap((p) => p.split("/"))
+      .filter((seg) => seg && seg !== name && !/^\d+$/.test(seg) && seg.length > 2)
+      .map((seg) => seg.replace(/\.[^.]+$/, "").replace(/-/g, "_").toLowerCase());
+
+    for (const q of qualifiers) {
+      const candidate = `${name}_${q}`;
+      if (!usedNames.has(candidate)) {
+        usedNames.add(candidate);
+        return candidate;
+      }
+    }
+  }
+
+  // Numeric fallback
   let i = 2;
   while (usedNames.has(`${name}_${i}`)) i++;
   const unique = `${name}_${i}`;

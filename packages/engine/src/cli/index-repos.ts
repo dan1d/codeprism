@@ -8,10 +8,11 @@ import { buildGraph } from "../indexer/graph-builder.js";
 import { detectFlows } from "../indexer/flow-detector.js";
 import { extractSeedFlows } from "../indexer/route-extractor.js";
 import { generateCards } from "../indexer/card-generator.js";
-import { generateProjectDocs, loadProjectContext, generateWorkspaceSpecialist } from "../indexer/doc-generator.js";
+import { generateProjectDocs, loadProjectContext, generateWorkspaceSpecialist, discoverFrontendPages, discoverBeOverview, setWorkspaceRoot as setDocWorkspaceRoot } from "../indexer/doc-generator.js";
 import { getEmbedder } from "../embeddings/local-embedder.js";
 import { createLLMProvider } from "../llm/provider.js";
 import { computeSpecificity } from "../search/specificity.js";
+import { generateAndSaveAllRepoSignals } from "../search/repo-signals.js";
 import { loadRepoConfig } from "../indexer/repo-config.js";
 import type { ParsedFile } from "../indexer/types.js";
 
@@ -41,9 +42,29 @@ const repoFilter: string | null = repoFlagIdx !== -1 ? (process.argv[repoFlagIdx
 // Positional workspace root = first non-flag argument after the script path
 const positionalArgs = process.argv.slice(2).filter((a) => !a.startsWith("--"));
 
-async function indexRepos(repos: RepoConfig[]): Promise<void> {
+/**
+ * Strip the workspace root prefix from an absolute path so only the
+ * repo-relative portion is stored in the DB.
+ * e.g. "/Users/r1/biobridge/biobridge-backend/app/models/user.rb"
+ *   →  "biobridge-backend/app/models/user.rb"
+ */
+function relativizePath(absPath: string, root: string): string {
+  if (!root) return absPath;
+  const prefix = root.endsWith("/") ? root : `${root}/`;
+  return absPath.startsWith(prefix) ? absPath.slice(prefix.length) : absPath;
+}
+
+async function indexRepos(repos: RepoConfig[], workspaceRoot: string): Promise<void> {
   const db = getDb();
   runMigrations(db);
+
+  // Persist workspace root so other modules (invalidator, API) can resolve absolute paths
+  db.prepare(
+    `INSERT OR REPLACE INTO search_config (key, value) VALUES ('workspace_root', ?)`
+  ).run(workspaceRoot);
+
+  // Tell doc-generator about the workspace root so it can store relative paths too
+  setDocWorkspaceRoot(workspaceRoot);
 
   const llm = createLLMProvider();
   if (llm) {
@@ -114,8 +135,8 @@ async function indexRepos(repos: RepoConfig[]): Promise<void> {
   const insertEdgeTx = db.transaction(() => {
     for (const edge of edges) {
       insertEdge.run(
-        edge.sourceFile,
-        edge.targetFile,
+        relativizePath(edge.sourceFile, workspaceRoot),
+        relativizePath(edge.targetFile, workspaceRoot),
         edge.relation,
         JSON.stringify(edge.metadata),
         edge.repo
@@ -124,12 +145,45 @@ async function indexRepos(repos: RepoConfig[]): Promise<void> {
   });
   insertEdgeTx();
 
+  // --- Early page / BE discovery (runs before flow detection) ---
+  // Gives the LLM a chance to identify what pages/views exist in each repo
+  // so route-extractor can use real page names instead of a hardcoded skip list.
+  const discoveredPagesByRepo = new Map<string, string[]>();
+
+  if (llm && !skipDocs) {
+    console.log(`\nDiscovering pages and backend overview...`);
+    for (const repo of repos) {
+      const absPath = resolve(repo.path);
+      const repoParsed = allParsed.filter((f) => f.repo === repo.name);
+      const isFe =
+        repo.name.includes("frontend") ||
+        repo.name.endsWith("-fe") ||
+        repo.name.endsWith("-ui") ||
+        repoParsed.some((f) =>
+          f.path.endsWith(".tsx") || f.path.endsWith(".jsx") || f.path.endsWith(".vue")
+        );
+
+      if (isFe) {
+        const pageNames = await discoverFrontendPages(repo.name, absPath, repoParsed, llm);
+        if (pageNames.length > 0) {
+          discoveredPagesByRepo.set(repo.name, pageNames);
+          console.log(`  [${repo.name}] ${pageNames.length} pages discovered`);
+        }
+      } else {
+        await discoverBeOverview(repo.name, absPath, repoParsed, llm);
+      }
+    }
+  }
+
   console.log(`\nDetecting flows...`);
   // Identify FE repos by name convention (contains "frontend" or "fe")
   const feRepoNames = repos
     .map((r) => r.name)
     .filter((n) => n.includes("frontend") || n.endsWith("-fe") || n.endsWith("-ui"));
-  const seedFlows = extractSeedFlows(allParsed, feRepoNames);
+
+  // Collect all discovered page names across FE repos for the seed extractor
+  const allDiscoveredPages = feRepoNames.flatMap((n) => discoveredPagesByRepo.get(n) ?? []);
+  const seedFlows = extractSeedFlows(allParsed, feRepoNames, allDiscoveredPages.length > 0 ? allDiscoveredPages : undefined);
   if (seedFlows.length > 0) {
     console.log(`  Seeded ${seedFlows.length} business flows from FE component directories`);
   }
@@ -151,6 +205,11 @@ async function indexRepos(repos: RepoConfig[]): Promise<void> {
     skillLabelByRepo.set(repo.name, skillLabel);
     console.log(`  [${repo.name}] ${profile.primaryLanguage} / ${profile.frameworks.join(", ") || "no frameworks"}`);
   }
+
+  // Pass 1: generate signals from stack profile + any previously-generated docs.
+  // Runs even when LLM is disabled — deterministic signals are always useful.
+  console.log(`\nGenerating repo signals (pass 1 — profile + existing docs)...`);
+  generateAndSaveAllRepoSignals();
 
   // --- Project documentation (pre-indexing) ---
   const projectContextByRepo = new Map<string, string>();
@@ -191,6 +250,10 @@ async function indexRepos(repos: RepoConfig[]): Promise<void> {
         console.warn("[workspace] Specialist generation failed:", (err as Error).message),
       );
     }
+    // Pass 2: re-generate signals now that fresh docs exist (cross-corpus IDF
+    // will pick up domain terms from the newly written project_docs content).
+    console.log(`\nEnriching repo signals (pass 2 — with domain terms from new docs)...`);
+    generateAndSaveAllRepoSignals();
   } else if (skipDocs) {
     console.log(`\nSkipping doc generation (--skip-docs). Loading existing context...`);
     for (const repo of repos) {
@@ -211,6 +274,12 @@ async function indexRepos(repos: RepoConfig[]): Promise<void> {
   );
   console.log(`  -> ${cards.length} cards generated`);
 
+  // Strip absolute workspace root from card content so paths are always relative
+  const wsPrefix = workspaceRoot.endsWith("/") ? workspaceRoot : `${workspaceRoot}/`;
+  for (const card of cards) {
+    card.content = card.content.replaceAll(wsPrefix, "");
+  }
+
   if (llm) {
     const totalChars = cards.reduce((sum, c) => sum + c.content.length, 0);
     const estimatedTokens = Math.ceil(totalChars / 4);
@@ -221,10 +290,11 @@ async function indexRepos(repos: RepoConfig[]): Promise<void> {
 
   db.prepare("DELETE FROM cards WHERE card_type IN ('auto_generated', 'flow', 'model', 'cross_service', 'hub')").run();
   db.prepare("DELETE FROM card_embeddings").run();
+  try { db.prepare("DELETE FROM card_title_embeddings").run(); } catch { /* pre-v14 DB */ }
 
   const insertCard = db.prepare(
-    `INSERT INTO cards (id, flow, title, content, card_type, source_files, source_repos, tags, valid_branches, commit_sha)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO cards (id, flow, title, content, card_type, source_files, source_repos, tags, valid_branches, commit_sha, content_hash, identifiers)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const insertCardTx = db.transaction(() => {
     for (const card of cards) {
@@ -234,11 +304,13 @@ async function indexRepos(repos: RepoConfig[]): Promise<void> {
         card.title,
         card.content,
         card.cardType,
-        JSON.stringify(card.sourceFiles),
+        JSON.stringify(card.sourceFiles.map((f) => relativizePath(f, workspaceRoot))),
         JSON.stringify(card.sourceRepos),
         JSON.stringify(card.tags),
         card.validBranches ? JSON.stringify(card.validBranches) : null,
-        card.commitSha
+        card.commitSha,
+        card.contentHash,
+        card.identifiers ?? ""
       );
     }
   });
@@ -249,17 +321,26 @@ async function indexRepos(repos: RepoConfig[]): Promise<void> {
   const insertEmbedding = db.prepare(
     `INSERT INTO card_embeddings (card_id, embedding) VALUES (?, ?)`
   );
+  const insertTitleEmbedding = db.prepare(
+    `INSERT INTO card_title_embeddings (card_id, embedding) VALUES (?, ?)`
+  );
   const insertEmbTx = db.transaction(() => {
-    for (const { id, embedding } of embeddingsToInsert) {
+    for (const { id, embedding, titleEmbedding } of embeddingsToInsert) {
       insertEmbedding.run(id, Buffer.from(embedding.buffer));
+      try {
+        insertTitleEmbedding.run(id, Buffer.from(titleEmbedding.buffer));
+      } catch { /* pre-v14 DB */ }
     }
   });
 
-  const embeddingsToInsert: Array<{ id: string; embedding: Float32Array }> = [];
+  const embeddingsToInsert: Array<{ id: string; embedding: Float32Array; titleEmbedding: Float32Array }> = [];
   for (const card of cards) {
     const text = `${card.title}\n${card.content}`;
-    const embedding = await embedder.embed(text);
-    embeddingsToInsert.push({ id: card.id, embedding });
+    const [embedding, titleEmbedding] = await Promise.all([
+      embedder.embed(text, "document"),
+      embedder.embed(card.title, "document"),
+    ]);
+    embeddingsToInsert.push({ id: card.id, embedding, titleEmbedding });
     process.stdout.write(".");
   }
   console.log("");
@@ -275,7 +356,7 @@ async function indexRepos(repos: RepoConfig[]): Promise<void> {
   );
   const fileInsertTx = db.transaction(() => {
     for (const pf of allParsed) {
-      fileInsert.run(pf.path, pf.repo, pf.fileRole, JSON.stringify({
+      fileInsert.run(relativizePath(pf.path, workspaceRoot), pf.repo, pf.fileRole, JSON.stringify({
         classes: pf.classes,
         associations: pf.associations,
         functions: pf.functions.map((f) => f.name),
@@ -326,7 +407,7 @@ if (repoFilter && repos.length === 0) {
   process.exit(1);
 }
 
-indexRepos(repos).catch((err) => {
+indexRepos(repos, workspaceRoot).catch((err) => {
   console.error("Indexing failed:", err);
   process.exit(1);
 });

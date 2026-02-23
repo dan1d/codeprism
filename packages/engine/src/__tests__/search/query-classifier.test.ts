@@ -83,8 +83,8 @@ describe("getRepoCentroids", () => {
   });
 
   it("returns one centroid per repo", () => {
-    insertCardWithEmbedding(testDb, "c1", "backend", makeEmbedding(384, 1.0));
-    insertCardWithEmbedding(testDb, "c2", "frontend", makeEmbedding(384, 0.5));
+    insertCardWithEmbedding(testDb, "c1", "backend", makeEmbedding(768, 1.0));
+    insertCardWithEmbedding(testDb, "c2", "frontend", makeEmbedding(768, 0.5));
     invalidateRepoCentroidsCache();
 
     const centroids = getRepoCentroids();
@@ -94,8 +94,8 @@ describe("getRepoCentroids", () => {
   });
 
   it("produces normalised centroid vectors (magnitude ≈ 1)", () => {
-    insertCardWithEmbedding(testDb, "c1", "backend", makeEmbedding(384, 2.0));
-    insertCardWithEmbedding(testDb, "c2", "backend", makeEmbedding(384, 3.0));
+    insertCardWithEmbedding(testDb, "c1", "backend", makeEmbedding(768, 2.0));
+    insertCardWithEmbedding(testDb, "c2", "backend", makeEmbedding(768, 3.0));
     invalidateRepoCentroidsCache();
 
     const centroids = getRepoCentroids();
@@ -113,7 +113,7 @@ describe("getRepoCentroids", () => {
       .prepare("INSERT INTO card_embeddings (card_id, embedding) VALUES (?, ?)")
       .run("bad-json-card", embeddingToBuffer(makeEmbedding()));
     // Also insert a valid card so the result is non-empty
-    insertCardWithEmbedding(testDb, "valid-card", "backend", makeEmbedding(384, 1.0));
+    insertCardWithEmbedding(testDb, "valid-card", "backend", makeEmbedding(768, 1.0));
     invalidateRepoCentroidsCache();
 
     // Should not throw and should still return the valid card's repo
@@ -167,14 +167,14 @@ describe("classifyQueryEmbedding", () => {
 
   it("returns the correct top repo for a highly similar query", () => {
     // backend cards are all pointing in the +1 direction
-    insertCardWithEmbedding(testDb, "be1", "backend", makeEmbedding(384, 1.0));
-    insertCardWithEmbedding(testDb, "be2", "backend", makeEmbedding(384, 1.0));
+    insertCardWithEmbedding(testDb, "be1", "backend", makeEmbedding(768, 1.0));
+    insertCardWithEmbedding(testDb, "be2", "backend", makeEmbedding(768, 1.0));
     // frontend cards are orthogonal (zero similarity to backend query)
-    insertCardWithEmbedding(testDb, "fe1", "frontend", makeOrthogonalEmbedding(384));
+    insertCardWithEmbedding(testDb, "fe1", "frontend", makeOrthogonalEmbedding(768));
     invalidateRepoCentroidsCache();
 
     // A query embedding that aligns with backend
-    const queryEmbedding = makeEmbedding(384, 1.0);
+    const queryEmbedding = makeEmbedding(768, 1.0);
     const result = classifyQueryEmbedding(queryEmbedding);
 
     expect(result.topRepo).toBe("backend");
@@ -202,7 +202,7 @@ describe("classifyQueryEmbedding", () => {
 
   it("handles zero-vector embeddings gracefully (covers mag=0 and denom=0 branches)", () => {
     // A card with all-zero embedding → centroid will be zero → mag=0 → skip normalization
-    const zeroEmb = new Float32Array(384).fill(0);  // all zeros
+    const zeroEmb = new Float32Array(768).fill(0);  // all zeros
     insertTestCard(testDb, { id: "zero-card", source_repos: '["zero-repo"]', stale: 0 });
     testDb
       .prepare("INSERT INTO card_embeddings (card_id, embedding) VALUES (?, ?)")

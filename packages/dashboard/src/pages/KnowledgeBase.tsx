@@ -67,7 +67,7 @@ function CardDrawer({ card, onClose }: CardDrawerProps) {
         {/* Content */}
         <div>
           <h3 className="text-[10px] font-medium text-[#484f58] uppercase tracking-wider mb-2">Content</h3>
-          <p className="text-xs text-[#c9d1d9] leading-relaxed whitespace-pre-wrap">{card.content.slice(0, 600)}{card.content.length > 600 ? "…" : ""}</p>
+          <p className="text-xs text-[#c9d1d9] leading-relaxed whitespace-pre-wrap">{card.content}</p>
         </div>
 
         {/* Repos */}
@@ -83,14 +83,13 @@ function CardDrawer({ card, onClose }: CardDrawerProps) {
         {/* Source files */}
         {sourceFiles.length > 0 && (
           <div>
-            <h3 className="text-[10px] font-medium text-[#484f58] uppercase tracking-wider mb-2">Source Files</h3>
-            <div className="space-y-1">
-              {sourceFiles.slice(0, 6).map((f) => (
-                <div key={f} className="font-mono text-[10px] text-[#8b949e] truncate">{f}</div>
+            <h3 className="text-[10px] font-medium text-[#484f58] uppercase tracking-wider mb-2">
+              Source Files <span className="text-[#30363d]">({sourceFiles.length})</span>
+            </h3>
+            <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
+              {sourceFiles.map((f) => (
+                <div key={f} className="font-mono text-[10px] text-[#8b949e] break-all">{f}</div>
               ))}
-              {sourceFiles.length > 6 && (
-                <div className="font-mono text-[10px] text-[#484f58]">+{sourceFiles.length - 6} more</div>
-              )}
             </div>
           </div>
         )}

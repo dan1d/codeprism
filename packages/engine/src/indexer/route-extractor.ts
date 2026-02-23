@@ -39,31 +39,28 @@ const UTILITY_DIRS = new Set([
   "modals", "usecase",
 ]);
 
-// Nav labels that are section headers, not individual page names — skip them
-const NAV_SKIP_LABELS = new Set([
-  "dashboard", "admin", "billing", "schedule", "settings", "devices",
-  "patients", "reports", "users", "practices", "alerts", "orders",
-  "transmissions", "recent transmissions", "teams", "reminders",
-  "phone numbers", "flag-enabled features", "practice features",
-  "cpt codes", "welcome letters",
-]);
-
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
 /**
  * Extract seed flows from a mixed set of parsed files covering multiple repos.
+ *
+ * @param discoveredPages - Optional list of page names discovered by the LLM
+ *   (from `discoverFrontendPages`). When provided, nav labels are filtered to
+ *   only those that match a known page — replacing the old hardcoded
+ *   NAV_SKIP_LABELS approach with a project-agnostic LLM-driven one.
  */
 export function extractSeedFlows(
   parsedFiles: ParsedFile[],
   feRepoNames: string[],
+  discoveredPages?: string[],
 ): SeedFlow[] {
   const feRepoSet = new Set(feRepoNames);
   const filesByPath = new Map(parsedFiles.map((f) => [f.path, f]));
 
   // --- 1. Extract nav labels from sidebar/nav files to build override map ---
-  const navOverrides = buildNavOverrides(parsedFiles, feRepoSet);
+  const navOverrides = buildNavOverrides(parsedFiles, feRepoSet, discoveredPages);
 
   // --- 2. Group FE files by their leaf component directory path ---
   //   key = "PreAuthorizations" or "Billing/OfficeAuthorizations"
@@ -127,6 +124,7 @@ export function extractSeedFlows(
 function buildNavOverrides(
   parsedFiles: ParsedFile[],
   feRepoSet: Set<string>,
+  discoveredPages?: string[],
 ): Map<string, string> {
   const navFiles = parsedFiles.filter((pf) => {
     if (!feRepoSet.has(pf.repo)) return false;
@@ -146,7 +144,7 @@ function buildNavOverrides(
   // Collect all unique UI labels from nav files
   const navLabels: string[] = [];
   for (const nf of navFiles) {
-    const labels = extractNavLabels(nf.path);
+    const labels = extractNavLabels(nf.path, discoveredPages);
     navLabels.push(...labels);
   }
 
@@ -167,8 +165,13 @@ function buildNavOverrides(
 /**
  * Read a nav file and extract all `title="..."` string literals.
  * Also handles `title={'...'}` and `title={"..."}`.
+ *
+ * When `discoveredPages` is provided (from LLM analysis), only labels that
+ * fuzzy-match a known page name are kept — this replaces the old hardcoded
+ * NAV_SKIP_LABELS approach with a project-agnostic filter.
+ * When `discoveredPages` is absent, all non-JSX labels are kept.
  */
-function extractNavLabels(filePath: string): string[] {
+function extractNavLabels(filePath: string, discoveredPages?: string[]): string[] {
   let source: string;
   try {
     source = readFileSync(filePath, "utf8");
@@ -176,19 +179,31 @@ function extractNavLabels(filePath: string): string[] {
     return [];
   }
 
-  const labels: string[] = [];
+  const rawLabels: string[] = [];
   // Match title="...", title={'...'}, title={"..."}
   const re = /title=["'{]([^"'{}]{2,60})["'}]/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(source)) !== null) {
     const label = m[1].trim();
-    if (!label || NAV_SKIP_LABELS.has(label.toLowerCase())) continue;
+    if (!label) continue;
     // Skip labels that look like JSX expressions or variable references
     if (label.includes("{") || label.includes("<") || label.includes("(")) continue;
-    // Must have at least one space (multi-word) or be clearly a page name
-    labels.push(label);
+    rawLabels.push(label);
   }
-  return [...new Set(labels)];
+
+  const unique = [...new Set(rawLabels)];
+
+  // If LLM-discovered pages are available, use them as an allowlist:
+  // keep only nav labels that score ≥ 3 against at least one known page name.
+  // This filters out section headers (e.g. "Admin", "Billing") generically.
+  if (discoveredPages && discoveredPages.length > 0) {
+    return unique.filter((label) =>
+      discoveredPages.some((page) => scoreMatch(label.toLowerCase(), page) >= 3 ||
+        scoreMatch(page.toLowerCase(), label) >= 3)
+    );
+  }
+
+  return unique;
 }
 
 /**

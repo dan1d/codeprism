@@ -73,6 +73,12 @@ export interface ProjectDoc {
   updated_at: string;
 }
 
+export interface RepoOverview {
+  about: ProjectDoc | null;
+  pages: ProjectDoc | null;
+  be_overview: ProjectDoc | null;
+}
+
 export interface InstanceInfo {
   instanceId: string;
   companyName: string;
@@ -130,6 +136,9 @@ export const api = {
     const q = qs.toString();
     return fetchJSON<ProjectDoc[]>(`/api/project-docs${q ? `?${q}` : ""}`);
   },
+
+  repoOverview: (repo: string) =>
+    fetchJSON<RepoOverview>(`/api/repo-overview?repo=${encodeURIComponent(repo)}`),
 
   reindexStatus: () => fetchJSON<ReindexStatus>("/api/reindex-status"),
 

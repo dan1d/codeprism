@@ -4,6 +4,8 @@ import { getEmbedder } from "../embeddings/local-embedder.js";
 import { semanticSearch } from "./semantic.js";
 import { keywordSearch } from "./keyword.js";
 import { classifyQueryEmbedding } from "./query-classifier.js";
+import { rerankResults } from "./reranker.js";
+import { loadRepoSignals } from "./repo-signals.js";
 
 export interface SearchResult {
   card: Card;
@@ -22,7 +24,7 @@ const CACHE_LOOKUP_LIMIT = 50;
 export async function checkCache(
   query: string,
 ): Promise<SearchResult[] | null> {
-  const embedding = await getEmbedder().embed(query);
+  const embedding = await getEmbedder().embed(query, "query");
   const db = getDb();
 
   const recentMetrics = db
@@ -76,37 +78,39 @@ const TYPE_BOOST: Record<string, number> = {
 };
 
 /**
- * Text-signal keywords that suggest a query belongs to a specific repo.
- * Generic and project-agnostic -- teams can use search_config to extend.
+ * Reciprocal Rank Fusion score across multiple retrieval lists.
+ * Standard RRF formula: Σ 1/(k + rank_i), k=60 per Cormack et al. (2009).
+ * A card appearing in two lists at rank 0 scores ~0.033 (vs 0.016 for one).
  */
-const REPO_SIGNALS: Record<string, string[]> = {
-  "biobridge-frontend": [
-    "frontend", "react", "component", "redux", "slice", "store",
-    "modal", "button", "form", "table", "page", "layout", "hook",
-    "ui", "render", "css", "style", "tsx", "jsx",
-  ],
-  "biobridge-backend": [
-    "backend", "rails", "controller", "model", "migration", "job",
-    "serializer", "concern", "mailer", "route", "middleware",
-    "active record", "association", "validation", "callback",
-  ],
-  "bp-monitor-frontend": ["bp-monitor", "vue", "bp monitor"],
-  "bp-monitor-api": ["bp-monitor-api", "cuba", "bp monitor api"],
-};
+export function computeRrfScore(ranks: number[], k = 60): number {
+  return ranks.reduce((sum, rank) => sum + 1 / (k + rank), 0);
+}
 
 /**
- * Counts how many keyword signals in `REPO_SIGNALS` each repo matches
- * against the query. Returns an empty map if no signals are found.
+ * Minimum number of signal hits before a repo earns a text-affinity boost.
+ * A threshold of 2 prevents single spurious keyword matches (e.g. a query
+ * containing the word "client") from distorting the affinity multiplier.
+ */
+const MIN_SIGNAL_HITS = 2;
+
+/**
+ * Counts how many keyword signals each repo matches against the query.
+ * Signals are loaded from the `repo_signals` table (generated at index time
+ * from detected stack profile + LLM docs). Returns an empty map if no signals
+ * are stored — the embedding classifier handles affinity in that case.
+ *
+ * Requires at least MIN_SIGNAL_HITS matches before a repo earns a score entry,
+ * preventing single-word false positives.
  */
 function detectTextRepoAffinity(query: string): Map<string, number> {
   const lower = query.toLowerCase();
   const scores = new Map<string, number>();
-  for (const [repo, signals] of Object.entries(REPO_SIGNALS)) {
+  for (const [repo, signals] of loadRepoSignals()) {
     let hits = 0;
     for (const signal of signals) {
       if (lower.includes(signal)) hits++;
     }
-    if (hits > 0) scores.set(repo, hits);
+    if (hits >= MIN_SIGNAL_HITS) scores.set(repo, hits);
   }
   return scores;
 }
@@ -138,35 +142,21 @@ export async function hybridSearch(
     Promise.resolve(keywordSearch(query, fetchLimit)),
   ]);
 
-  const allCandidateIds = new Set<string>();
-  const scoreMap = new Map<
-    string,
-    { semantic?: number; keyword?: number }
-  >();
-
-  for (const sr of semanticResults) {
-    const score = Math.max(0, Math.min(1, 1 - sr.distance));
-    const entry = scoreMap.get(sr.cardId) ?? {};
-    entry.semantic = score;
-    scoreMap.set(sr.cardId, entry);
-    allCandidateIds.add(sr.cardId);
+  // Build rank maps for RRF (position 0 = best match in each list)
+  const semanticRankMap = new Map<string, number>();
+  for (let i = 0; i < semanticResults.length; i++) {
+    semanticRankMap.set(semanticResults[i]!.cardId, i);
+  }
+  const keywordRankMap = new Map<string, number>();
+  for (let i = 0; i < keywordResults.length; i++) {
+    keywordRankMap.set(keywordResults[i]!.cardId, i);
   }
 
-  if (keywordResults.length > 0) {
-    const rawScores = keywordResults.map((kr) => -kr.rank);
-    const min = Math.min(...rawScores);
-    const max = Math.max(...rawScores);
-    const range = max - min;
-
-    for (let i = 0; i < keywordResults.length; i++) {
-      const kr = keywordResults[i]!;
-      const normalized = range === 0 ? 1 : (rawScores[i]! - min) / range;
-      const entry = scoreMap.get(kr.cardId) ?? {};
-      entry.keyword = normalized;
-      scoreMap.set(kr.cardId, entry);
-      allCandidateIds.add(kr.cardId);
-    }
-  }
+  // Union of all candidate IDs from both retrieval lists
+  const allCandidateIds = new Set<string>([
+    ...semanticRankMap.keys(),
+    ...keywordRankMap.keys(),
+  ]);
 
   if (allCandidateIds.size === 0) return [];
 
@@ -178,25 +168,31 @@ export async function hybridSearch(
     .all(...ids) as Card[];
   const cardMap = new Map(allCards.map((c) => [c.id, c]));
 
-  // Compute repo affinity from text signals (cheap, synchronous)
-  const textAffinity = detectTextRepoAffinity(query);
+  // --- Repo affinity: both text and embedding run always, blended ---
+  //
+  // Text signals (fast, synchronous): precise for explicit keyword queries
+  //   ("the Rails controller", "the Vue composable", "pre_authorization billing")
+  // Embedding classifier (async, centroid-based): robust for semantic queries
+  //   ("how does payment work?", "what handles device pairing?")
+  //
+  // Running both always and blending at 60/40 means neither becomes dead code.
+  // When text signals are absent (fresh install / no signals generated yet),
+  // only the embedding signal applies (multiplier weight shifts to 1.0 embedding).
 
-  // Supplement with embedding-based classification when text signals are weak
+  const textAffinity = detectTextRepoAffinity(query);
+  const maxTextAffinity = textAffinity.size > 0 ? Math.max(...textAffinity.values()) : 0;
+
+  // Embedding classifier — always attempt, non-blocking on failure
   let embeddingClassification: Map<string, number> | null = null;
-  if (textAffinity.size === 0 && semanticResults.length > 0) {
+  if (semanticResults.length > 0) {
     try {
-      const qEmb = await getEmbedder().embed(semanticQuery);
+      const qEmb = await getEmbedder().embed(semanticQuery, "query");
       const cls = classifyQueryEmbedding(qEmb);
       if (cls.confidence > 0.03 && cls.topRepo) {
         embeddingClassification = cls.scores;
       }
-    } catch { /* non-critical */ }
+    } catch { /* non-critical — centroid cache may be cold */ }
   }
-
-  const combinedAffinity = textAffinity.size > 0 ? textAffinity : null;
-  const maxTextAffinity = combinedAffinity
-    ? Math.max(...combinedAffinity.values())
-    : 0;
 
   const combined: {
     cardId: string;
@@ -204,60 +200,65 @@ export async function hybridSearch(
     source: "semantic" | "keyword" | "both";
   }[] = [];
 
-  for (const [cardId, scores] of scoreMap) {
-    const hasSemantic = scores.semantic !== undefined;
-    const hasKeyword = scores.keyword !== undefined;
+  for (const cardId of allCandidateIds) {
+    const semRank = semanticRankMap.get(cardId);
+    const kwRank  = keywordRankMap.get(cardId);
+
+    const hasSemantic = semRank !== undefined;
+    const hasKeyword  = kwRank  !== undefined;
     const source: "semantic" | "keyword" | "both" =
-      hasSemantic && hasKeyword
-        ? "both"
-        : hasSemantic
-          ? "semantic"
-          : "keyword";
+      hasSemantic && hasKeyword ? "both"
+      : hasSemantic ? "semantic"
+      : "keyword";
 
-    const semanticScore = scores.semantic ?? 0;
-    const keywordScore = scores.keyword ?? 0;
-    let score = 0.7 * semanticScore + 0.3 * keywordScore;
-
-    if (source === "both") score *= 1.2;
+    // RRF base score — additive across lists, naturally rewards dual-list hits
+    const ranks: number[] = [];
+    if (semRank !== undefined) ranks.push(semRank);
+    if (kwRank  !== undefined) ranks.push(kwRank);
+    let score = computeRrfScore(ranks);
 
     const card = cardMap.get(cardId);
     if (!card) continue;
 
-    const typeBoost = TYPE_BOOST[card.card_type] ?? 1.0;
-    score *= typeBoost;
-
-    const usageBoost = 1 + 0.05 * Math.log2(1 + card.usage_count);
-    score *= usageBoost;
+    score *= TYPE_BOOST[card.card_type] ?? 1.0;
+    score *= 1 + 0.05 * Math.log2(1 + card.usage_count);
 
     const specificity = card.specificity_score;
-    if (specificity != null) {
-      score *= 0.6 + 0.4 * specificity;
+    if (specificity != null) score *= 0.6 + 0.4 * specificity;
+
+    // --- Blended repo-affinity multiplier ---
+    // Parses the card's repo list once; both text and embedding paths use it.
+    let cardRepos: string[] = [];
+    try { cardRepos = JSON.parse(card.source_repos); } catch { /* skip */ }
+
+    // Text-affinity component (0.6x–1.0x range, weight 0.60)
+    let textMultiplier = 0.6; // base penalty for no match
+    if (maxTextAffinity > 0) {
+      let bestHits = 0;
+      for (const repo of cardRepos) bestHits = Math.max(bestHits, textAffinity.get(repo) ?? 0);
+      textMultiplier = 0.6 + 0.4 * (bestHits / maxTextAffinity);
     }
 
-    // Repo-affinity scoring (text-signal based)
-    if (combinedAffinity && maxTextAffinity > 0) {
-      let cardRepos: string[] = [];
-      try { cardRepos = JSON.parse(card.source_repos); } catch { /* skip */ }
-      let repoScore = 0;
-      for (const repo of cardRepos) {
-        repoScore = Math.max(repoScore, combinedAffinity.get(repo) ?? 0);
-      }
-      const repoMultiplier = 0.6 + 0.4 * (repoScore / maxTextAffinity);
-      score *= repoMultiplier;
-    } else if (embeddingClassification) {
-      // Fallback: embedding-based classification (softer, 0.85-1.15 range)
-      let cardRepos: string[] = [];
-      try { cardRepos = JSON.parse(card.source_repos); } catch { /* skip */ }
+    // Embedding-affinity component (0.85x–1.15x range, weight 0.40)
+    let embMultiplier = 1.0; // neutral when classifier unavailable
+    if (embeddingClassification) {
       let maxSim = 0;
-      for (const repo of cardRepos) {
-        maxSim = Math.max(maxSim, embeddingClassification.get(repo) ?? 0);
-      }
+      for (const repo of cardRepos) maxSim = Math.max(maxSim, embeddingClassification.get(repo) ?? 0);
       const allSims = [...embeddingClassification.values()];
-      const minSim = Math.min(...allSims);
+      const minSim  = Math.min(...allSims);
       const simRange = Math.max(...allSims) - minSim;
       const normalized = simRange > 0 ? (maxSim - minSim) / simRange : 0.5;
-      score *= 0.85 + 0.3 * normalized;
+      embMultiplier = 0.85 + 0.30 * normalized;
     }
+
+    // Blend: 60% text, 40% embedding. When text signals are absent (textAffinity.size === 0),
+    // textMultiplier stays at its base 0.6, and embMultiplier carries the full signal.
+    // Avoid double-penalizing by using max when no text signals are stored yet.
+    const repoMultiplier = textAffinity.size > 0
+      ? textMultiplier * 0.60 + embMultiplier * 0.40
+      : embMultiplier; // no text signals → embedding only
+
+    score *= repoMultiplier;
 
     combined.push({ cardId, score, source });
   }
@@ -272,22 +273,39 @@ export async function hybridSearch(
   const parsedHubCap = hubCapRow ? parseInt(hubCapRow.value, 10) : NaN;
   const MAX_HUB_CARDS = Number.isNaN(parsedHubCap) ? 2 : parsedHubCap;
 
-  const cappedResults: typeof combined = [];
-  let hubCount = 0;
-  for (const entry of combined) {
+  // Build SearchResult[] from top candidates (up to 20) for optional reranking
+  const RERANK_LIMIT = 20;
+  const candidateResults: SearchResult[] = [];
+  for (const entry of combined.slice(0, RERANK_LIMIT)) {
     const card = cardMap.get(entry.cardId);
-    if (card?.card_type === "hub") {
+    if (card) {
+      candidateResults.push({ card, score: entry.score, source: entry.source });
+    }
+  }
+
+  if (candidateResults.length === 0) return [];
+
+  // Optional neural reranking — graceful: if model unavailable, keep RRF order
+  let orderedResults = candidateResults;
+  try {
+    orderedResults = await rerankResults(query, candidateResults, limit * 2);
+  } catch { /* Reranker unavailable, continue with RRF ordering */ }
+
+  // Apply hub cap + limit on final ordered results
+  const cappedResults: SearchResult[] = [];
+  let hubCount = 0;
+  for (const result of orderedResults) {
+    if (result.card.card_type === "hub") {
       if (hubCount >= MAX_HUB_CARDS) continue;
       hubCount++;
     }
-    cappedResults.push(entry);
+    cappedResults.push(result);
     if (cappedResults.length >= limit) break;
   }
-  const topResults = cappedResults;
 
-  if (topResults.length === 0) return [];
+  if (cappedResults.length === 0) return [];
 
-  const resultCardIds = topResults.map((r) => r.cardId);
+  const resultCardIds = cappedResults.map((r) => r.card.id);
   const updateStmt = db.prepare(
     "UPDATE cards SET usage_count = usage_count + 1 WHERE id = ?",
   );
@@ -296,17 +314,8 @@ export async function hybridSearch(
   });
   incrementUsage(resultCardIds);
 
-  const results: SearchResult[] = [];
-  for (const entry of topResults) {
-    const card = cardMap.get(entry.cardId);
-    if (card) {
-      results.push({
-        card: { ...card, usage_count: card.usage_count + 1 },
-        score: entry.score,
-        source: entry.source,
-      });
-    }
-  }
-
-  return results;
+  return cappedResults.map((r) => ({
+    ...r,
+    card: { ...r.card, usage_count: r.card.usage_count + 1 },
+  }));
 }

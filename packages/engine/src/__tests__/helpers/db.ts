@@ -42,6 +42,7 @@ export function insertTestCard(
     source_files: string;
     source_repos: string;
     tags: string;
+    identifiers: string;
     stale: number;
     usage_count: number;
     specificity_score: number;
@@ -50,8 +51,8 @@ export function insertTestCard(
   const id = overrides.id ?? `card-${Math.random().toString(36).slice(2)}`;
   db.prepare(`
     INSERT INTO cards
-      (id, flow, title, content, card_type, source_files, source_repos, tags, stale, usage_count, specificity_score)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, flow, title, content, card_type, source_files, source_repos, tags, identifiers, stale, usage_count, specificity_score)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     overrides.flow ?? "test-flow",
@@ -61,6 +62,7 @@ export function insertTestCard(
     overrides.source_files ?? '[]',
     overrides.source_repos ?? '["test-repo"]',
     overrides.tags ?? '[]',
+    overrides.identifiers ?? "",
     overrides.stale ?? 0,
     overrides.usage_count ?? 0,
     overrides.specificity_score ?? 0.5,

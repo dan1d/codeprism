@@ -14,6 +14,7 @@ import {
   generateCards,
   isDomainRelevant,
   computeTags,
+  computeContentHash,
 } from "../../indexer/card-generator.js";
 import { makeParsedFile, makeFlow, makeEdge, mockLlm, failingLlm } from "../helpers/fixtures.js";
 
@@ -306,7 +307,7 @@ describe("generateCards — card types", () => {
 
   it("generates cross_service cards for api_endpoint edges", async () => {
     const feFile = makeParsedFile({
-      path: "/fe/src/api/patients.ts",
+      path: "/fe/src/pages/PatientSearch.tsx",
       repo: "biobridge-frontend",
       language: "javascript",
       fileRole: "domain",
@@ -344,7 +345,7 @@ describe("generateCards — card types", () => {
 
   it("generates cross_service cards in structural-only mode (no LLM)", async () => {
     const feFile = makeParsedFile({
-      path: "/fe/src/api/patients.ts",
+      path: "/fe/src/pages/CreatePatient.tsx",
       repo: "biobridge-frontend",
       language: "javascript",
       fileRole: "domain",
@@ -394,4 +395,87 @@ describe("generateCards — card types", () => {
     const backendCards = cards.filter((c) => c.sourceRepos.includes("biobridge-backend"));
     expect(backendCards.every((c) => c.commitSha === "deadbeef123")).toBe(true);
   }, CARD_GEN_TIMEOUT);
+});
+
+// ---------------------------------------------------------------------------
+// buildIdentifiers — pure, no deps
+// (buildIdentifierAppendix is a deprecated alias; test the canonical function)
+// ---------------------------------------------------------------------------
+
+import { buildIdentifiers } from "../../indexer/card-generator.js";
+
+describe("buildIdentifiers", () => {
+  it("returns empty string when files have no classes or routes", () => {
+    const file = makeParsedFile({ path: "app/models/empty.rb" });
+    expect(buildIdentifiers([file])).toBe("");
+  });
+
+  it("includes class names as plain text (not an HTML comment)", () => {
+    const file = makeParsedFile({
+      path: "app/models/patient.rb",
+      classes: [{ name: "Patient", type: "model" }],
+    });
+    const identifiers = buildIdentifiers([file]);
+    expect(identifiers).toContain("Patient");
+    // Must NOT be an HTML comment — plain text so BM25 can index it
+    expect(identifiers).not.toContain("<!--");
+  });
+
+  it("includes route method and path", () => {
+    const file = makeParsedFile({
+      path: "config/routes.rb",
+      routes: [{ method: "GET", path: "/patients" }],
+    });
+    const identifiers = buildIdentifiers([file]);
+    expect(identifiers).toContain("GET /patients");
+  });
+
+  it("deduplicates class names across files", () => {
+    const f1 = makeParsedFile({ classes: [{ name: "User", type: "model" }] });
+    const f2 = makeParsedFile({ classes: [{ name: "User", type: "controller" as const }] });
+    const identifiers = buildIdentifiers([f1, f2]);
+    expect(identifiers.split("User").length - 1).toBe(1);
+  });
+
+  it("caps routes at 10 entries", () => {
+    const file = makeParsedFile({
+      routes: Array.from({ length: 15 }, (_, i) => ({
+        method: "GET",
+        path: `/route${i}`,
+      })),
+    });
+    const identifiers = buildIdentifiers([file]);
+    expect(identifiers).toContain("/route9");
+    expect(identifiers).not.toContain("/route10");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// computeContentHash — pure, no deps
+// ---------------------------------------------------------------------------
+
+describe("computeContentHash", () => {
+  it("returns a 64-character hex string (SHA-256)", () => {
+    const hash = computeContentHash("Patient model", "some content");
+    expect(hash).toHaveLength(64);
+    expect(hash).toMatch(/^[0-9a-f]+$/);
+  });
+
+  it("is deterministic for the same input", () => {
+    const h1 = computeContentHash("Patient model", "same content");
+    const h2 = computeContentHash("Patient model", "same content");
+    expect(h1).toBe(h2);
+  });
+
+  it("produces different hashes for different content", () => {
+    const h1 = computeContentHash("Patient model", "content A");
+    const h2 = computeContentHash("Patient model", "content B");
+    expect(h1).not.toBe(h2);
+  });
+
+  it("produces different hashes for different titles", () => {
+    const h1 = computeContentHash("Title A", "same content");
+    const h2 = computeContentHash("Title B", "same content");
+    expect(h1).not.toBe(h2);
+  });
 });

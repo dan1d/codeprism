@@ -9,6 +9,24 @@
 
 import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+
+// ---------------------------------------------------------------------------
+// Workspace root — set once from index-repos.ts before any doc is generated.
+// Used to store relative paths in the DB instead of absolute machine paths.
+// ---------------------------------------------------------------------------
+let _workspaceRoot = "";
+
+/** Call this once at the start of indexing with the absolute workspace root. */
+export function setWorkspaceRoot(root: string): void {
+  _workspaceRoot = root;
+}
+
+function relativizePath(absPath: string): string {
+  if (!_workspaceRoot) return absPath;
+  const prefix = _workspaceRoot.endsWith("/") ? _workspaceRoot : `${_workspaceRoot}/`;
+  if (!prefix || prefix === "/") return absPath;
+  return absPath.startsWith(prefix) ? absPath.slice(prefix.length) : absPath;
+}
 import { execSync } from "node:child_process";
 import { nanoid } from "nanoid";
 import { getDb } from "../db/connection.js";
@@ -27,6 +45,8 @@ import {
   buildSpecialistPrompt,
   buildApiContractsPrompt,
   buildChangelogPrompt,
+  buildPagesPrompt,
+  buildBeOverviewPrompt,
   type DocType,
   type MemoryInput,
 } from "./doc-prompts.js";
@@ -296,6 +316,110 @@ function selectChangelogFiles(repoPath: string): string[] {
   }
 }
 
+/**
+ * Selects nav/sidebar files + page index files for FE page discovery.
+ * Returns at most 15 files to keep the prompt cost low.
+ */
+function selectPagesFiles(repoPath: string, parsed: ParsedFile[]): SourceFile[] {
+  const results: SourceFile[] = [];
+  const seen = new Set<string>();
+
+  const add = (path: string, maxLines = MAX_DOC_FILE_LINES) => {
+    if (seen.has(path)) return;
+    seen.add(path);
+    const content = readTruncated(path, maxLines);
+    if (content) results.push({ path, content });
+  };
+
+  // Nav / sidebar files — highest signal for page names
+  const navFiles = parsed.filter((pf) => {
+    const lower = pf.path.toLowerCase();
+    return (
+      lower.includes("sidebar") ||
+      lower.includes("side-bar") ||
+      lower.includes("navbar") ||
+      lower.includes("nav-bar") ||
+      lower.includes("navigation") ||
+      lower.includes("sidenav") ||
+      lower.includes("/nav/") ||
+      lower.includes("/menu")
+    );
+  });
+  for (const nf of navFiles.slice(0, 4)) add(nf.path, 150);
+
+  // Router / routes file — shows all routes in one place
+  const routerFile =
+    tryRead(repoPath, ["src/router/index.ts", "src/router/index.js", "src/routes/index.ts", "src/routes/index.js"]) ??
+    tryRead(repoPath, ["src/App.tsx", "src/App.jsx", "src/App.vue"]);
+  if (routerFile) add(routerFile.path, 120);
+
+  // Page index files — index.tsx/jsx/vue inside feature directories
+  const pageIndexFiles = parsed
+    .filter((pf) => {
+      const lower = pf.path.toLowerCase();
+      const base = pf.path.split("/").at(-1)?.toLowerCase() ?? "";
+      return (
+        (base === "index.tsx" || base === "index.jsx" || base === "index.vue" || base === "index.js") &&
+        (lower.includes("/pages/") || lower.includes("/views/") || lower.includes("/screens/"))
+      );
+    })
+    .slice(0, 8);
+  for (const pf of pageIndexFiles) add(pf.path, 60);
+
+  return results.slice(0, 15);
+}
+
+/**
+ * Selects routes + top API controllers for BE overview discovery.
+ */
+function selectBeOverviewFiles(repoPath: string, parsed: ParsedFile[]): SourceFile[] {
+  const results: SourceFile[] = [];
+  const seen = new Set<string>();
+
+  const add = (path: string, maxLines = MAX_DOC_FILE_LINES) => {
+    if (seen.has(path)) return;
+    seen.add(path);
+    const content = readTruncated(path, maxLines);
+    if (content) results.push({ path, content });
+  };
+
+  // Rails routes file
+  const railsRoutes = tryRead(repoPath, ["config/routes.rb"]);
+  if (railsRoutes) add(railsRoutes.path, 200);
+
+  // OpenAPI spec
+  const openapi = tryRead(repoPath, ["openapi.yaml", "swagger.yaml", "openapi.json", "swagger.json", "docs/api.yaml"]);
+  if (openapi) add(openapi.path, 150);
+
+  // JS/TS router files
+  const jsRouter = tryRead(repoPath, ["src/routes/index.ts", "src/routes/index.js", "routes/index.js"]);
+  if (jsRouter) add(jsRouter.path, 120);
+
+  // Top controllers by association richness
+  const controllers = parsed
+    .filter((f) => f.classes.some((c) => c.type === "controller") && f.fileRole === "domain")
+    .sort((a, b) => b.associations.length - a.associations.length)
+    .slice(0, 5);
+  for (const c of controllers) add(c.path, 80);
+
+  return results.slice(0, 10);
+}
+
+/**
+ * Parses the LLM-generated Pages.md content to extract a flat list of page names.
+ * Looks for lines matching: `- **Page Name** — description`
+ */
+function parsePageNamesFromContent(content: string): string[] {
+  const names: string[] = [];
+  const re = /^[-*]\s+\*{1,2}([^*]+)\*{1,2}/gm;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(content)) !== null) {
+    const name = m[1]!.trim();
+    if (name.length > 1 && name.length < 60) names.push(name);
+  }
+  return [...new Set(names)];
+}
+
 // ---------------------------------------------------------------------------
 // Changelog formatting (no LLM for conventional commits)
 // ---------------------------------------------------------------------------
@@ -405,7 +529,7 @@ function upsertDoc(doc: {
       stale             = 0,
       source_file_paths = excluded.source_file_paths,
       updated_at        = datetime('now')
-  `).run(id, doc.repo, doc.doc_type, doc.title, doc.content, JSON.stringify(doc.sourceFilePaths));
+  `).run(id, doc.repo, doc.doc_type, doc.title, doc.content, JSON.stringify(doc.sourceFilePaths.map(relativizePath)));
 }
 
 function docExists(repo: string, docType: DocType): boolean {
@@ -414,6 +538,91 @@ function docExists(repo: string, docType: DocType): boolean {
     .prepare("SELECT 1 FROM project_docs WHERE repo = ? AND doc_type = ? AND stale = 0")
     .get(repo, docType);
   return !!row;
+}
+
+// ---------------------------------------------------------------------------
+// Early-stage page / BE discovery (runs before flow detection)
+// ---------------------------------------------------------------------------
+
+/**
+ * Analyzes FE nav and page files with the LLM to produce a "pages" doc and
+ * returns the list of discovered page names so route-extractor can use them
+ * instead of a hardcoded NAV_SKIP_LABELS list.
+ *
+ * No-ops when LLM is unavailable or the doc already exists and is fresh.
+ * Returns an empty array in those cases so the caller can fall back gracefully.
+ */
+export async function discoverFrontendPages(
+  repoName: string,
+  repoPath: string,
+  parsedFiles: ParsedFile[],
+  llm: LLMProvider | null,
+): Promise<string[]> {
+  if (!llm) return [];
+
+  // If a fresh pages doc already exists, load the names from it
+  const db = getDb();
+  const existing = db
+    .prepare("SELECT content FROM project_docs WHERE repo = ? AND doc_type = 'pages' AND stale = 0")
+    .get(repoName) as { content: string } | undefined;
+  if (existing) {
+    return parsePageNamesFromContent(existing.content);
+  }
+
+  const files = selectPagesFiles(repoPath, parsedFiles);
+  if (files.length === 0) return [];
+
+  console.log(`  [pages] discovering FE pages for ${repoName} (${files.length} files)`);
+  try {
+    const prompt = buildPagesPrompt(repoName, files);
+    const content = await callDocLlm(llm, prompt, `${repoName}/pages`, 1000);
+    upsertDoc({
+      repo: repoName,
+      doc_type: "pages",
+      title: `${repoName} — Pages`,
+      content,
+      sourceFilePaths: files.map((f) => f.path),
+    });
+    return parsePageNamesFromContent(content);
+  } catch (err) {
+    console.warn(`  [pages] failed for ${repoName}: ${err}`);
+    return [];
+  }
+}
+
+/**
+ * Analyzes BE routes and controllers with the LLM to produce a "be_overview" doc.
+ * Runs before flow detection so the doc is available early for the UI.
+ *
+ * No-ops when LLM is unavailable or the doc already exists and is fresh.
+ */
+export async function discoverBeOverview(
+  repoName: string,
+  repoPath: string,
+  parsedFiles: ParsedFile[],
+  llm: LLMProvider | null,
+): Promise<void> {
+  if (!llm) return;
+
+  if (docExists(repoName, "be_overview")) return;
+
+  const files = selectBeOverviewFiles(repoPath, parsedFiles);
+  if (files.length === 0) return;
+
+  console.log(`  [be_overview] generating BE overview for ${repoName} (${files.length} files)`);
+  try {
+    const prompt = buildBeOverviewPrompt(repoName, files);
+    const content = await callDocLlm(llm, prompt, `${repoName}/be_overview`, 1000);
+    upsertDoc({
+      repo: repoName,
+      doc_type: "be_overview",
+      title: `${repoName} — Backend Overview`,
+      content,
+      sourceFilePaths: files.map((f) => f.path),
+    });
+  } catch (err) {
+    console.warn(`  [be_overview] failed for ${repoName}: ${err}`);
+  }
 }
 
 // ---------------------------------------------------------------------------

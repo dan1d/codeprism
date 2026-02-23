@@ -54,6 +54,7 @@ export function makeCard(overrides: Partial<Card> = {}): Card {
     stale: 0,
     usage_count: 0,
     specificity_score: 0.5,
+    identifiers: "",
     created_at: now,
     updated_at: now,
     ...overrides,
@@ -127,14 +128,17 @@ export const failingLlm: LLMProvider = {
 // Embedding helpers
 // ---------------------------------------------------------------------------
 
-/** Creates a normalised Float32Array of the given dimension. */
-export function makeEmbedding(dim = 384, value = 1.0): Float32Array {
+/**
+ * Creates a normalised Float32Array of the given dimension.
+ * Default is 768 to match nomic-embed-text-v1.5 / migration v15.
+ */
+export function makeEmbedding(dim = 768, value = 1.0): Float32Array {
   const arr = new Float32Array(dim).fill(value / Math.sqrt(dim));
   return arr;
 }
 
 /** Creates an orthogonal embedding (cosine similarity = 0 against makeEmbedding). */
-export function makeOrthogonalEmbedding(dim = 384): Float32Array {
+export function makeOrthogonalEmbedding(dim = 768): Float32Array {
   const arr = new Float32Array(dim);
   // Alternate +/- to be orthogonal to a constant vector
   for (let i = 0; i < dim; i++) {

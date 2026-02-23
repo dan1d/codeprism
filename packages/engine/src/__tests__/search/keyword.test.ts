@@ -105,9 +105,11 @@ describe("keywordSearch", () => {
 });
 
 describe("sanitizeFts5Query", () => {
-  it("quotes simple tokens", () => {
+  it("produces unquoted tokens joined by OR (enables Porter stemming)", () => {
     const result = sanitizeFts5Query("patient authorization");
-    expect(result).toBe('"patient" OR "authorization"');
+    // Tokens must NOT be quoted — quoted tokens bypass the Porter stemmer
+    expect(result).toBe("patient OR authorization");
+    expect(result).not.toContain('"');
   });
 
   it("strips HTTP URLs", () => {
@@ -116,27 +118,26 @@ describe("sanitizeFts5Query", () => {
     );
     expect(result).not.toContain("linear.app");
     expect(result).not.toContain("https");
-    expect(result).toContain('"see"');
+    expect(result).toContain("see");
   });
 
-  it("strips HTTPS URLs", () => {
+  it("strips HTTPS URLs leaving no tokens", () => {
     const result = sanitizeFts5Query("https://example.com/path/to/page");
-    // URL stripped, no tokens remain (single-char filter)
+    // URL stripped entirely, no tokens remain
     expect(result).toBe("");
   });
 
-  it("strips special characters", () => {
+  it("strips special characters, keeps underscores", () => {
     const result = sanitizeFts5Query("pre_authorization (modal) 'form'");
-    // Parens, single-quotes become spaces; underscores are kept
     expect(result).not.toContain("(");
     expect(result).not.toContain(")");
     expect(result).not.toContain("'");
-    expect(result).toContain('"pre_authorization"');
+    expect(result).toContain("pre_authorization");
   });
 
   it("filters out single-character tokens", () => {
     const result = sanitizeFts5Query("a b patient c");
-    expect(result).toBe('"patient"');
+    expect(result).toBe("patient");
   });
 
   it("returns empty string for empty input", () => {
@@ -151,13 +152,16 @@ describe("sanitizeFts5Query", () => {
     expect(sanitizeFts5Query("a b c")).toBe("");
   });
 
-  it("handles FTS5 operators gracefully (AND, OR, NOT removed via special-char strip)", () => {
-    const result = sanitizeFts5Query("patient AND authorization");
-    // 'AND' has no special chars so it remains as a token — that is fine;
-    // the important thing is no unquoted operators break FTS5.
-    expect(result).toContain('"patient"');
-    expect(result).toContain('"AND"');
-    expect(result).toContain('"authorization"');
+  it("removes FTS5 boolean operators (AND, OR, NOT, NEAR) to prevent injection", () => {
+    const result = sanitizeFts5Query("patient AND authorization OR billing NOT hub");
+    // AND, OR, NOT must be stripped — they would break FTS5 if unquoted
+    expect(result).not.toContain("AND");
+    expect(result).not.toContain("OR OR"); // no double OR
+    expect(result).not.toContain("NOT");
+    expect(result).toContain("patient");
+    expect(result).toContain("authorization");
+    expect(result).toContain("billing");
+    expect(result).toContain("hub");
   });
 
   it("limits to 30 tokens", () => {
@@ -169,8 +173,8 @@ describe("sanitizeFts5Query", () => {
 
   it("handles PascalCase identifiers without crashing", () => {
     const result = sanitizeFts5Query("PatientAuthorization RemoteCheck");
-    expect(result).toContain('"PatientAuthorization"');
-    expect(result).toContain('"RemoteCheck"');
+    expect(result).toContain("PatientAuthorization");
+    expect(result).toContain("RemoteCheck");
   });
 
   it("handles ticket descriptions with mixed content", () => {
@@ -178,14 +182,15 @@ describe("sanitizeFts5Query", () => {
       "Ability to Add Multiple Remote Authorizations in DEMO https://linear.app/ticket/ENG-756";
     const result = sanitizeFts5Query(raw);
     expect(result).not.toContain("linear.app");
-    expect(result).toContain('"Ability"');
-    expect(result).toContain('"Remote"');
+    expect(result).toContain("Ability");
+    expect(result).toContain("Remote");
+    // OR (the operator) should be stripped; "Authorizations", "Multiple" etc. should remain
+    expect(result.split(" OR ").every((t) => t.trim().length > 1)).toBe(true);
   });
 
   it("strips dot notation (object.property becomes two tokens)", () => {
     const result = sanitizeFts5Query("schema.rb routes.rb");
-    // Dots become spaces
-    expect(result).toContain('"schema"');
-    expect(result).toContain('"rb"');
+    expect(result).toContain("schema");
+    expect(result).toContain("rb");
   });
 });

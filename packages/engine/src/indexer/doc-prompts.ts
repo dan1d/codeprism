@@ -14,7 +14,9 @@ export type DocType =
   | "api_contracts"
   | "specialist"
   | "changelog"
-  | "memory";
+  | "memory"
+  | "pages"
+  | "be_overview";
 
 const DOC_SYSTEM_PROMPT = `You are a senior software architect documenting a codebase for an AI coding assistant.
 Write clear, concise markdown. Focus on what developers need to know to work confidently in this codebase.
@@ -189,6 +191,63 @@ If no CSS files are provided, note that styling information was not available.`;
 }
 
 // ---------------------------------------------------------------------------
+// PAGES (frontend only) — LLM-discovered page/view inventory
+// ---------------------------------------------------------------------------
+
+export function buildPagesPrompt(repoName: string, files: SourceFile[]): string {
+  return `Analyze the navigation and page components of the \`${repoName}\` frontend repository.
+
+## Source Files
+
+${sourceSection(files)}
+
+## Task
+
+Produce a **Pages.md** document that catalogues every distinct user-facing page or view in this application.
+
+Rules:
+- A **page** is a route-level view a user navigates to (e.g. "Remote Authorizations", "Patient Profile").
+- A **section header** is a nav group that contains child pages (e.g. "Admin", "Settings" when they have sub-items) — do NOT list these as pages.
+- Infer page names from nav \`title\` attributes, component directory names, and route definitions.
+- For each page write exactly one sentence describing what the user does there.
+
+Output format — use this exact markdown structure so it can be machine-parsed:
+
+## Pages
+
+- **<Page Name>** — <one sentence describing what the user does on this page>
+- **<Page Name>** — <one sentence>
+...
+
+List every leaf page you can identify. Do not include section headers, utility components, or modal-only views.`;
+}
+
+// ---------------------------------------------------------------------------
+// BE_OVERVIEW — LLM-generated backend API summary
+// ---------------------------------------------------------------------------
+
+export function buildBeOverviewPrompt(repoName: string, files: SourceFile[]): string {
+  return `Analyze the backend routes and controllers of the \`${repoName}\` repository.
+
+## Source Files
+
+${sourceSection(files)}
+
+## Task
+
+Produce a **BackendOverview.md** that gives a developer an instant understanding of what this API does.
+
+Cover:
+1. **Purpose** — one paragraph: what real-world problem does this API solve?
+2. **Main Resources** — bullet list of the 5-10 core domain resources (e.g. Patient, Authorization, Device) with one-line descriptions
+3. **Key Endpoint Groups** — for each resource, list 2-4 of the most important routes (method + path + purpose)
+4. **Authentication** — how clients authenticate (token, session, API key, etc.)
+5. **Notable Patterns** — any cross-cutting concerns visible in the routes (versioning, namespacing, nested resources)
+
+Be specific to what is visible in the provided files. Maximum 600 words.`;
+}
+
+// ---------------------------------------------------------------------------
 // Refresh prompt (used by POST /api/refresh for incremental updates)
 // ---------------------------------------------------------------------------
 
@@ -204,6 +263,8 @@ export function buildRefreshDocPrompt(
     case "code_style":   return buildCodeStylePrompt(repoName, files);
     case "rules":        return buildRulesPrompt(repoName, files);
     case "styles":       return buildStylesPrompt(repoName, files);
+    case "pages":        return buildPagesPrompt(repoName, files);
+    case "be_overview":  return buildBeOverviewPrompt(repoName, files);
     default:             return buildReadmePrompt(repoName, files);
   }
 }
