@@ -655,12 +655,9 @@ if (import.meta.url === new URL(`file://${process.argv[1]}`).href) {
 
   const workspaceRoot = positional[0] ?? userWorkspaceRootFrom(import.meta.url);
 
-  const allRepos: RepoConfig[] = [
-    { name: "biobridge-backend",   path: resolve(workspaceRoot, "biobridge-backend") },
-    { name: "biobridge-frontend",  path: resolve(workspaceRoot, "biobridge-frontend") },
-    { name: "bp-monitor-api",      path: resolve(workspaceRoot, "bp-monitor-api") },
-    { name: "bp-monitor-frontend", path: resolve(workspaceRoot, "bp-monitor-frontend") },
-  ];
+  const { loadWorkspaceConfig } = await import("../config/workspace-config.js");
+  const config = loadWorkspaceConfig(workspaceRoot);
+  const allRepos: RepoConfig[] = config.repos.map((r) => ({ name: r.name, path: r.path }));
 
   const repos = legacyRepoFilter
     ? allRepos.filter((r) => r.name === legacyRepoFilter)

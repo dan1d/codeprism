@@ -94,6 +94,22 @@ export interface ReindexStatus {
   error: string | null;
 }
 
+export interface PublicStats {
+  activeInstances: number;
+  totalTokensSaved: number;
+  totalQueries: number;
+  totalCards: number;
+  avgCacheHitRate: number;
+}
+
+export interface TenantInfo {
+  slug: string;
+  name: string;
+  apiKey: string;
+  mcpUrl: string;
+  dashboardUrl: string;
+}
+
 // ---------------------------------------------------------------------------
 // API calls
 // ---------------------------------------------------------------------------
@@ -154,5 +170,88 @@ export const api = {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
+    }),
+
+  // ---- Team rules ----
+  rules: () => fetchJSON<unknown[]>("/api/rules"),
+
+  addRule: (name: string, description: string, severity: string, scope?: string, created_by?: string) =>
+    fetchJSON<unknown>("/api/rules", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, description, severity, scope, created_by }),
+    }),
+
+  patchRule: (id: string, data: Record<string, unknown>) =>
+    fetchJSON<unknown>(`/api/rules/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    }),
+
+  deleteRule: (id: string) =>
+    fetchJSON<{ deleted: string }>(`/api/rules/${encodeURIComponent(id)}`, { method: "DELETE" }),
+
+  ruleChecks: (repo?: string) => {
+    const qs = repo ? `?repo=${encodeURIComponent(repo)}` : "";
+    return fetchJSON<unknown[]>(`/api/rule-checks${qs}`);
+  },
+
+  refineRule: (description: string, opts?: { name?: string; scope?: string; severity?: string }) =>
+    fetchJSON<{ refined: string }>("/api/rules/refine", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ description, ...opts }),
+    }),
+
+  importRules: (rules: Array<{ name: string; description: string; severity?: string; scope?: string; created_by?: string }>) =>
+    fetchJSON<{ inserted: string[]; skipped: string[]; errors: string[] }>("/api/rules/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(rules),
+    }),
+
+  runCheck: (repo?: string, base = "main") =>
+    fetchJSON<{ passed: boolean; violations: unknown[]; checked_rules?: number; files_checked?: number; message?: string; error?: string }>("/api/rules/run-check", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ repo, base }),
+    }),
+
+  // ---- Knowledge files ----
+  knowledgeFiles: () =>
+    fetchJSON<Array<{ id: string; source: "builtin" | "custom" }>>("/api/knowledge-files"),
+
+  addKnowledgeFile: (skillId: string, content: string) =>
+    fetchJSON<{ skillId: string; path: string; message: string }>("/api/knowledge-files", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ skillId, content }),
+    }),
+
+  // ---- Repo registration ----
+  registeredRepos: () =>
+    fetchJSON<Array<{ name: string; path: string }>>("/api/repos/registered"),
+
+  registerRepo: (name: string, path: string) =>
+    fetchJSON<{ name: string; path: string; reindexing: boolean; message: string }>("/api/repos/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, path }),
+    }),
+
+  removeRepo: (name: string) =>
+    fetchJSON<{ removed: string }>(`/api/repos/register/${encodeURIComponent(name)}`, {
+      method: "DELETE",
+    }),
+
+  publicStats: () =>
+    fetchJSON<PublicStats>("/api/public-stats"),
+
+  createTenant: (name: string) =>
+    fetchJSON<TenantInfo>("/api/tenants", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
     }),
 };

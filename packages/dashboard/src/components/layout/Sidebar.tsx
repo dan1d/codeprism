@@ -7,17 +7,19 @@ import {
   Settings,
   Plus,
   Database,
+  ShieldAlert,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { api, type RepoSummary } from "@/lib/api";
 
 const NAV_ITEMS = [
-  { to: "/", icon: LayoutDashboard, label: "Overview" },
-  { to: "/repos", icon: GitBranch, label: "Repositories" },
-  { to: "/knowledge", icon: BookOpen, label: "Knowledge Base" },
-  { to: "/analytics", icon: BarChart2, label: "Analytics" },
-  { to: "/settings", icon: Settings, label: "Settings" },
+  { to: "/dashboard", icon: LayoutDashboard, label: "Overview" },
+  { to: "/dashboard/repos", icon: GitBranch, label: "Repositories" },
+  { to: "/dashboard/knowledge", icon: BookOpen, label: "Knowledge Base" },
+  { to: "/dashboard/rules", icon: ShieldAlert, label: "Team Rules" },
+  { to: "/dashboard/analytics", icon: BarChart2, label: "Analytics" },
+  { to: "/dashboard/settings", icon: Settings, label: "Settings" },
 ] as const;
 
 interface SidebarProps {
@@ -53,7 +55,7 @@ export function Sidebar({ companyName }: SidebarProps) {
           <NavLink
             key={to}
             to={to}
-            end={to === "/"}
+            end={to === "/dashboard"}
             className={({ isActive }) =>
               cn(
                 "flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors",
@@ -79,7 +81,7 @@ export function Sidebar({ companyName }: SidebarProps) {
             {repos.map((r) => (
               <button
                 key={r.repo}
-                onClick={() => navigate(`/repos?highlight=${encodeURIComponent(r.repo)}`)}
+                onClick={() => navigate(`/dashboard/repos?highlight=${encodeURIComponent(r.repo)}`)}
                 className="flex items-center gap-2 w-full px-3 py-1.5 rounded-md text-xs text-[#8b949e] hover:text-[#c9d1d9] hover:bg-[#161b22] transition-colors text-left"
               >
                 <span
@@ -98,7 +100,7 @@ export function Sidebar({ companyName }: SidebarProps) {
       {/* Footer */}
       <div className="px-3 py-3 border-t border-[#21262d] space-y-1">
         <NavLink
-          to="/repos"
+          to="/dashboard/repos"
           className="flex items-center gap-2 px-3 py-1.5 rounded-md text-xs text-[#8b949e] hover:text-[#c9d1d9] hover:bg-[#161b22] transition-colors"
         >
           <Plus size={13} />

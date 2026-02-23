@@ -8,6 +8,10 @@ import {
   FileText,
   Layers,
   ChevronRight,
+  BookOpen,
+  Plus,
+  Loader2,
+  Upload,
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { RepoBadge } from "@/components/layout/RepoBadge";
@@ -15,6 +19,188 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { LoadingState } from "@/components/shared/LoadingState";
 import { api, type Card, type FlowSummary } from "@/lib/api";
 import { formatRelativeTime, cn } from "@/lib/utils";
+
+// ---------------------------------------------------------------------------
+// Add Knowledge File modal
+// ---------------------------------------------------------------------------
+
+interface AddKnowledgeModalProps {
+  onClose: () => void;
+}
+
+const PLACEHOLDER_MD = `# MyFramework Best Practices
+
+> Curated conventions used by srcmap to seed code_style and rules documentation.
+
+## Architecture
+- ...
+
+## Code Style
+- ...
+
+## Testing
+- ...
+
+## Performance
+- ...
+
+## Security
+- ...
+
+## Anti-Patterns
+- ...
+`.trim();
+
+function AddKnowledgeModal({ onClose }: AddKnowledgeModalProps) {
+  const [skillId, setSkillId] = useState("");
+  const [content, setContent] = useState(PLACEHOLDER_MD);
+  const [saving, setSaving] = useState(false);
+  const [done, setDone] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      setContent(text);
+      if (!skillId) {
+        setSkillId(file.name.replace(/\.md$/i, "").toLowerCase());
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!skillId.trim() || !content.trim()) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await api.addKnowledgeFile(skillId.trim(), content);
+      setDone(res.message);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save knowledge file");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+      <div className="relative w-[600px] max-h-[90vh] bg-[#0f1117] border border-[#30363d] rounded-xl shadow-2xl flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between p-5 border-b border-[#21262d]">
+          <div className="flex items-center gap-2">
+            <BookOpen size={15} className="text-accent" />
+            <h2 className="text-sm font-semibold text-[#e1e4e8]">Add Knowledge File</h2>
+          </div>
+          <button onClick={onClose} className="p-1 rounded text-[#484f58] hover:text-[#8b949e]">
+            <X size={15} />
+          </button>
+        </div>
+
+        {done ? (
+          <div className="p-6 space-y-4">
+            <div className="flex items-start gap-3 p-4 rounded-lg bg-success/10 border border-success/30">
+              <CheckCircle2 size={16} className="text-success mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-success">Knowledge file saved</p>
+                <p className="text-xs text-[#8b949e] mt-1">{done}</p>
+              </div>
+            </div>
+            <p className="text-xs text-[#484f58]">
+              The file was written to <code className="text-[#8b949e]">.srcmap/knowledge/{skillId}.md</code>.
+              It will be picked up automatically on the next <code className="text-[#8b949e]">srcmap index</code> run.
+            </p>
+            <button
+              onClick={onClose}
+              className="w-full px-3 py-2 rounded-md text-xs bg-[#1c2333] border border-[#30363d] text-[#c9d1d9] hover:border-accent/50 transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={(e) => void handleSubmit(e)} className="flex flex-col flex-1 min-h-0">
+            <div className="p-5 space-y-4 overflow-y-auto flex-1">
+              {/* Skill ID + upload button */}
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="block text-[10px] font-medium text-[#484f58] uppercase tracking-wider mb-1.5">
+                    Framework / Skill ID
+                  </label>
+                  <input
+                    type="text"
+                    value={skillId}
+                    onChange={(e) => setSkillId(e.target.value.toLowerCase())}
+                    placeholder="myframework"
+                    className="w-full px-3 py-2 rounded-md border border-[#30363d] bg-[#161b22] text-xs text-[#c9d1d9] placeholder:text-[#484f58] font-mono focus:outline-none focus:border-accent/50"
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-medium text-[#484f58] uppercase tracking-wider mb-1.5">
+                    Import .md
+                  </label>
+                  <label className="flex items-center gap-1.5 px-3 py-2 rounded-md border border-[#30363d] bg-[#161b22] text-xs text-[#8b949e] hover:border-[#484f58] cursor-pointer transition-colors">
+                    <Upload size={11} />
+                    Browse
+                    <input type="file" accept=".md" onChange={handleFile} className="sr-only" />
+                  </label>
+                </div>
+              </div>
+
+              <p className="text-[10px] text-[#484f58] -mt-2">
+                The file will be saved as <code className="text-[#8b949e]">.srcmap/knowledge/{"{"}skillId{"}"}.md</code> in the workspace root.
+                It overrides the built-in skill for that ID. Built-in IDs: rails, react, vue, nextjs, go, python, django, nestjs, laravel, gin, angular, spring, fastapi.
+              </p>
+
+              {/* Content editor */}
+              <div>
+                <label className="block text-[10px] font-medium text-[#484f58] uppercase tracking-wider mb-1.5">
+                  Markdown Content
+                </label>
+                <textarea
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  rows={16}
+                  className="w-full px-3 py-2.5 rounded-md border border-[#30363d] bg-[#161b22] text-xs text-[#c9d1d9] font-mono resize-y focus:outline-none focus:border-accent/50 leading-relaxed"
+                />
+              </div>
+
+              {error && (
+                <div className="flex items-start gap-2 p-3 rounded-md bg-danger/10 border border-danger/30 text-xs text-danger">
+                  <AlertTriangle size={12} className="mt-0.5 flex-shrink-0" />
+                  {error}
+                </div>
+              )}
+            </div>
+
+            <div className="p-5 border-t border-[#21262d] flex gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 px-3 py-2 rounded-md text-xs text-[#8b949e] border border-[#30363d] hover:border-[#484f58] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={saving || !skillId.trim() || !content.trim()}
+                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-xs bg-accent text-black font-medium hover:bg-accent-hover transition-colors disabled:opacity-50"
+              >
+                {saving ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+                {saving ? "Saving…" : "Save Knowledge File"}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Card detail drawer
@@ -166,6 +352,7 @@ export function KnowledgeBase() {
   const [filterStale, setFilterStale] = useState(false);
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
   const [selectedFlow, setSelectedFlow] = useState<string | null>(null);
+  const [showAddKnowledge, setShowAddKnowledge] = useState(false);
   const [searchParams] = useSearchParams();
 
   useEffect(() => {
@@ -209,10 +396,19 @@ export function KnowledgeBase() {
 
   return (
     <div>
-      <PageHeader
-        title="Knowledge Base"
-        subtitle={`${cards.length} cards · ${flows.length} flows${staleCount > 0 ? ` · ⚠ ${staleCount} stale` : ""}`}
-      />
+      <div className="flex items-start justify-between mb-0">
+        <PageHeader
+          title="Knowledge Base"
+          subtitle={`${cards.length} cards · ${flows.length} flows${staleCount > 0 ? ` · ⚠ ${staleCount} stale` : ""}`}
+        />
+        <button
+          onClick={() => setShowAddKnowledge(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs bg-[#1c2333] border border-[#30363d] text-[#c9d1d9] hover:border-accent/50 hover:text-accent transition-colors mt-1"
+        >
+          <Plus size={12} />
+          Add Knowledge
+        </button>
+      </div>
 
       {/* Tab toggle */}
       <div className="flex items-center gap-1 mb-5">
@@ -427,6 +623,11 @@ export function KnowledgeBase() {
             ))}
           </div>
         )
+      )}
+
+      {/* Add knowledge modal */}
+      {showAddKnowledge && (
+        <AddKnowledgeModal onClose={() => setShowAddKnowledge(false)} />
       )}
 
       {/* Card detail drawer */}

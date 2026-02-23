@@ -14,6 +14,8 @@ import {
   BookOpen,
   LayoutDashboard,
   Server,
+  Plus,
+  FolderOpen,
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { RepoBadges } from "@/components/layout/RepoBadge";
@@ -21,6 +23,111 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { LoadingState } from "@/components/shared/LoadingState";
 import { api, type RepoSummary, type RepoOverview } from "@/lib/api";
 import { formatRelativeTime, cn } from "@/lib/utils";
+
+// ---------------------------------------------------------------------------
+// Add Repository modal
+// ---------------------------------------------------------------------------
+
+interface AddRepoModalProps {
+  onClose: () => void;
+  onAdded: () => void;
+}
+
+function AddRepoModal({ onClose, onAdded }: AddRepoModalProps) {
+  const [name, setName] = useState("");
+  const [path, setPath] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim() || !path.trim()) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await api.registerRepo(name.trim(), path.trim());
+      onAdded();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to register repository");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+      <div className="relative w-[460px] bg-[#0f1117] border border-[#30363d] rounded-xl shadow-2xl p-6">
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2">
+            <FolderOpen size={16} className="text-accent" />
+            <h2 className="text-sm font-semibold text-[#e1e4e8]">Add Repository</h2>
+          </div>
+          <button onClick={onClose} className="p-1 rounded text-[#484f58] hover:text-[#8b949e]">
+            <X size={15} />
+          </button>
+        </div>
+
+        <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
+          <div>
+            <label className="block text-[10px] font-medium text-[#484f58] uppercase tracking-wider mb-1.5">
+              Repository Name
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="my-service"
+              className="w-full px-3 py-2 rounded-md border border-[#30363d] bg-[#161b22] text-xs text-[#c9d1d9] placeholder:text-[#484f58] focus:outline-none focus:border-accent/50"
+              autoFocus
+            />
+            <p className="mt-1 text-[10px] text-[#484f58]">Used as the identifier in cards and search.</p>
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-medium text-[#484f58] uppercase tracking-wider mb-1.5">
+              Local Path
+            </label>
+            <input
+              type="text"
+              value={path}
+              onChange={(e) => setPath(e.target.value)}
+              placeholder="/Users/you/projects/my-service"
+              className="w-full px-3 py-2 rounded-md border border-[#30363d] bg-[#161b22] text-xs text-[#c9d1d9] placeholder:text-[#484f58] font-mono focus:outline-none focus:border-accent/50"
+            />
+            <p className="mt-1 text-[10px] text-[#484f58]">Absolute path to the repository root on this machine.</p>
+          </div>
+
+          {error && (
+            <div className="flex items-start gap-2 p-3 rounded-md bg-danger/10 border border-danger/30 text-xs text-danger">
+              <AlertTriangle size={12} className="mt-0.5 flex-shrink-0" />
+              {error}
+            </div>
+          )}
+
+          <div className="flex gap-2 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-3 py-2 rounded-md text-xs text-[#8b949e] border border-[#30363d] hover:border-[#484f58] transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving || !name.trim() || !path.trim()}
+              className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-xs bg-accent text-black font-medium hover:bg-accent-hover transition-colors disabled:opacity-50"
+            >
+              {saving ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+              {saving ? "Registering…" : "Register & Index"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Helpers for parsing LLM doc content
@@ -272,6 +379,7 @@ export function Repositories() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<RepoSummary | null>(null);
   const [reindexingRepo, setReindexingRepo] = useState<string | null>(null);
+  const [showAddModal, setShowAddModal] = useState(false);
   const [searchParams] = useSearchParams();
 
   const load = useCallback(() => {
@@ -308,10 +416,19 @@ export function Repositories() {
 
   return (
     <div>
-      <PageHeader
-        title="Repositories"
-        subtitle={repos.length > 0 ? `${repos.length} repo${repos.length !== 1 ? "s" : ""} indexed` : undefined}
-      />
+      <div className="flex items-start justify-between mb-0">
+        <PageHeader
+          title="Repositories"
+          subtitle={repos.length > 0 ? `${repos.length} repo${repos.length !== 1 ? "s" : ""} indexed` : undefined}
+        />
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs bg-[#1c2333] border border-[#30363d] text-[#c9d1d9] hover:border-accent/50 hover:text-accent transition-colors mt-1"
+        >
+          <Plus size={12} />
+          Add Repository
+        </button>
+      </div>
 
       {loading ? (
         <LoadingState rows={5} />
@@ -432,6 +549,14 @@ export function Repositories() {
             )}
           </span>
         </div>
+      )}
+
+      {/* Add repo modal */}
+      {showAddModal && (
+        <AddRepoModal
+          onClose={() => setShowAddModal(false)}
+          onAdded={() => { void load(); }}
+        />
       )}
 
       {/* Repo detail drawer */}

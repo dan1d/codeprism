@@ -4,44 +4,66 @@
 > Project-specific patterns discovered during indexing extend or override these baselines.
 
 ## Architecture
-- Use `ViewSet` + `DefaultRouter` for standard CRUD resources; use `APIView` or `@api_view` for non-RESTful endpoints
-- Define serializers in a dedicated `serializers.py` per app; avoid inline serializer definitions in views
-- Apply permission classes globally as a default in settings (`DEFAULT_PERMISSION_CLASSES`) and override per-view only when needed
-- Use `ModelSerializer` as the base for ORM-backed serializers; define `fields = "__all__"` only in internal tooling, never in public APIs
-- Separate read serializers (with nested representations) from write serializers (with flat IDs) for complex resources
+
+- **Prefer ViewSets over APIView** for standard CRUD operations; use APIView only for non-standard endpoints that don't map to model operations
+- **Keep business logic in services or model methods**, not in serializers or views; serializers handle data transformation only
+- **Use explicit serializer classes** per action when fields differ (list vs detail); avoid dynamic field manipulation in `get_serializer()` unless necessary
+- **Organize by app domain** (users, orders, products) rather than by layer (all serializers in one module); keep related views, serializers, and tests together
+- **Leverage nested routers** for hierarchical resources (`/users/{id}/posts/`) instead of flat URL structures with query parameters
+- **Prefer model serializers** over plain serializers; only use `Serializer` base class when not mapping directly to models
+- **Use serializer composition** (nested serializers, SerializerMethodField) rather than custom render methods or data post-processing in views
+- **Implement pagination at the view/viewset level** with consistent pagination classes across the API; avoid manual pagination logic
+- **Separate read and write serializers** when update/create operations require different fields than retrieval operations
+- **Use permissions at the view level** and object-level permissions for fine-grained access control; avoid authorization logic in serializers
 
 ## Code Style
-- Use `serializers.Serializer` for non-model inputs (e.g., action endpoints); don't abuse `ModelSerializer` for arbitrary payloads
-- Always define `read_only_fields` or `read_only=True` on auto-generated and system fields (`id`, `created_at`)
-- Raise `serializers.ValidationError` from `validate_<field>` and `validate` methods — never raise inside views
-- Use DRF's `@action` decorator for custom actions on ViewSets; avoid bolting them onto list/retrieve
-- Return meaningful HTTP status codes: 201 for creation, 204 for deletions, 400 for validation errors, 403 for authorization failures
+
+- **Name serializers with `Serializer` suffix** matching their model: `UserSerializer`, `OrderDetailSerializer`; use descriptive suffixes like `Create`, `Update`, `List` when specialized
+- **Name viewsets with `ViewSet` suffix**: `UserViewSet`, `ProductViewSet`; use `APIView` suffix only for non-viewset views
+- **Keep viewset methods under 15 lines**; extract complex logic to service functions, manager methods, or querysets
+- **Use `get_queryset()` for filtering**, not `queryset` attribute, when dynamic logic is required; always annotate/prefetch in `get_queryset()`
+- **Prefer explicit field declarations** in serializers over `fields = '__all__'`; whitelist fields for clarity and security
+- **Use `SerializerMethodField` with `get_<field_name>` pattern** for computed fields; keep these methods simple and avoid N+1 queries
+- **Name permission classes descriptively**: `IsOwnerOrReadOnly`, `IsAdminOrAuthenticatedReadOnly`; avoid generic names like `CustomPermission`
+- **Use `related_name` consistently** in models for reverse relations; prefer plural nouns (`user.orders` not `user.order_set`)
+- **Order serializer fields logically**: id first, then required fields, optional fields, then read-only/computed fields last
+- **Use trailing commas** in multi-line lists, tuples, and dictionaries for cleaner diffs
 
 ## Testing
-- Use `APITestCase` or `pytest-django` + `APIClient` for endpoint tests
-- Authenticate test clients with `client.force_authenticate(user=user)` — don't bypass auth in views
-- Test serializer validation independently from views with `serializer.is_valid()` assertions
-- Use `factory_boy` with `DjangoModelFactory` for all test fixtures; avoid hardcoded `Model.objects.create` in tests
-- Assert on response `status_code` and `response.data` structure, not on raw JSON strings
+
+- **Use `APITestCase` or `APIClient`** for DRF endpoint tests; prefer `APIClient` with pytest for flexibility
+- **Prefer factory_boy over fixtures** for test data generation; factories are more maintainable and composable
+- **Test one behavior per test method**; separate tests for authentication, permissions, validation, and business logic
+- **Use `reverse()` for URL generation** in tests to avoid hardcoded paths; test URL patterns remain resilient to changes
+- **Test serializer validation independently** from view tests; unit test serializers with `serializer.is_valid()` assertions
+- **Aim for 80%+ coverage** with focus on business logic, permissions, and validation; avoid testing framework code
+- **Mock external services and expensive operations**; use `@patch` for third-party APIs, file uploads, and email sending
 
 ## Performance
-- Use `select_related` and `prefetch_related` in ViewSet `get_queryset()` to avoid N+1 for nested serializers
-- Apply `django-filter` with `FilterBackend` for query param filtering rather than filtering in serializer `to_representation`
-- Use `drf-spectacular` or `drf-yasg` for OpenAPI schema generation; maintain schema accuracy alongside code
-- Paginate all list endpoints — configure `DEFAULT_PAGINATION_CLASS` and `PAGE_SIZE` globally; never return unbounded lists
-- Cache read-only list endpoints with `cache_page` decorator or DRF's `CacheResponseMixin` for stable data
+
+- **Always use `select_related()` for foreign keys** and `prefetch_related()` for many-to-many and reverse foreign keys in `get_queryset()`
+- **Enable Django Debug Toolbar in development** to identify N+1 queries; fail CI if query count exceeds thresholds for critical endpoints
+- **Use `Prefetch` objects with custom querysets** for complex prefetching scenarios rather than post-processing in serializers
+- **Implement pagination on all list endpoints**; use `PageNumberPagination` or `CursorPagination` for large datasets
+- **Cache expensive computed fields** using `@cached_property` on models or Redis for API responses; invalidate caches explicitly on updates
+- **Use `only()` and `defer()`** when serializers need subset of model fields to reduce database column fetching
+- **Avoid SerializerMethodField for list endpoints** when it triggers per-object queries; prefer annotations or prefetching
 
 ## Security
-- Apply `IsAuthenticated` as the global default permission; explicitly allow anonymous access where needed with `AllowAny`
-- Use object-level permissions (`has_object_permission`) to enforce resource ownership — never rely solely on view-level permissions
-- Validate file uploads for type, size, and content before saving; use `FileExtensionValidator`
-- Rate-limit API endpoints with `djangorestframework-simplejwt` throttling or `django-ratelimit`
-- Never expose internal Django error tracebacks — set `DEBUG = False` and define custom exception handlers
 
-## Anti-Patterns to Flag
-- Returning `ModelSerializer` with all fields on sensitive models — explicitly list `fields` and exclude sensitive data
-- Overriding `to_representation` for validation logic — use `validate_<field>` methods instead
-- Unbounded list views without pagination — always set `pagination_class`
-- Mixing query logic into serializers — keep database access in ViewSet `get_queryset()` or service functions
-- Using `APIView` for standard CRUD when `ModelViewSet` would eliminate boilerplate
-- Granting `IsAdminUser` as the only protection when row-level scoping is also needed
+- **Use token or JWT authentication** over session authentication for stateless APIs; prefer `rest_framework_simplejwt` for JWT
+- **Implement throttling on all endpoints** with appropriate rates for anonymous and authenticated users; use stricter limits on write operations
+- **Validate all input at the serializer level** with explicit validators; never trust client data or skip validation
+- **Use object-level permissions** (`has_object_permission`) for resource ownership checks; don't rely on queryset filtering alone
+- **Never expose sensitive fields** in serializers; use `extra_kwargs = {'password': {'write_only': True}}` and exclude tokens from responses
+- **Enable CORS selectively** with `django-cors-headers`; avoid `CORS_ORIGIN_ALLOW_ALL = True` in production
+- **Use Django's `SECRET_KEY` management** and rotate secrets; store secrets in environment variables, never in code
+
+## Anti-Patterns
+
+- **Avoid business logic in serializers' `create()` or `update()`** methods; serializers should only handle data transformation and validation
+- **Don't override `to_representation()` for authorization**; filtering visible fields based on user permissions belongs in separate serializers or permissions
+- **Never call `serializer.save()` multiple times** or modify `serializer.validated_data` directly; treat validated data as immutable
+- **Don't use `@api_view` decorator for complex logic**; function-based views become unmaintainable; use ViewSets or class-based views
+- **Avoid generic relation serialization without optimization**; generic foreign keys cause N+1 queries and should be prefetched carefully
+- **Don't return different status codes for the same outcome**; be consistent with

@@ -1,47 +1,64 @@
-# Django Best Practices
+# Django (Python) Best Practices
 
 > Curated conventions used by srcmap to seed code_style and rules documentation.
 > Project-specific patterns discovered during indexing extend or override these baselines.
 
 ## Architecture
-- Use a "fat models, thin views" pattern — domain logic belongs on the model or in a service module, not in views
-- Organize by Django apps (`python manage.py startapp`) that each own a bounded slice of the domain
-- Use class-based views (CBVs) for CRUD; use function-based views for complex custom logic where CBV mixins obscure intent
-- Place business logic that spans multiple models in service modules (`services.py`) rather than in views or signals
-- Use custom model managers for reusable query logic; keep raw SQL in managers, not views
+
+- **Service layer pattern**: Extract business logic into dedicated service functions/classes in `services.py`, keeping views thin and models free of complex logic
+- **Selector pattern**: Separate read operations into `selectors.py` modules that encapsulate all database query logic with `select_related()` and `prefetch_related()`
+- **Fat models, thin views, dumb templates**: Models contain data structure and simple methods; views orchestrate services/selectors; templates only render
+- **Base model pattern**: Use abstract base models with `BaseModel` containing common fields (`created_at`, `updated_at`) and inherit throughout the project
+- **Module organization**: Group related functionality by domain (`users/`, `orders/`) rather than by type (`models/`, `views/`), with each app containing `models.py`, `services.py`, `selectors.py`, `apis.py`
+- **Service naming**: Use explicit verb-noun naming like `user_create()`, `order_process()`, `payment_refund()` rather than generic CRUD names
+- **API layer separation**: Keep Django REST Framework serializers and views in `apis.py` separate from business logic; APIs should only validate input and call services
+- **Avoid business logic in serializers**: Serializers handle serialization/deserialization only; move creation/update logic to services called from API views
+- **Explicit over implicit**: Prefer function-based services over class-based unless clear state/inheritance benefits exist; favor clarity over cleverness
 
 ## Code Style
-- Follow PEP 8; enforce with `ruff` and `black`; import order enforced by `isort` or `ruff`
-- Use `snake_case` for everything in Python; Django's ORM maps to `snake_case` table and column names
-- Declare `__str__` on every model for human-readable admin and debug output
-- Use `verbose_name` and `verbose_name_plural` in model `Meta` for clean admin display
-- Prefer `get_object_or_404` and `get_list_or_404` over raw `get()`/`filter()` in views for cleaner error handling
+
+- **Service functions**: Name as `noun_verb()` format (e.g., `user_create()`, `email_send()`) and place in `{app}/services.py`
+- **Selector functions**: Name as `noun_verb()` or `noun_get_queryset()` format (e.g., `user_get()`, `order_list()`) and place in `{app}/selectors.py`
+- **API naming**: Name API views/viewsets with `{Noun}{Action}Api` suffix (e.g., `UserCreateApi`, `OrderListApi`) in `{app}/apis.py`
+- **Model methods**: Keep minimal; use only for simple derived properties or string representations; complex operations belong in services
+- **Type hints**: Use Python type annotations for all function signatures, especially service/selector boundaries for clarity
+- **Import organization**: Group imports as (1) standard library, (2) third-party, (3) Django, (4) local apps, with blank lines between groups
+- **Querysets in models**: Define custom `QuerySet` and `Manager` classes for reusable query logic, attach to models via `objects = CustomManager()`
+- **Model validation**: Implement `clean()` methods for field-level validation and use model `Meta.constraints` for database-level validation
+- **Avoid magic**: No metaprogramming, dynamic imports, or implicit behaviors; prefer explicit, greppable code paths
 
 ## Testing
-- Use `pytest-django` with `@pytest.mark.django_db` for database tests; avoid `unittest.TestCase` for new tests
-- Use `factory_boy` with `DjangoModelFactory` for test data; define `class Meta: model = MyModel`
-- Test views with Django's `RequestFactory` for unit tests; use `Client` for integration tests
-- Use `override_settings` to swap settings (email backend, cache, storage) in tests without patching
-- Test migrations with `--check` in CI: `python manage.py migrate --check`
+
+- **Factory pattern**: Use `factory_boy` for test data generation over fixtures; create factories in `tests/factories.py` for each model
+- **Test organization**: Structure tests as `tests/test_{module}.py` mirroring source structure; test services, selectors, and APIs separately
+- **Test naming**: Name tests as `test_{function_name}_{scenario}_{expected_outcome}` (e.g., `test_user_create_with_invalid_email_raises_validation_error`)
+- **Service/selector testing**: Test business logic directly by calling service/selector functions, not through HTTP layer
+- **API testing**: Use DRF's `APITestCase` and `APIClient` to test endpoints; verify status codes, response structure, and side effects
+- **Minimal mocking**: Prefer real database interactions in tests; mock only external services (APIs, email, payment gateways)
+- **Transaction handling**: Use `TransactionTestCase` only when testing transaction-specific behavior; default to `TestCase` for speed
 
 ## Performance
-- Add `select_related` for `ForeignKey`/`OneToOne` and `prefetch_related` for `ManyToMany`/reverse FK to eliminate N+1
-- Use `only()` and `defer()` to limit fetched columns on large models
-- Apply database indexes via `db_index=True` on model fields used in filtering, and composite indexes in `Meta.indexes`
-- Use Django's cache framework with Redis for per-view and per-object caching
-- Use `bulk_create` and `bulk_update` for batch operations instead of per-instance saves
+
+- **Always use select_related/prefetch_related**: Encapsulate in selectors; never allow N+1 queries in production code; use `django-debug-toolbar` to detect
+- **Queryset optimization in selectors**: All database access goes through selector functions that include necessary `only()`, `defer()`, `select_related()`, `prefetch_related()`
+- **Caching strategy**: Cache expensive querysets/computations in services using Django's cache framework; invalidate explicitly on writes
+- **Bulk operations**: Use `bulk_create()`, `bulk_update()`, and `update()` for multiple objects; avoid loops calling `save()`
+- **Index strategically**: Add database indexes to foreign keys, fields used in `filter()`/`order_by()`, and unique constraints; verify with `EXPLAIN` queries
+- **Pagination always**: Use `PageNumberPagination` or `CursorPagination` for list endpoints; never return unbounded querysets
+- **Monitor query counts**: Set up query count assertions in critical path tests; fail tests if queries exceed thresholds
 
 ## Security
-- Use Django's authentication system; avoid reimplementing login/session management
-- Apply `@login_required` or `LoginRequiredMixin` on all protected views; use `permission_required` for role-based access
-- Use Django's CSRF middleware (enabled by default); mark API views with `@csrf_exempt` only when using token auth
-- Validate all user input at the form or serializer layer — never pass raw request data to ORM queries
-- Set `ALLOWED_HOSTS`, `SECURE_SSL_REDIRECT`, `SESSION_COOKIE_SECURE`, and `CSRF_COOKIE_SECURE` in production settings
 
-## Anti-Patterns to Flag
-- Business logic in templates or views — move to model methods or service modules
-- Using `raw()` or `extra()` with unsanitized user input — use parameterized queries
-- `Model.objects.all()` without pagination on large tables — always paginate
-- Signals used for cross-model side effects in ways that are hard to trace — prefer explicit service calls
-- Setting `DEBUG = True` or `ALLOWED_HOSTS = ['*']` in production configuration
-- Migrations that edit data inside `RunPython` without handling reverse migrations
+- **Validate in services**: All user input validation occurs in service layer using Django's `ValidationError`; raise before database operations
+- **Use Django ORM safely**: Never interpolate strings into raw SQL; use parameterized queries or ORM exclusively
+- **Permission checks in APIs**: Check permissions at API entry points before calling services; use DRF's permission classes or custom decorators
+- **Secret management**: Load secrets from environment variables; never commit `.env` files; use `django-environ` or similar for typed environment parsing
+- **CSRF/CORS configuration**: Configure `CSRF_TRUSTED_ORIGINS` and `CORS_ALLOWED_ORIGINS` explicitly; never use wildcards in production
+
+## Anti-Patterns
+
+- **Business logic in serializers**: Never put create/update logic in `create()`/`update()` methods; serializers only validate and transform data
+- **Fat views**: Avoid complex logic in views/viewsets; views should call one service function and return a response
+- **Signals for business logic**: Don't use Django signals for core business logic; they create hidden dependencies and are hard to test
+- **Generic naming**: Avoid services named `create()`, `update()`, `process()` without noun context; always specify what is being acted upon
+- **Mixing layers**: Services should not import from APIs; APIs import from services; maintain unid

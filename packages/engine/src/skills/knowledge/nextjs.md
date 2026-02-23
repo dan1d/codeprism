@@ -4,44 +4,55 @@
 > Project-specific patterns discovered during indexing extend or override these baselines.
 
 ## Architecture
-- Use the App Router (`app/`) for new projects; prefer Server Components by default, opt into Client Components only when needed
-- Co-locate page components, loading states, error boundaries, and layouts in the same route segment directory
-- Separate data fetching (Server Components, Route Handlers) from UI logic (Client Components)
-- Use Route Handlers (`app/api/`) for BFF (backend-for-frontend) endpoints; avoid exposing internal APIs directly
-- Apply parallel routes and intercepting routes for complex UI patterns (modals, split views) rather than managing state manually
+
+- **Use App Router over Pages Router**: Prefer the `app/` directory structure for new projects, leveraging React Server Components, streaming, and improved data fetching patterns
+- **Collocate by feature, not by type**: Organize code by feature modules (e.g., `app/dashboard/`, `app/products/`) rather than technical layers (`components/`, `hooks/`, `utils/`)
+- **Keep Server and Client Components separate**: Explicitly mark Client Components with `"use client"` directive at the top of files; default to Server Components for better performance
+- **Implement absolute imports**: Configure `@/*` path alias in `tsconfig.json` to reference `src/` or `app/` directories, avoiding relative path chains like `../../../components`
+- **Separate business logic from UI**: Extract data fetching, mutations, and business rules into server actions or API routes, keeping components focused on presentation
+- **Use Route Groups for organization**: Leverage `(group-name)` folder syntax to organize routes without affecting URL structure
+- **Centralize shared UI in reusable components**: Maintain a component library at `@/components` for cross-feature shared elements, but allow feature-specific components to live within feature folders
 
 ## Code Style
-- Mark components with `"use client"` only when they need browser APIs, event handlers, or state — not by default
-- Co-locate types with the files that use them; export shared types from a `types/` directory at the feature level
-- Use `next/image` for all images; never use raw `<img>` tags
-- Use `next/link` for internal navigation; never use `<a>` tags for in-app routes
-- Follow the file conventions: `page.tsx`, `layout.tsx`, `loading.tsx`, `error.tsx`, `not-found.tsx`
+
+- **Enforce TypeScript strict mode**: Enable `strict: true` in `tsconfig.json` to catch type errors early and improve refactoring confidence
+- **Use kebab-case for file names**: Name files like `user-profile.tsx`, `api-client.ts`, `data-table.tsx` for consistency and URL-friendliness
+- **Prefer named exports over default exports**: Use `export function ComponentName()` for better refactoring support and explicit imports, except for page components
+- **Configure ESLint with Next.js rules**: Extend `eslint-config-next` and enforce rules for React hooks, accessibility, and Next.js-specific patterns
+- **Integrate Prettier with format-on-save**: Configure `.prettierrc` and enable IDE auto-formatting to maintain consistent code style across the team
+- **Use async/await over promises chains**: Write asynchronous code with async/await syntax for better readability and error handling
+- **Prefix event handlers with "handle"**: Name callback functions like `handleSubmit`, `handleClick`, `handleChange` for clarity
 
 ## Testing
-- Unit-test Server Components by calling them as async functions and asserting on the JSX output
-- Use React Testing Library with `@testing-library/jest-dom` for Client Component tests
-- Mock `next/navigation` hooks (`useRouter`, `useSearchParams`) in unit tests
-- Use Playwright for end-to-end tests that validate full page interactions and navigation
-- Test Route Handlers with `fetch` against a test server or by importing and calling the handler directly
+
+- **Use Vitest or Jest with React Testing Library**: Prefer Vitest for unit/integration tests with React Testing Library for component testing following user-centric queries
+- **Test Server Actions and API Routes with integration tests**: Validate server-side logic with tests that exercise the full request/response cycle
+- **Mock external dependencies at boundaries**: Use tools like MSW (Mock Service Worker) for API mocking rather than mocking internal modules
+- **Use Playwright for E2E tests**: Implement end-to-end tests with Playwright to validate critical user flows across pages
+- **Configure Husky for pre-commit validation**: Run linting, formatting, type checking, and tests before allowing commits to ensure code quality
+- **Focus on behavior over implementation**: Write tests that verify user-facing behavior and outcomes rather than internal component state
 
 ## Performance
-- Leverage static rendering (SSG) wherever data doesn't change per-request; use `revalidate` for ISR
-- Use `React.cache` to deduplicate fetch calls within a single render pass in Server Components
-- Prefetch critical routes with `<Link prefetch>` and preload fonts via `next/font`
-- Avoid large client bundles — move data processing to Server Components; use `next/dynamic` for heavy Client Components
-- Use `generateStaticParams` for dynamic routes that can be statically generated at build time
+
+- **Optimize images with next/image**: Always use the `<Image>` component for automatic optimization, lazy loading, and responsive sizing
+- **Implement dynamic imports for code splitting**: Use `next/dynamic` with `{ loading }` option for client-heavy components to reduce initial bundle size
+- **Leverage Server Components for data fetching**: Fetch data in Server Components to reduce client bundle and eliminate waterfall requests
+- **Use React Suspense for streaming**: Wrap async components in `<Suspense>` boundaries to stream content and show loading states progressively
+- **Configure caching strategies**: Use `revalidate`, `cache: 'force-cache'`, or `cache: 'no-store'` appropriately in fetch calls and route segments
+- **Monitor with Core Web Vitals**: Track LCP, FID, and CLS metrics using Next.js built-in analytics or third-party tools
 
 ## Security
-- Validate all inputs in Route Handlers with Zod or similar; never trust request bodies
-- Use middleware (`middleware.ts`) to enforce authentication before reaching protected routes
-- Store secrets only in environment variables and access them server-side; never expose in Client Components
-- Set security headers in `next.config.js` (CSP, X-Frame-Options, Referrer-Policy)
-- Use `httpOnly` cookies for session tokens; avoid `localStorage` for auth state
 
-## Anti-Patterns to Flag
-- Adding `"use client"` to root layouts or high-level wrappers — defeats Server Component benefits
-- Fetching data in Client Components when the same data could be fetched in a Server Component
-- Using `getServerSideProps` or `getStaticProps` in the App Router — these are Pages Router APIs
-- Returning sensitive data from Server Components that gets serialized into the client bundle
-- Large `useEffect` chains for data fetching in Client Components — use React Query or server fetching instead
-- Ignoring `loading.tsx` and `error.tsx` files — every segment with async data should have them
+- **Use environment variables for secrets**: Store API keys and secrets in `.env.local` (never committed), access via `process.env` in server-only code
+- **Validate input in Server Actions**: Use schema validation libraries (Zod, Yup) to validate all user input before processing
+- **Implement CSRF protection**: Use built-in Server Actions security or add CSRF tokens for traditional form submissions and API routes
+- **Set security headers**: Configure `next.config.js` with headers for CSP, X-Frame-Options, and other security policies
+- **Never expose secrets to client**: Ensure sensitive environment variables are only accessed in Server Components, Server Actions, or API Routes, never in Client Components
+
+## Anti-Patterns
+
+- **Avoid fetching data in Client Components**: Don't use `useEffect` to fetch data on mount; use Server Components or server-side data fetching instead
+- **Don't use `getServerSideProps` in App Router**: Migrate to async Server Components and native `fetch` with caching options
+- **Avoid deeply nested component trees**: Flatten component hierarchies to prevent prop drilling; use composition or context when needed
+- **Don't block rendering with synchronous operations**: Avoid heavy computation in render; use memoization, Web Workers, or server-side processing
+- **Never bypass ESLint or TypeScript errors**: Fix type errors and linting issues rather than using `@ts-ignore`, `eslint-disable`, or `any` types

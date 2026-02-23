@@ -1,0 +1,36 @@
+services:
+  srcmap:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:4000:4000"
+    volumes:
+      - srcmap-data:/data
+    environment:
+      - SRCMAP_PORT=4000
+      - SRCMAP_DB_PATH=/data/srcmap.db
+      - SRCMAP_DATA_DIR=/data
+      - SRCMAP_MULTI_TENANT=${SRCMAP_MULTI_TENANT:-false}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - SRCMAP_COMPANY_NAME=${SRCMAP_COMPANY_NAME:-}
+      - SRCMAP_TELEMETRY=${SRCMAP_TELEMETRY:-false}
+      - SRCMAP_TELEMETRY_URL=${SRCMAP_TELEMETRY_URL:-}
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  srcmap-data:
+  caddy-data:
+  caddy-config:

@@ -94,8 +94,12 @@ function formatCards(cards: CardSummary[], totalLinesBudget = MAX_TOTAL_LINES): 
 }
 
 function shortenPath(p: string): string {
-  const idx = p.indexOf("/biobridge/");
-  return idx >= 0 ? p.slice(idx + "/biobridge/".length) : p;
+  const parts = p.split("/");
+  const repoIdx = parts.findIndex((_seg, i) =>
+    i > 0 && (parts[i + 1] === "app" || parts[i + 1] === "src" || parts[i + 1] === "lib" || parts[i + 1] === "packages"),
+  );
+  if (repoIdx >= 0) return parts.slice(repoIdx).join("/");
+  return parts.length > 3 ? parts.slice(-3).join("/") : p;
 }
 
 function prioritizeCards(cards: CardSummary[]): CardSummary[] {
@@ -113,12 +117,34 @@ function prioritizeCards(cards: CardSummary[]): CardSummary[] {
   });
 }
 
-const REPO_PREFIXES: Record<string, string> = {
-  "biobridge-frontend": "React frontend UI component: ",
-  "biobridge-backend": "Rails backend API model controller: ",
-  "bp-monitor-frontend": "Vue frontend bp-monitor: ",
-  "bp-monitor-api": "Cuba API bp-monitor service: ",
-};
+/**
+ * Loads repo-to-prefix mapping from the repo_profiles table.
+ * Falls back to a generic "<language> <frameworks>:" prefix.
+ */
+function loadRepoPrefixes(): Record<string, string> {
+  try {
+    const rows = getDb()
+      .prepare("SELECT repo, primary_language, frameworks FROM repo_profiles")
+      .all() as { repo: string; primary_language: string; frameworks: string }[];
+
+    const prefixes: Record<string, string> = {};
+    for (const row of rows) {
+      let frameworks: string[] = [];
+      try { frameworks = JSON.parse(row.frameworks); } catch { /* skip */ }
+      const parts = [row.primary_language, ...frameworks].filter(Boolean).join(" ");
+      prefixes[row.repo] = `${parts} ${row.repo}: `;
+    }
+    return prefixes;
+  } catch {
+    return {};
+  }
+}
+
+let _repoPrefixes: Record<string, string> | null = null;
+function getRepoPrefixes(): Record<string, string> {
+  if (!_repoPrefixes) _repoPrefixes = loadRepoPrefixes();
+  return _repoPrefixes;
+}
 
 /**
  * Builds a context-prefixed semantic query to steer embeddings toward the
@@ -130,7 +156,7 @@ async function buildSemanticQuery(query: string): Promise<string> {
     const raw = await getEmbedder().embed(query);
     const cls = classifyQueryEmbedding(raw);
     if (cls.topRepo && cls.confidence > 0.05) {
-      const prefix = REPO_PREFIXES[cls.topRepo];
+      const prefix = getRepoPrefixes()[cls.topRepo];
       if (prefix) return prefix + query;
     }
   } catch { /* non-critical */ }
@@ -1050,7 +1076,7 @@ export function registerTools(server: McpServer): void {
         repo: z
           .string()
           .optional()
-          .describe("Repository name (e.g. 'biobridge-backend'). Omit to list all repos with docs."),
+          .describe("Repository name. Omit to list all repos with docs."),
         doc_type: z
           .enum(["readme", "about", "architecture", "code_style", "rules", "styles"])
           .optional()

@@ -142,7 +142,7 @@ export function Overview() {
           description="Run pnpm index-repos to start building your knowledge base."
           action={
             <Link
-              to="/repos"
+              to="/dashboard/repos"
               className="inline-flex items-center gap-1.5 text-xs text-accent hover:underline"
             >
               Go to Repositories <ArrowRight size={12} />
@@ -269,7 +269,7 @@ export function Overview() {
                   Most Used Cards
                 </h2>
                 <Link
-                  to="/knowledge"
+                  to="/dashboard/knowledge"
                   className="text-[10px] text-accent hover:underline flex items-center gap-1"
                 >
                   View all <ArrowRight size={10} />

@@ -4,13 +4,16 @@ import { readFile, stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join, extname } from "node:path";
 
-import { getDb, closeDb } from "./db/connection.js";
+import { getDb, closeAllDbs } from "./db/connection.js";
 import { runMigrations } from "./db/migrations.js";
 import { handleSync } from "./sync/receiver.js";
 import type { SyncPayload } from "./sync/receiver.js";
 import { createMcpServer } from "./mcp/server.js";
 import { registerDashboardRoutes } from "./metrics/dashboard-api.js";
 import { warmReranker } from "./search/reranker.js";
+import { startTelemetryReporter, stopTelemetryReporter } from "./telemetry/reporter.js";
+import { initTenantRegistry, closeTenantRegistry } from "./tenant/registry.js";
+import { tenantMiddleware } from "./tenant/middleware.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -50,12 +53,67 @@ async function main(): Promise<void> {
   const app = Fastify({ logger: true });
   await app.register(cors);
 
+  // ── Multi-tenancy (opt-in via SRCMAP_MULTI_TENANT=true) ─────────
+  const isMultiTenant = process.env["SRCMAP_MULTI_TENANT"] === "true";
+  if (isMultiTenant) {
+    initTenantRegistry();
+  }
+  await app.register(tenantMiddleware);
+
   // ── API routes ─────────────────────────────────────────────────────
 
   app.post<{ Body: SyncPayload }>("/api/sync", async (request, reply) => {
     const result = await handleSync(request.body);
     return reply.send(result);
   });
+
+  if (isMultiTenant) {
+    app.post<{ Body: { name: string } }>(
+      "/api/tenants",
+      async (request, reply) => {
+        const { name } = request.body ?? {};
+        if (!name || typeof name !== "string" || name.trim().length < 2) {
+          return reply
+            .code(400)
+            .send({ error: "name is required (min 2 characters)" });
+        }
+        try {
+          const { createTenant } = await import("./tenant/registry.js");
+          const { getTenantDb } = await import("./db/connection.js");
+          const tenant = createTenant(name.trim());
+          getTenantDb(tenant.slug); // lazy-provisions DB + runs migrations
+          return reply.code(201).send({
+            slug: tenant.slug,
+            name: tenant.name,
+            apiKey: tenant.api_key,
+            mcpUrl: `${request.protocol}://${request.hostname}/${tenant.slug}/mcp`,
+            dashboardUrl: `${request.protocol}://${request.hostname}/${tenant.slug}/`,
+          });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          return reply.code(409).send({ error: message });
+        }
+      },
+    );
+
+    app.get("/api/tenants", async (_request, reply) => {
+      const { listTenants } = await import("./tenant/registry.js");
+      return reply.send(listTenants());
+    });
+
+    app.delete<{ Params: { slug: string } }>(
+      "/api/tenants/:slug",
+      async (request, reply) => {
+        const { deleteTenant } = await import("./tenant/registry.js");
+        const { closeTenantDb } = await import("./db/connection.js");
+        closeTenantDb(request.params.slug);
+        const deleted = deleteTenant(request.params.slug);
+        if (!deleted)
+          return reply.code(404).send({ error: "Tenant not found" });
+        return reply.send({ deleted: request.params.slug });
+      },
+    );
+  }
 
   await registerDashboardRoutes(app);
 
@@ -78,6 +136,35 @@ async function main(): Promise<void> {
       cards: cardsRow.count,
       flows: flowsRow.count,
     });
+  });
+
+  app.post<{ Body: unknown }>("/api/telemetry", async (request, reply) => {
+    const body = request.body as Record<string, unknown> | undefined;
+    if (!body || typeof body !== "object" || !body.instance_id || !body.stats) {
+      return reply.code(400).send({ error: "Invalid telemetry payload" });
+    }
+    try {
+      const { receiveTelemetry } = await import("./telemetry/receiver.js");
+      receiveTelemetry(body as Parameters<typeof receiveTelemetry>[0]);
+      return reply.send({ ok: true });
+    } catch {
+      return reply.send({ ok: true });
+    }
+  });
+
+  app.get("/api/public-stats", async (_request, reply) => {
+    try {
+      const { getAggregateStats } = await import("./telemetry/receiver.js");
+      return reply.send(getAggregateStats());
+    } catch {
+      return reply.send({
+        activeInstances: 0,
+        totalTokensSaved: 0,
+        totalQueries: 0,
+        totalCards: 0,
+        avgCacheHitRate: 0,
+      });
+    }
   });
 
   // ── Dashboard static files ─────────────────────────────────────────
@@ -126,12 +213,17 @@ async function main(): Promise<void> {
   // Pre-load the cross-encoder model so the first query has no cold-start latency
   warmReranker();
 
+  // Start opt-in telemetry reporter
+  startTelemetryReporter();
+
   // ── Graceful shutdown ──────────────────────────────────────────────
 
   const shutdown = async (): Promise<void> => {
     console.log("[srcmap] Shutting down…");
+    stopTelemetryReporter();
     await app.close();
-    closeDb();
+    closeTenantRegistry();
+    closeAllDbs();
     process.exit(0);
   };
 

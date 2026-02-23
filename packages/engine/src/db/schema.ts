@@ -122,6 +122,35 @@ export interface ExtractedInsight {
   extracted_at: string;
 }
 
+export interface TeamRule {
+  id: string;
+  name: string;
+  description: string;
+  severity: "error" | "warning" | "info";
+  scope: string | null;     // null = all repos/languages; e.g. "rails", "react"
+  enabled: number;          // 1 | 0
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RuleViolation {
+  rule_id: string;
+  rule_name: string;
+  severity: "error" | "warning" | "info";
+  file: string;
+  line: number | null;
+  snippet: string;
+  explanation: string;
+}
+
+export interface RuleCheckResult {
+  violations: RuleViolation[];
+  checked_rules: number;
+  files_checked: number;
+  passed: boolean;
+}
+
 export interface RepoProfile {
   repo: string;
   primary_language: string;
@@ -215,6 +244,32 @@ CREATE TABLE IF NOT EXISTS schema_version (
   version INTEGER PRIMARY KEY,
   applied_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS team_rules (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL,
+  severity TEXT NOT NULL DEFAULT 'warning',
+  scope TEXT,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  created_by TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS rule_checks (
+  id TEXT PRIMARY KEY,
+  repo TEXT NOT NULL,
+  branch TEXT NOT NULL,
+  base_branch TEXT NOT NULL DEFAULT 'main',
+  commit_sha TEXT,
+  violations TEXT NOT NULL DEFAULT '[]',
+  checked_rules INTEGER NOT NULL DEFAULT 0,
+  files_checked INTEGER NOT NULL DEFAULT 0,
+  passed INTEGER NOT NULL DEFAULT 1,
+  triggered_by TEXT,
+  checked_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `;
 
 const FTS = `
@@ -231,6 +286,8 @@ CREATE INDEX IF NOT EXISTS idx_file_index_repo ON file_index(repo);
 CREATE INDEX IF NOT EXISTS idx_graph_edges_source ON graph_edges(source_file);
 CREATE INDEX IF NOT EXISTS idx_graph_edges_target ON graph_edges(target_file);
 CREATE INDEX IF NOT EXISTS idx_metrics_timestamp ON metrics(timestamp);
+CREATE INDEX IF NOT EXISTS idx_team_rules_enabled ON team_rules(enabled);
+CREATE INDEX IF NOT EXISTS idx_rule_checks_repo_checked_at ON rule_checks(repo, checked_at);
 `;
 
 /**

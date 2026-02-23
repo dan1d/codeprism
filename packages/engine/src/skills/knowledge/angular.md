@@ -4,44 +4,59 @@
 > Project-specific patterns discovered during indexing extend or override these baselines.
 
 ## Architecture
-- Follow the Angular CLI workspace structure: feature modules (or standalone components in Angular 17+) grouped by domain
-- Use standalone components (`standalone: true`) for new development in Angular 15+; avoid unnecessary NgModules
-- Apply the smart/dumb (container/presentational) component pattern — smart components fetch data, dumb components render
-- Use `@ngrx/store` (or signals-based state in Angular 17+) for shared application state; avoid `BehaviorSubject` anti-patterns
-- Provide services at the root level with `providedIn: 'root'` unless lazy-module scoping is required
+
+- **Prefer standalone components** over NgModule-based architecture for new applications (Angular 14+); use `standalone: true` to reduce boilerplate and improve tree-shaking
+- **Use feature modules with lazy loading** for logical boundaries; structure as `feature/` directories with routing, components, services, and models co-located
+- **Apply smart/presentational component pattern**: container components manage state and services, presentational components accept `@Input()` and emit `@Output()` events only
+- **Centralize state management** with signals (Angular 16+) or NgRx for complex applications; avoid scattered service state for shared data across multiple features
+- **Organize by feature, not by type**: place `user.component.ts`, `user.service.ts`, `user.model.ts` together in `features/user/` rather than separating into `components/`, `services/` directories
+- **Use dependency injection hierarchically**: provide services at root level for singletons, at component level for isolated instances, and use `providedIn: 'root'` by default
+- **Implement facade pattern for complex state**: create a single service that orchestrates multiple stores/services, exposing simple observables or signals to components
+- **Separate core and shared modules**: `CoreModule` (imported once in `AppModule`) for singleton services, `SharedModule` for reusable components/pipes/directives imported across features
 
 ## Code Style
-- Follow the Angular Style Guide (official): one component/service per file, named with `kebab-case` file names
-- Suffix class names consistently: `UserComponent`, `UserService`, `UserGuard`, `UserResolver`
-- Use `OnPush` change detection strategy for all presentational components to minimize re-renders
-- Avoid `any` — use strict TypeScript; enable `strict: true` in `tsconfig.json`
-- Use `async` pipe in templates to subscribe to Observables — never subscribe in components without `takeUntilDestroyed`
+
+- **Use strict TypeScript configuration**: enable `"strict": true`, `"strictNullChecks": true`, and `"noImplicitAny": true` in `tsconfig.json`
+- **Follow Angular naming conventions**: `*.component.ts`, `*.service.ts`, `*.directive.ts`, `*.pipe.ts`, `*.guard.ts`, `*.interceptor.ts` with kebab-case file names
+- **Prefix selector names**: use project-specific prefix for components (`app-user-card`) and directives (`appHighlight`) to avoid collisions with third-party libraries
+- **Limit component logic to 400 lines**: extract business logic into services, complex templates into sub-components, and shared functionality into utility functions
+- **Prefer signals over observables** for synchronous reactive state (Angular 16+); use `signal()`, `computed()`, and `effect()` for simpler mental model
+- **Use `async` pipe in templates**: avoid manual subscription management; let Angular handle unsubscription automatically with `{{ data$ | async }}`
+- **Apply OnPush change detection** for presentational components: set `changeDetection: ChangeDetectionStrategy.OnPush` and use immutable inputs for performance
+- **Declare types explicitly**: avoid implicit `any`, define interfaces for API responses, component inputs, and service method parameters
 
 ## Testing
-- Use Jasmine + Karma (traditional) or Jest + `jest-preset-angular` for unit tests
-- Test components with `TestBed.configureTestingModule`; use `HttpClientTestingModule` for HTTP-dependent code
-- Use `ComponentFixture` to access rendered DOM and trigger change detection
-- Test services in isolation with `TestBed` + mock dependencies via `{ provide: ServiceClass, useValue: mockObj }`
-- Use Cypress or Playwright for e2e tests; avoid Protractor (deprecated)
+
+- **Use Jasmine with Karma or Jest** as test runners; prefer Jest for faster execution and better TypeScript support in modern projects
+- **Write component tests with TestBed**: use `TestBed.configureTestingModule()` for integration tests, but prefer shallow tests with mocked dependencies
+- **Apply AAA pattern** (Arrange, Act, Assert) for test structure; use `describe` blocks for grouping related tests and clear `it` descriptions
+- **Mock services and HTTP calls**: use `jasmine.createSpyObj()` or Jest mocks for services, `HttpClientTestingModule` for HTTP testing, avoid real API calls
+- **Target 80%+ code coverage** for services and business logic, 60%+ for components; focus on critical paths over vanity metrics
+- **Test user interactions, not implementation**: verify behavior through `DebugElement.nativeElement` events, avoid testing private methods directly
+- **Use test harnesses for complex components**: leverage Angular CDK's component harness pattern for consistent, maintainable interaction testing
 
 ## Performance
-- Use `ChangeDetectionStrategy.OnPush` on all components and pass immutable data (new object references)
-- Lazy-load feature modules via the router: `loadChildren: () => import(...)` to reduce initial bundle size
-- Avoid heavy computations in templates — use `Pipe`s with `pure: true` or move logic to the component
-- Use virtual scrolling (`CdkVirtualScrollViewport`) from Angular CDK for long lists
-- Leverage Angular's built-in `NgOptimizedImage` directive for images with proper sizing and lazy loading
+
+- **Enable production mode optimizations**: use `ng build --configuration production` with AOT compilation, minification, and tree-shaking enabled by default
+- **Implement trackBy for `*ngFor`**: always provide `trackBy` function to prevent unnecessary DOM re-renders when list data changes
+- **Lazy load routes and modules**: use `loadChildren` in route configuration to split bundles and reduce initial load time; preload strategies for critical paths
+- **Optimize change detection**: use `OnPush` strategy, avoid function calls in templates, prefer pure pipes, and detach change detector for performance-critical components
+- **Defer non-critical content**: use `@defer` blocks (Angular 17+) for lazy-loading components below the fold or behind user interactions
+- **Profile with Angular DevTools**: use Chrome extension to identify change detection cycles, detect unnecessary renders, and analyze component tree performance
+- **Manage subscriptions carefully**: unsubscribe in `ngOnDestroy()` using `takeUntil()` pattern or use `async` pipe to prevent memory leaks
 
 ## Security
-- Use Angular's built-in template sanitization — never bypass it with `bypassSecurityTrust*` unless absolutely necessary
-- Validate all form inputs with Angular Reactive Forms and built-in/custom validators; use `HttpParams` for query params
-- Use Angular's `HttpClient` interceptors for adding auth headers; never hard-code tokens in service methods
-- Apply route guards (`CanActivate`, `CanActivateFn`) for auth-protected routes
-- Avoid direct DOM manipulation (`document.createElement`, `innerHTML`) — use Angular's `Renderer2`
 
-## Anti-Patterns to Flag
-- Subscribing to Observables in components without unsubscribing — use `takeUntilDestroyed()` or `async` pipe
-- Using `Default` change detection on all components — results in unnecessary re-renders throughout the tree
-- Deeply nested NgModule imports — flatten with standalone components or restructure feature modules
-- Mixing `HttpClient` calls directly in components — service layer should own all HTTP concerns
-- Storing component state in services when it should be local component state
-- Using `@ViewChild` to imperatively manipulate child component state — use input bindings and outputs instead
+- **Sanitize user input automatically**: Angular's DomSanitizer handles XSS protection by default; avoid `bypassSecurityTrust*` methods unless absolutely necessary
+- **Use Angular's HTTP interceptors** for authentication: attach JWT tokens in `HttpInterceptor`, handle 401/403 responses centrally, never store tokens in localStorage without encryption considerations
+- **Implement route guards for authorization**: use `CanActivate`, `CanLoad` guards to protect routes based on user roles/permissions before component initialization
+- **Validate input on both client and server**: use Angular's form validators (`Validators.required`, custom validators) but always re-validate server-side
+- **Enable Content Security Policy**: configure CSP headers to prevent inline script execution and restrict resource loading to trusted domains
+- **Avoid exposing secrets in frontend code**: never commit API keys, use environment variables for configuration, proxy sensitive API calls through backend
+
+## Anti-Patterns
+
+- **Avoid direct DOM manipulation**: never use `document.querySelector()` or `ElementRef.nativeElement` directly; use `@ViewChild`, `Renderer2`, or Angular directives instead
+- **Don't subscribe inside subscriptions**: nested subscriptions create memory leaks and unreadable code; use RxJS operators (`switchMap`, `mergeMap`, `combineLatest`) instead
+- **Never mutate `@Input()` properties**: treat inputs as immutable; emit `@Output()` events for changes to maintain unidirectional data flow
+- **Avoid logic in constructors**: use `ngOnInit()` for initialization

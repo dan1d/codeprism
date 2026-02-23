@@ -8,7 +8,7 @@
  */
 
 import { readFileSync, existsSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 // ---------------------------------------------------------------------------
 // Workspace root — set once from index-repos.ts before any doc is generated.
@@ -56,6 +56,7 @@ import {
   type MemoryInput,
 } from "./doc-prompts.js";
 import { resolveSkills } from "../skills/index.js";
+import { loadAllKnowledge } from "../skills/knowledge-loader.js";
 import type { StackProfile } from "./stack-profiler.js";
 import type { GitSignals } from "./git-signals.js";
 import { getFileHeat, isInStaleDir } from "./git-signals.js";
@@ -724,15 +725,25 @@ export async function generateProjectDocs(
   // The section mix is intentionally asymmetric:
   //   code_style gets Testing — test conventions are a coding style concern.
   //   rules gets Performance — query/N+1 rules are enforced as domain constraints (not just style).
+  //
+  // Knowledge is loaded from (priority order):
+  //   1. SRCMAP_KNOWLEDGE_DIR/<id>.md   — user / team override
+  //   2. <workspace>/.srcmap/knowledge/<id>.md — workspace-local community contribution
+  //   3. src/skills/knowledge/<id>.md   — built-in (shipped with srcmap)
   const resolvedSkills = stackProfile ? resolveSkills(stackProfile.skillIds) : [];
-  const codeStyleBaseline = resolvedSkills.length > 0
-    ? buildFrameworkBaseline(resolvedSkills.map((s) => s.bestPractices), { includeTesting: true })
+  const workspaceRoot = resolve(repoPath, "..");
+  const knowledgeMap = resolvedSkills.length > 0
+    ? await loadAllKnowledge(resolvedSkills, workspaceRoot)
+    : new Map<string, import("../skills/types.js").BestPractices>();
+  const resolvedPractices = resolvedSkills.map((s) => knowledgeMap.get(s.id) ?? s.bestPractices);
+  const codeStyleBaseline = resolvedPractices.length > 0
+    ? buildFrameworkBaseline(resolvedPractices, { includeTesting: true })
     : "";
-  const rulesBaseline = resolvedSkills.length > 0
-    ? buildFrameworkBaseline(resolvedSkills.map((s) => s.bestPractices), { includePerformance: true })
+  const rulesBaseline = resolvedPractices.length > 0
+    ? buildFrameworkBaseline(resolvedPractices, { includePerformance: true })
     : "";
-  const frameworkArchBaseline = resolvedSkills.length > 0
-    ? buildFrameworkArchitectureOnly(resolvedSkills.map((s) => s.bestPractices))
+  const frameworkArchBaseline = resolvedPractices.length > 0
+    ? buildFrameworkArchitectureOnly(resolvedPractices)
     : "";
 
   // Detect if this looks like a frontend repo
