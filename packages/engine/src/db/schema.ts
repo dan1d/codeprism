@@ -219,8 +219,9 @@ CREATE TABLE IF NOT EXISTS schema_version (
 
 const FTS = `
 CREATE VIRTUAL TABLE IF NOT EXISTS cards_fts USING fts5(
-  title, content, flow,
-  content=cards, content_rowid=rowid
+  title, content, flow, source_repos, tags, identifiers,
+  content=cards, content_rowid=rowid,
+  tokenize='porter unicode61'
 );
 `;
 

@@ -25,6 +25,7 @@ import { createLLMProvider } from "../llm/provider.js";
 import { computeSpecificity } from "../search/specificity.js";
 import { generateAndSaveAllRepoSignals } from "../search/repo-signals.js";
 import { loadRepoConfig } from "../indexer/repo-config.js";
+import { loadIgnoreConfig } from "../config/ignore.js";
 import { buildGitSignals, buildWorkspaceBranchSignal, type BranchDiffContext } from "../indexer/git-signals.js";
 import type { BranchContext } from "../indexer/doc-prompts.js";
 import { writeDocsToFilesystem, type DocToWrite } from "../indexer/doc-writer.js";
@@ -252,6 +253,8 @@ export async function indexRepos(repos: RepoConfig[], workspaceRoot: string, opt
     console.log(`Detected frameworks: ${detectedFrameworks.join(", ")}`);
   }
 
+  const ignoreConfig = loadIgnoreConfig(workspaceRoot);
+
   for (const repo of repos) {
     const absPath = resolve(repo.path);
 
@@ -264,7 +267,7 @@ export async function indexRepos(repos: RepoConfig[], workspaceRoot: string, opt
     }
     const repoConfig = loadRepoConfig(absPath);
     console.log(`Parsing ${repo.name} at ${absPath}...`);
-    const parsed = await registry.parseDirectory(absPath, repo.name, repoConfig);
+    const parsed = await registry.parseDirectory(absPath, repo.name, repoConfig, ignoreConfig);
 
     // Log role breakdown per repo
     const roleCounts: Record<string, number> = {};
@@ -363,7 +366,7 @@ export async function indexRepos(repos: RepoConfig[], workspaceRoot: string, opt
 
   // Collect all discovered page names across FE repos for the seed extractor
   const allDiscoveredPages = feRepoNames.flatMap((n) => discoveredPagesByRepo.get(n) ?? []);
-  const seedFlows = extractSeedFlows(allParsed, feRepoNames, allDiscoveredPages.length > 0 ? allDiscoveredPages : undefined);
+  const seedFlows = extractSeedFlows(allParsed, feRepoNames, allDiscoveredPages.length > 0 ? allDiscoveredPages : undefined, ignoreConfig);
   if (seedFlows.length > 0) {
     console.log(`  Seeded ${seedFlows.length} business flows from FE component directories`);
   }
@@ -531,6 +534,10 @@ export async function indexRepos(repos: RepoConfig[], workspaceRoot: string, opt
     }
   });
   insertCardTx();
+  // Rebuild FTS5 inverted index so keyword search reflects the new cards.
+  // Required because cards_fts is an external-content table — INSERT OR REPLACE
+  // on the base `cards` table does not automatically update the FTS shadow tables.
+  db.exec("INSERT INTO cards_fts(cards_fts) VALUES('rebuild')");
 
   console.log(`\nGenerating embeddings...`);
   const embedder = getEmbedder();
@@ -632,7 +639,12 @@ export async function indexRepos(repos: RepoConfig[], workspaceRoot: string, opt
 // Legacy direct-invocation support: `tsx src/cli/index-repos.ts [workspace-root] [flags]`
 // Prefer `srcmap index` (srcmap.ts) for new usage — this block remains for
 // backward-compatibility with existing scripts.
-{
+//
+// Guard: only run when this file is the process entry point, not when imported
+// as a module by `srcmap index`. Without the guard, importing index-repos.js
+// triggers a second concurrent indexRepos() call that crashes when the first
+// run calls closeDb() before the second run finishes.
+if (import.meta.url === new URL(`file://${process.argv[1]}`).href) {
   const argv = process.argv.slice(2);
   const legacySkipDocs = argv.includes("--skip-docs");
   const legacyForceDocs = argv.includes("--force-docs");
@@ -667,4 +679,4 @@ export async function indexRepos(repos: RepoConfig[], workspaceRoot: string, opt
     console.error("Indexing failed:", err);
     process.exit(1);
   });
-}
+} // end legacy direct-invocation guard

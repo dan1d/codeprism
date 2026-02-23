@@ -8,6 +8,7 @@ import { extname } from "node:path";
 import { glob } from "glob";
 import { emptyParsedFile } from "./types.js";
 import { classifyFileRole, applyGraphRoles, computeInboundDegrees, type RepoConfig } from "./file-classifier.js";
+import type { IgnoreConfig } from "../config/ignore.js";
 
 const SKIP_PATTERNS = [
   "**/node_modules/**",
@@ -121,17 +122,22 @@ export class ParserRegistry {
     dirPath: string,
     repo: string,
     repoConfig?: RepoConfig,
+    ignoreConfig?: IgnoreConfig,
   ): Promise<ParsedFile[]> {
     const extensions = this.getSupportedExtensions();
     if (extensions.length === 0) return [];
 
     const pattern = `**/*{${extensions.join(",")}}`;
 
-    const files = await glob(pattern, {
+    let files = await glob(pattern, {
       cwd: dirPath,
       absolute: true,
       ignore: SKIP_PATTERNS,
     });
+
+    if (ignoreConfig) {
+      files = files.filter((f) => !ignoreConfig.isIgnored(f));
+    }
 
     const results: ParsedFile[] = [];
 

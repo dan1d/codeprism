@@ -5,35 +5,22 @@
  *
  * Usage: pnpm --filter @srcmap/engine exec tsx src/cli/verify-skills.ts
  */
-import { readdirSync, existsSync } from "node:fs";
-import { join } from "node:path";
 import { detectStackProfile } from "../indexer/stack-profiler.js";
 import { resolveSkills } from "../skills/index.js";
-import { userWorkspaceRootFrom } from "../utils/workspace.js";
+import { loadWorkspace } from "../utils/workspace.js";
 
-const WORKSPACE_ROOT = userWorkspaceRootFrom(import.meta.url);
-
-const entries = readdirSync(WORKSPACE_ROOT, { withFileTypes: true });
-const repoDirs = entries
-  .filter((e) => e.isDirectory() && !e.name.startsWith(".") && e.name !== "srcmap")
-  .map((e) => join(WORKSPACE_ROOT, e.name))
-  .filter(
-    (dir) =>
-      existsSync(join(dir, "package.json")) ||
-      existsSync(join(dir, "Gemfile")) ||
-      existsSync(join(dir, "go.mod")),
-  );
+const workspace = loadWorkspace(import.meta.url);
+const repoDirs = workspace.repos;
 
 console.log(`\n=== srcmap skill detection smoke test ===\n`);
 
 let allGood = true;
-for (const dir of repoDirs) {
-  const name = dir.split("/").at(-1) ?? dir;
-  const profile = detectStackProfile(dir);
+for (const repo of repoDirs) {
+  const profile = detectStackProfile(repo.path);
   const skills = resolveSkills(profile.skillIds);
 
   const status = profile.skillIds.length > 0 ? "✓" : "⚠ no skills detected";
-  console.log(`${status}  ${name}`);
+  console.log(`${status}  ${repo.name}`);
   console.log(`   language: ${profile.primaryLanguage}`);
   console.log(`   frameworks: ${profile.frameworks.join(", ") || "(none)"}`);
   console.log(`   skill IDs: ${profile.skillIds.join(", ") || "(none)"}`);

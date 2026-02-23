@@ -21,6 +21,7 @@
 
 import { readFileSync } from "node:fs";
 import type { ParsedFile } from "./tree-sitter.js";
+import type { IgnoreConfig } from "../config/ignore.js";
 
 export interface SeedFlow {
   /** Human-readable page/feature name, e.g. "Remote Authorizations" */
@@ -55,18 +56,22 @@ export function extractSeedFlows(
   parsedFiles: ParsedFile[],
   feRepoNames: string[],
   discoveredPages?: string[],
+  ignoreConfig?: IgnoreConfig,
 ): SeedFlow[] {
+  const filtered = ignoreConfig
+    ? parsedFiles.filter((pf) => !ignoreConfig.isIgnored(pf.path))
+    : parsedFiles;
   const feRepoSet = new Set(feRepoNames);
-  const filesByPath = new Map(parsedFiles.map((f) => [f.path, f]));
+  const filesByPath = new Map(filtered.map((f) => [f.path, f]));
 
   // --- 1. Extract nav labels from sidebar/nav files to build override map ---
-  const navOverrides = buildNavOverrides(parsedFiles, feRepoSet, discoveredPages);
+  const navOverrides = buildNavOverrides(filtered, feRepoSet, discoveredPages);
 
   // --- 2. Group FE files by their leaf component directory path ---
   //   key = "PreAuthorizations" or "Billing/OfficeAuthorizations"
   const componentGroups = new Map<string, string[]>();
 
-  for (const pf of parsedFiles) {
+  for (const pf of filtered) {
     if (!feRepoSet.has(pf.repo)) continue;
     const dirKey = extractLeafComponentDir(pf.path);
     if (!dirKey) continue;
@@ -76,7 +81,7 @@ export function extractSeedFlows(
 
   // --- 3. Build seed flows ---
   const seeds: SeedFlow[] = [];
-  const beFiles = parsedFiles.filter((pf) => !feRepoSet.has(pf.repo));
+  const beFiles = filtered.filter((pf) => !feRepoSet.has(pf.repo));
 
   for (const [dirKey, fePaths] of componentGroups) {
     const leafName = dirKey.split("/").pop()!;

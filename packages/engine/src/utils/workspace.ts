@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { loadWorkspaceConfig, type LoadedWorkspaceConfig } from "../config/workspace-config.js";
 
 /**
  * Walk up the directory tree from `start` until a `pnpm-workspace.yaml` is
@@ -39,4 +40,16 @@ export function userWorkspaceRootFrom(importMetaUrl: string): string {
   const scriptDir = fileURLToPath(new URL(".", importMetaUrl));
   const srcmapRoot = findSrcmapRoot(scriptDir);
   return resolve(srcmapRoot, "..");
+}
+
+/**
+ * Load the full workspace configuration, checking for `srcmap.config.json`
+ * at the workspace root first and falling back to auto-discovery.
+ *
+ * This is the recommended entry point for CLI scripts that need both the
+ * workspace root and the list of repos.
+ */
+export function loadWorkspace(importMetaUrl: string): LoadedWorkspaceConfig {
+  const workspaceRoot = userWorkspaceRootFrom(importMetaUrl);
+  return loadWorkspaceConfig(workspaceRoot);
 }

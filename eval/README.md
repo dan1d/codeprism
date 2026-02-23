@@ -2,6 +2,55 @@
 
 Evaluates srcmap search quality against a golden dataset of real ticket queries.
 
+## Evaluating your own codebase
+
+The default `golden_dataset.json` is tuned for the biobridge project. To evaluate
+srcmap against **your own** indexed codebase, you have two options:
+
+### Option A: Auto-generate from your srcmap index (recommended)
+
+```bash
+# Start srcmap with your indexed database, then:
+python generate_dataset.py                     # 10 test cases → golden_dataset.json
+python generate_dataset.py --sample 20         # more test cases
+python generate_dataset.py --output my_ds.json # custom output path
+python generate_dataset.py --seed 42           # reproducible sampling
+```
+
+The generator connects to your running srcmap instance, discovers all indexed flows
+and cards, and builds test cases with realistic queries, ground truth, and expected
+flows/files derived from your actual data.
+
+Then run the evaluation as normal:
+
+```bash
+python evaluate.py                             # uses golden_dataset.json
+```
+
+### Option B: Start from the example template
+
+Copy `example_golden_dataset.json` → `golden_dataset.json` and edit:
+
+1. Replace `expected_flows` with flow names from your srcmap dashboard
+2. Replace `expected_file_fragments` with filename substrings from your repos
+3. Adjust `query` and `ground_truth` to match your domain
+4. Remove test cases that don't apply (e.g. `background-job` if you have none)
+
+Each test case has a `_comment` field explaining what to customize.
+
+### CLI options for generate_dataset.py
+
+```
+python generate_dataset.py [options]
+
+  --server URL     srcmap base URL (default: http://localhost:4000)
+  --sample N       Number of test cases to generate (default: 10)
+  --output PATH    Output file path (default: golden_dataset.json)
+  --seed N         Random seed for reproducible output
+```
+
+---
+
 ## Two evaluation modes
 
 | Mode | Needs LLM? | Speed | What it measures |

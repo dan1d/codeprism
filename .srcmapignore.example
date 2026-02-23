@@ -1,0 +1,33 @@
+# .srcmapignore — gitignore-style patterns for srcmap file exclusion
+#
+# Copy this file to `.srcmapignore` at your workspace root and customize.
+# Patterns use the same syntax as .gitignore:
+#   - Blank lines and lines starting with # are ignored
+#   - Standard glob patterns work (*, ?, [abc])
+#   - A pattern without a slash matches at any directory level
+#   - Prefix ! to negate (re-include a previously excluded pattern)
+
+# Dependencies
+node_modules
+vendor
+venv
+.venv
+
+# Build outputs
+dist
+build
+.next
+tmp
+
+# Generated files
+*.generated.*
+schema.rb
+db/migrate
+
+# Assets (images, compiled packs, etc.)
+public/assets
+public/packs
+
+# Test fixtures / snapshots (optional — uncomment to skip)
+# **/__snapshots__
+# **/fixtures

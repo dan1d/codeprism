@@ -36,6 +36,7 @@
     "graphology-communities-louvain": "^2.0.2",
     "graphology-metrics": "^2.4.0",
     "graphology-types": "^0.24.8",
+    "ignore": "^7.0.5",
     "nanoid": "latest",
     "openai": "^6.22.0",
     "sqlite-vec": "latest",

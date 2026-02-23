@@ -1,0 +1,83 @@
+{
+  "version": "1.0",
+  "description": "Example golden dataset with generic test cases that work with any typical web application (Rails+React, Django+Vue, Next.js, etc.). Copy this file to golden_dataset.json and customize the expected_flows and expected_file_fragments to match your indexed codebase. Run `python generate_dataset.py` to auto-generate a dataset from your actual srcmap index instead.",
+  "test_cases": [
+    {
+      "id": "auth-flow",
+      "ticket": null,
+      "query": "User authentication and session management across frontend and backend",
+      "ground_truth": "User authentication involves a login endpoint that validates credentials and issues a session token or JWT. The backend stores user records with hashed passwords. The frontend persists the token and attaches it to API requests. Session expiry and refresh logic ensures users stay authenticated across page reloads.",
+      "expected_flows": ["User", "Session"],
+      "_comment": "Customize expected_flows to match your auth-related flow names (e.g. 'Auth', 'Authentication', 'User'). Add file fragments like 'session', 'auth', 'login' that appear in your source paths.",
+      "expected_file_fragments": [
+        "user",
+        "session",
+        "auth"
+      ]
+    },
+    {
+      "id": "api-endpoint",
+      "ticket": null,
+      "query": "REST API endpoint for listing and creating resources with pagination",
+      "ground_truth": "The API exposes index and create actions on a primary resource. The index action supports pagination via page/per_page query params and returns a JSON array. The create action validates input, persists the record, and returns the created resource. Both actions are protected by authentication middleware.",
+      "expected_flows": ["Patient", "Order"],
+      "_comment": "Replace with your primary domain model flow names. Use the flow names shown in your srcmap dashboard (e.g. 'Product', 'Invoice', 'Task').",
+      "expected_file_fragments": [
+        "controller",
+        "serializer"
+      ]
+    },
+    {
+      "id": "db-model-associations",
+      "ticket": null,
+      "query": "Database model relationships and associations for the core domain entity",
+      "ground_truth": "The core domain model has associations to related models through foreign keys. It defines validations, scopes, and callbacks. Related models reference it via belongs_to or has_many relationships. The schema includes indexes on frequently queried columns.",
+      "expected_flows": ["Patient", "Device"],
+      "_comment": "Replace with your core domain models. These should be the model/entity names that srcmap indexed as flows.",
+      "expected_file_fragments": [
+        "model",
+        "migration",
+        "schema"
+      ]
+    },
+    {
+      "id": "frontend-list-page",
+      "ticket": null,
+      "query": "Frontend list page component with filtering, sorting, and bulk actions",
+      "ground_truth": "The list page renders a data table with rows fetched from the API. Filter controls allow narrowing by status and type. Column headers support click-to-sort. Checkboxes enable multi-select for bulk operations. Pagination is managed via query parameters synced with the URL.",
+      "expected_flows": ["Patients", "patients"],
+      "_comment": "Replace with your frontend page flow names. srcmap often indexes page-level flows separately from model flows. Check your dashboard for page flow names.",
+      "expected_file_fragments": [
+        "list",
+        "table",
+        "filter"
+      ]
+    },
+    {
+      "id": "cross-service-integration",
+      "ticket": null,
+      "query": "How does the frontend communicate with the backend API for the main workflow?",
+      "ground_truth": "The frontend makes HTTP requests to the backend REST API using an API client module. Request payloads are validated on the backend before processing. Responses include the resource data and any error messages. The frontend API client handles authentication headers, error states, and response parsing.",
+      "expected_flows": ["Patient ↔ patients_controller"],
+      "_comment": "Cross-service flows use the '↔' separator in srcmap. Replace with actual cross-service flow names from your srcmap index. Run `python generate_dataset.py` to discover these automatically.",
+      "expected_file_fragments": [
+        "api",
+        "client",
+        "controller"
+      ]
+    },
+    {
+      "id": "background-job",
+      "ticket": null,
+      "query": "Background job processing and async task execution",
+      "ground_truth": "Background jobs are enqueued from controllers or service objects and processed asynchronously by a job runner. Each job class defines a perform method with retry and error handling logic. Jobs are used for email delivery, report generation, and data synchronization tasks that should not block the request cycle.",
+      "expected_flows": ["Mailer", "Job"],
+      "_comment": "Replace with your background processing flow names (e.g. 'Sidekiq', 'Celery', 'BullMQ'). Omit this test case if your app has no background jobs.",
+      "expected_file_fragments": [
+        "job",
+        "worker",
+        "mailer"
+      ]
+    }
+  ]
+}
