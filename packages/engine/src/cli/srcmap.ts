@@ -103,4 +103,21 @@ program
     await importTranscripts(opts);
   });
 
+// ---------------------------------------------------------------------------
+// srcmap generate-skills
+// ---------------------------------------------------------------------------
+
+program
+  .command("generate-skills")
+  .description(
+    "Re-generate skill knowledge/*.md files using an LLM. " +
+    "Runs once per framework — output requires human review before committing."
+  )
+  .option("--skill <id>", "generate only for a specific skill ID (e.g. rails, react)")
+  .option("--force", "overwrite existing knowledge/*.md files", false)
+  .action(async (opts: { skill?: string; force: boolean }) => {
+    const { generateSkillKnowledge } = await import("./generate-skills.js");
+    await generateSkillKnowledge({ skillFilter: opts.skill, force: opts.force });
+  });
+
 program.parse(process.argv);

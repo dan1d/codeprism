@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { resolveSkills, buildSkillContextPrefix, buildSkillCardHints } from "../../skills/registry.js";
 
 describe("resolveSkills", () => {
@@ -29,6 +29,22 @@ describe("resolveSkills", () => {
   it("returns empty array for unrecognised skill IDs", () => {
     const skills = resolveSkills(["cobol", "fortran"]);
     expect(skills).toHaveLength(0);
+  });
+
+  it("emits console.warn for each unrecognised skill ID", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    resolveSkills(["cobol", "fortran"]);
+    expect(warnSpy).toHaveBeenCalledTimes(2);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("cobol"));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("fortran"));
+    warnSpy.mockRestore();
+  });
+
+  it("does not warn for valid skill IDs", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    resolveSkills(["rails", "react"]);
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 });
 

@@ -618,17 +618,20 @@ export function registerTools(server: McpServer): void {
         .prepare(
           `SELECT
             c.flow,
-            COUNT(DISTINCT c.id) AS card_count,
-            GROUP_CONCAT(DISTINCT jr.value) AS repos,
-            COUNT(DISTINCT jf.value) AS file_count,
-            SUM(CASE WHEN c.stale = 1 THEN 1 ELSE 0 END) AS stale_count
+            COUNT(DISTINCT c.id)                       AS card_count,
+            GROUP_CONCAT(DISTINCT jr.value)            AS repos,
+            COUNT(DISTINCT jf.value)                   AS file_count,
+            SUM(CASE WHEN c.stale = 1 THEN 1 ELSE 0 END) AS stale_count,
+            COALESCE(AVG(fi.heat_score), 0)            AS avg_heat
           FROM cards c
-            LEFT JOIN json_each(c.source_repos) jr
-            LEFT JOIN json_each(c.source_files) jf
+            LEFT JOIN json_each(c.source_repos)  jr
+            LEFT JOIN json_each(c.source_files)  jf
+            LEFT JOIN file_index fi ON fi.path = jf.value
+          WHERE c.card_type NOT IN ('conv_insight')
           GROUP BY c.flow
-          ORDER BY card_count DESC`,
+          ORDER BY avg_heat DESC, card_count DESC`,
         )
-        .all() as { flow: string; card_count: number; repos: string | null; file_count: number; stale_count: number }[];
+        .all() as { flow: string; card_count: number; repos: string | null; file_count: number; stale_count: number; avg_heat: number }[];
 
       if (rows.length === 0) {
         return {
@@ -643,7 +646,8 @@ export function registerTools(server: McpServer): void {
         const repos = r.repos ? [...new Set(r.repos.split(","))].join(", ") : "unknown";
         const crossRepo = repos.includes(",") ? " (cross-repo)" : "";
         const staleFlag = r.stale_count > 0 ? ` ⚠ ${r.stale_count} stale` : "";
-        return `- **${r.flow}**: ${r.card_count} card(s), ${r.file_count} files — ${repos}${crossRepo}${staleFlag}`;
+        const heatEmoji = r.avg_heat > 0.6 ? " 🔥" : r.avg_heat > 0.3 ? " 🌡" : "";
+        return `- **${r.flow}**${heatEmoji}: ${r.card_count} card(s), ${r.file_count} files — ${repos}${crossRepo}${staleFlag}`;
       });
       const total = rows.reduce((sum, r) => sum + r.card_count, 0);
 
