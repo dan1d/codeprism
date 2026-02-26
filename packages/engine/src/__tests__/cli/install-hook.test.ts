@@ -7,7 +7,7 @@
  * Covers: fresh install, idempotency, append-to-existing, non-git-repo error.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -137,7 +137,7 @@ describe("installHook — append to existing hook", () => {
 describe("installHook — non-git directory", () => {
   it("calls process.exit(1) when run outside a git repo", async () => {
     const emptyDir = mkdtempSync(join(tmpdir(), "codeprism-nogit-"));
-    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code) => {
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((_code?: string | number | null) => {
       throw new Error("process.exit called");
     });
     try {

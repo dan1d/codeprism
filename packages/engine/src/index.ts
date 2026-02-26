@@ -322,7 +322,7 @@ async function main(): Promise<void> {
         return reply.code(400).send({ error: "Invalid telemetry payload" });
       }
       try {
-        receiveTelemetry(body as Parameters<typeof receiveTelemetry>[0]);
+        receiveTelemetry(body as unknown as Parameters<typeof receiveTelemetry>[0]);
         return reply.send({ ok: true });
       } catch {
         return reply.send({ ok: true });

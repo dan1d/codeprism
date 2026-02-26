@@ -121,7 +121,7 @@ export function registerSearchTools(server: McpServer): void {
         const hydeQuery = await buildHydeQuery(cleaned);
         const { results: primaryResults } = await searchAndTrack(hydeQuery, branch, 10, contextSessionId, devEmail);
 
-        const entities = extractEntityNames(description);
+        const entities = extractEntityNames(effectiveDescription);
         const seenIds = new Set(primaryResults.map((r) => r.card.id));
         const allSearchResults: SearchResult[] = [...primaryResults];
 

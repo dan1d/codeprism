@@ -11,9 +11,15 @@
 /* eslint-disable no-console */
 
 import { Command } from "commander";
-import { resolve } from "node:path";
 import { userWorkspaceRootFrom } from "../utils/workspace.js";
 import { loadWorkspaceConfig } from "../config/workspace-config.js";
+import { indexRepos } from "./index-repos.js";
+import { importTranscripts } from "./import-transcripts.js";
+import { generateSkillKnowledge } from "./generate-skills.js";
+import { runCheckCli } from "./check.js";
+import { listRules, addRule, deleteRule } from "./rules.js";
+import { runSync } from "./sync.js";
+import { installHook } from "./install-hook.js";
 
 const program = new Command("codeprism");
 program.version("0.1.0");
@@ -65,41 +71,31 @@ program
       console.log(`[codeprism] Ticket context: ${ticketId}${opts.ticketDesc ? ` — ${opts.ticketDesc}` : ""}`);
     }
 
-    const { runIndex } = await import("./index-repos.js");
-
     const repoName = opts.repo;
-    if (repoName) {
-      const allRepos = config.repos;
-      const repo = allRepos.find((r) => r.name === repoName);
-      if (!repo) {
-        console.error(
-          `[codeprism] Unknown repo "${repoName}". Known: ${allRepos.map((r) => r.name).join(", ")}`,
-        );
-        process.exit(1);
-      }
-      await runIndex(config.workspaceRoot, repo.name, resolve(repo.path), {
-        force: opts.force,
-        branch: opts.branch,
-        ticketId,
-        ticketDesc: opts.ticketDesc,
-        skipDocs: opts.skipDocs,
-        forceDocs: opts.forceDocs,
-        fetchRemote: opts.fetchRemote,
-      });
-      return;
+    const repos = repoName
+      ? config.repos.filter((r) => r.name === repoName)
+      : config.repos;
+
+    if (repoName && repos.length === 0) {
+      console.error(
+        `[codeprism] Unknown repo "${repoName}". Known: ${config.repos.map((r) => r.name).join(", ")}`,
+      );
+      process.exit(1);
     }
 
-    for (const repo of config.repos) {
-      await runIndex(config.workspaceRoot, repo.name, resolve(repo.path), {
+    await indexRepos(
+      repos.map((r) => ({ name: r.name, path: r.path })),
+      config.workspaceRoot,
+      {
         force: opts.force,
-        branch: opts.branch,
+        branchOverride: opts.branch,
         ticketId,
-        ticketDesc: opts.ticketDesc,
+        ticketDescription: opts.ticketDesc,
         skipDocs: opts.skipDocs,
         forceDocs: opts.forceDocs,
         fetchRemote: opts.fetchRemote,
-      });
-    }
+      },
+    );
   });
 
 // ---------------------------------------------------------------------------
@@ -110,9 +106,9 @@ program
   .command("import-transcripts")
   .description("Import AI assistant transcripts into team memory cards")
   .option("--dry-run", "only print what would be imported", false)
-  .action(async (opts: { dryRun: boolean }) => {
-    const { importTranscripts } = await import("./import-transcripts.js");
-    await importTranscripts(process.cwd(), { dryRun: opts.dryRun });
+  .option("--force", "re-extract from already-imported transcripts", false)
+  .action(async (opts: { dryRun: boolean; force: boolean }) => {
+    await importTranscripts({ dryRun: opts.dryRun, force: opts.force });
   });
 
 // ---------------------------------------------------------------------------
@@ -129,8 +125,7 @@ program
     "custom output directory (community use: ~/.codeprism/knowledge/ or <workspace>/.codeprism/knowledge/)",
   )
   .action(async (opts: { skill?: string; force: boolean; outputDir?: string }) => {
-    const { generateSkills } = await import("./generate-skills.js");
-    await generateSkills({ skill: opts.skill, force: opts.force, outputDir: opts.outputDir });
+    await generateSkillKnowledge({ skillFilter: opts.skill, force: opts.force, outputDir: opts.outputDir });
   });
 
 // ---------------------------------------------------------------------------
@@ -145,23 +140,37 @@ program
   .option("--strict", "exit 1 on any violation (incl. warnings)", false)
   .option("--json", "machine-readable JSON output", false)
   .action(async (opts: { base: string; repo?: string; strict: boolean; json: boolean }) => {
-    const { runCheck } = await import("./check.js");
-    await runCheck(process.cwd(), opts);
+    await runCheckCli(process.cwd(), opts);
   });
 
 // ---------------------------------------------------------------------------
 // codeprism rules list / add / delete
 // ---------------------------------------------------------------------------
 
-program
-  .command("rules")
-  .description("Manage rules stored in the engine database")
-  .argument("<action>", "list | add | delete")
-  .argument("[rule]", "rule text (for add)")
-  .option("--repo <name>", "repo name (defaults to current dir name)")
-  .action(async (action: string, rule: string | undefined, opts: { repo?: string }) => {
-    const { runRules } = await import("./rules.js");
-    await runRules(process.cwd(), { action, rule, repo: opts.repo });
+const rulesCmd = program.command("rules").description("Manage team rules stored in the engine database");
+
+rulesCmd.command("list").description("List all rules").action(async () => {
+  await listRules();
+});
+
+rulesCmd
+  .command("add")
+  .description("Add a new rule")
+  .requiredOption("--name <text>", "rule name")
+  .requiredOption("--desc <text>", "rule description")
+  .option("--severity <s>", "error|warning|info")
+  .option("--scope <s>", "optional scope (e.g. rails, react, go)")
+  .option("--by <name>", "author")
+  .action(async (opts: { name: string; desc: string; severity?: string; scope?: string; by?: string }) => {
+    await addRule(opts);
+  });
+
+rulesCmd
+  .command("delete")
+  .description("Delete a rule by ID")
+  .argument("<id>", "rule id")
+  .action(async (id: string) => {
+    await deleteRule(id);
   });
 
 // ---------------------------------------------------------------------------
@@ -180,7 +189,6 @@ program
   .option("--prev-head <sha>", "previous HEAD SHA (for checkout/rewrite)")
   .option("--dry-run", "show what would be sent without contacting the server", false)
   .action(async (opts: { repo?: string; port?: number; eventType?: string; prevHead?: string; dryRun: boolean }) => {
-    const { runSync } = await import("./sync.js");
     await runSync(process.cwd(), {
       repo: opts.repo,
       port: opts.port,
@@ -204,7 +212,6 @@ program
   .option("--strict", "block push on warnings too", false)
   .option("--engine-url <url>", "codeprism engine base URL (default: http://localhost:4000)")
   .action(async (opts: { base: string; strict: boolean; engineUrl?: string }) => {
-    const { installHook } = await import("./install-hook.js");
     await installHook(process.cwd(), opts);
   });
 
