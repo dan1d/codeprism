@@ -32,6 +32,8 @@ services:
       dockerfile: Dockerfile.caddy
     restart: unless-stopped
     environment:
+      # Used by deploy/Caddyfile host match (e.g. codeprism.dev)
+      - CODEPRISM_DOMAIN=${CODEPRISM_DOMAIN:-localhost}
       # Required for wildcard TLS via Cloudflare DNS challenge (see deploy/Caddyfile)
       - CF_API_TOKEN=${CF_API_TOKEN:-}
     ports:
