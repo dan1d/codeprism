@@ -16,6 +16,7 @@ import { Login } from "@/pages/Login";
 import { AcceptInvite } from "@/pages/AcceptInvite";
 import { Team } from "@/pages/Team";
 import { Benchmarks, BenchmarkDetail } from "@/pages/Benchmarks";
+import { Terms } from "@/pages/Terms";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { api, type InstanceInfo } from "@/lib/api";
 
@@ -53,6 +54,7 @@ function DashboardRoutes() {
       <Route path="/login" element={<Login />} />
       <Route path="/accept-invite" element={<AcceptInvite />} />
       <Route path="/auth/verify" element={<AcceptInvite />} />
+      <Route path="/terms" element={<Terms />} />
 
       {/* Protected dashboard pages — share one Layout via Outlet */}
       <Route path="/dashboard" element={<DashboardLayout />}>

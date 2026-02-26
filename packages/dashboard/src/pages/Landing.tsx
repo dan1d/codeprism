@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   FileText, GitBranch, Zap, Users, RefreshCw, Brain,
-  TrendingDown, Target, ArrowRight, Cpu, ChevronDown, AlertTriangle,
+  TrendingDown, Target, Cpu, ChevronDown, AlertTriangle, Github, MessageCircle, Check,
 } from "lucide-react";
 import { api, type PublicStats, type FoundingStatus, type BenchmarkResponse } from "@/lib/api";
 import { formatTokens, stackColor, cn } from "@/lib/utils";
@@ -10,6 +10,115 @@ import { formatTokens, stackColor, cn } from "@/lib/utils";
 const SUPPORT_EMAIL = "support@codeprism.dev";
 const GITHUB_URL = "https://github.com/dan1d/codeprism";
 const DISCORD_URL = "https://discord.gg/nsWERSde";
+
+function PrismLogo({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 36 36" fill="none" className={className} aria-hidden="true">
+      {/* Prism body */}
+      <polygon
+        points="18,3 33,30 3,30"
+        fill="url(#prismFill)"
+        stroke="#58a6ff"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      {/* Inner facet line — creates depth */}
+      <line x1="18" y1="3" x2="10" y2="30" stroke="#58a6ff" strokeWidth="0.8" strokeOpacity="0.35" />
+      {/* Spectrum dots at base — light dispersion */}
+      <circle cx="6" cy="30" r="1.8" fill="#f85149" />
+      <circle cx="10" cy="30" r="1.8" fill="#d29922" />
+      <circle cx="14" cy="30" r="1.8" fill="#3fb950" />
+      <circle cx="18" cy="30" r="1.8" fill="#58a6ff" />
+      <circle cx="22" cy="30" r="1.8" fill="#a371f7" />
+      <defs>
+        <linearGradient id="prismFill" x1="3" y1="30" x2="33" y2="3" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#58a6ff" stopOpacity="0.08" />
+          <stop offset="100%" stopColor="#58a6ff" stopOpacity="0.22" />
+        </linearGradient>
+      </defs>
+    </svg>
+  );
+}
+
+function Navbar() {
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const handler = () => setScrolled(window.scrollY > 10);
+    window.addEventListener("scroll", handler, { passive: true });
+    return () => window.removeEventListener("scroll", handler);
+  }, []);
+
+  return (
+    <header
+      className={cn(
+        "fixed top-0 inset-x-0 z-50 transition-all duration-200",
+        scrolled
+          ? "bg-[#0d1117]/90 backdrop-blur-md border-b border-[#21262d] shadow-lg shadow-black/20"
+          : "bg-transparent"
+      )}
+    >
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 h-16">
+        {/* Logo */}
+        <Link to="/" className="flex items-center gap-2.5 group">
+          <PrismLogo className="h-8 w-8 flex-shrink-0" />
+          <span className="text-lg font-bold tracking-tight text-[#e1e4e8] group-hover:text-white transition-colors">
+            code<span className="text-accent">prism</span>
+          </span>
+        </Link>
+
+        {/* Center nav */}
+        <nav className="hidden md:flex items-center gap-1">
+          <a
+            href="#pricing"
+            onClick={(e) => { e.preventDefault(); document.getElementById("pricing")?.scrollIntoView({ behavior: "smooth" }); }}
+            className="px-3 py-2 text-sm text-[#8b949e] hover:text-[#e1e4e8] transition-colors rounded-md hover:bg-[#21262d]"
+          >
+            Pricing
+          </a>
+          <a
+            href="#faq"
+            onClick={(e) => { e.preventDefault(); document.getElementById("faq")?.scrollIntoView({ behavior: "smooth" }); }}
+            className="px-3 py-2 text-sm text-[#8b949e] hover:text-[#e1e4e8] transition-colors rounded-md hover:bg-[#21262d]"
+          >
+            FAQ
+          </a>
+          <Link
+            to="/terms"
+            className="px-3 py-2 text-sm text-[#8b949e] hover:text-[#e1e4e8] transition-colors rounded-md hover:bg-[#21262d]"
+          >
+            Terms
+          </Link>
+          <a
+            href={GITHUB_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-3 py-2 text-sm text-[#8b949e] hover:text-[#e1e4e8] transition-colors rounded-md hover:bg-[#21262d]"
+          >
+            <Github className="h-3.5 w-3.5" />
+            Open source
+          </a>
+        </nav>
+
+        {/* Right CTAs */}
+        <div className="flex items-center gap-2">
+          <Link
+            to="/login"
+            className="hidden sm:block px-4 py-2 text-sm text-[#8b949e] hover:text-[#e1e4e8] transition-colors"
+          >
+            Log in
+          </Link>
+          <Link
+            to="/onboard"
+            className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-black hover:bg-[#79b8ff] transition-colors"
+          >
+            Get started →
+          </Link>
+        </div>
+      </div>
+    </header>
+  );
+}
 
 const FRAMEWORKS = [
   "Rails", "React", "Vue", "Next.js", "Django", "FastAPI",
@@ -238,9 +347,11 @@ export function Landing() {
 
   return (
     <div className="min-h-screen bg-background">
+      <Navbar />
+
       {/* Hero */}
       <section
-        className="relative px-6 py-24 text-center"
+        className="relative px-6 pt-36 pb-24 text-center"
         style={{ background: "linear-gradient(180deg, #0f1117 0%, #161b22 100%)" }}
       >
         {/* Badge */}
@@ -592,8 +703,109 @@ export function Landing() {
         </div>
       </section>
 
+      {/* Pricing */}
+      <section id="pricing" className="border-t border-[#30363d] bg-[#0d1117]">
+        <div className="mx-auto max-w-5xl px-6 py-24">
+          <h2 className="mb-3 text-center text-3xl font-bold text-[#e1e4e8]">
+            Simple, transparent pricing
+          </h2>
+          <p className="mb-12 text-center text-base text-[#8b949e] max-w-xl mx-auto">
+            Open source and free to self-host forever. Cloud is free for founding teams.
+          </p>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+            {/* Open Source */}
+            <div className="rounded-xl border border-[#30363d] bg-[#161b22] p-8 flex flex-col">
+              <h3 className="text-lg font-semibold text-[#e1e4e8] mb-1">Open Source</h3>
+              <p className="text-xs text-[#484f58] mb-6">Solo devs &amp; tinkerers</p>
+              <div className="mb-6">
+                <span className="text-4xl font-bold text-[#e1e4e8]">$0</span>
+                <span className="text-sm text-[#8b949e] ml-1">forever</span>
+              </div>
+              <ul className="space-y-3 text-sm text-[#8b949e] flex-1">
+                {["Self-host with Docker", "Full engine, no limits", "1 developer", "AGPL-3.0 open source", "Community support (Discord)"].map((f) => (
+                  <li key={f} className="flex items-center gap-2">
+                    <Check className="h-3.5 w-3.5 shrink-0 text-[#3fb950]" />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <a
+                href={GITHUB_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-8 block rounded-lg border border-[#30363d] px-4 py-2.5 text-center text-sm font-medium text-[#e1e4e8] hover:border-[#8b949e] hover:bg-[#21262d] transition-colors"
+              >
+                View on GitHub →
+              </a>
+            </div>
+
+            {/* Team — highlighted */}
+            <div className="rounded-xl border border-accent/60 bg-[#161b22] p-8 flex flex-col relative">
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-accent px-3 py-0.5 text-[11px] font-semibold text-black">
+                Most popular
+              </div>
+              <h3 className="text-lg font-semibold text-[#e1e4e8] mb-1">Team Cloud</h3>
+              <p className="text-xs text-[#484f58] mb-6">AI-native startups</p>
+              <div className="mb-6">
+                <span className="text-4xl font-bold text-accent">Free</span>
+                <span className="text-sm text-[#8b949e] ml-1">founding offer</span>
+              </div>
+              <ul className="space-y-3 text-sm text-[#8b949e] flex-1">
+                {[
+                  "Cloud-hosted, zero infra",
+                  "Up to 10 developers",
+                  "First 100 teams",
+                  "Invitations & analytics",
+                  "Priority Discord support",
+                ].map((f) => (
+                  <li key={f} className="flex items-center gap-2">
+                    <Check className="h-3.5 w-3.5 shrink-0 text-accent" />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <Link
+                to="/onboard"
+                className="mt-8 block rounded-lg bg-accent px-4 py-2.5 text-center text-sm font-semibold text-black hover:bg-[#79b8ff] transition-colors"
+              >
+                Claim your spot →
+              </Link>
+            </div>
+
+            {/* Enterprise */}
+            <div className="rounded-xl border border-[#30363d] bg-[#161b22] p-8 flex flex-col">
+              <h3 className="text-lg font-semibold text-[#e1e4e8] mb-1">Enterprise</h3>
+              <p className="text-xs text-[#484f58] mb-6">Large engineering orgs</p>
+              <div className="mb-6">
+                <span className="text-4xl font-bold text-[#e1e4e8]">Custom</span>
+              </div>
+              <ul className="space-y-3 text-sm text-[#8b949e] flex-1">
+                {[
+                  "On-prem or private cloud",
+                  "Unlimited developers",
+                  "SSO & audit logs",
+                  "SLA & dedicated support",
+                  "Custom integrations",
+                ].map((f) => (
+                  <li key={f} className="flex items-center gap-2">
+                    <Check className="h-3.5 w-3.5 shrink-0 text-[#3fb950]" />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <a
+                href={`mailto:${SUPPORT_EMAIL}`}
+                className="mt-8 block rounded-lg border border-[#30363d] px-4 py-2.5 text-center text-sm font-medium text-[#e1e4e8] hover:border-[#8b949e] hover:bg-[#21262d] transition-colors"
+              >
+                Contact us →
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* FAQ */}
-      <section className="border-t border-[#30363d]">
+      <section id="faq" className="border-t border-[#30363d]">
         <div className="mx-auto max-w-3xl px-6 py-20">
           <h2 className="mb-10 text-center text-2xl font-bold text-[#e1e4e8]">
             Common questions
@@ -649,41 +861,32 @@ export function Landing() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-[#30363d] px-6 py-6">
-        <div className="flex flex-wrap items-center justify-center gap-4 text-sm text-[#8b949e]">
-          <span>AGPL-3.0 open source</span>
-          <span className="text-[#30363d]">|</span>
-          <a
-            href={GITHUB_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:text-accent transition-colors"
-          >
-            GitHub
-          </a>
-          <span className="text-[#30363d]">|</span>
-          <a
-            href={DISCORD_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:text-accent transition-colors"
-          >
-            Discord
-          </a>
-          <span className="text-[#30363d]">|</span>
-          <a
-            href="https://docs.codeprism.dev"
-            className="hover:text-accent transition-colors"
-          >
-            Docs
-          </a>
-          <span className="text-[#30363d]">|</span>
-          <a
-            href={`mailto:${SUPPORT_EMAIL}`}
-            className="hover:text-accent transition-colors"
-          >
-            Support
-          </a>
+      <footer className="border-t border-[#30363d] px-6 py-8">
+        <div className="mx-auto max-w-6xl flex flex-col items-center gap-4">
+          {/* Logo row */}
+          <Link to="/" className="flex items-center gap-2">
+            <PrismLogo className="h-6 w-6" />
+            <span className="text-sm font-bold text-[#8b949e]">
+              code<span className="text-accent">prism</span>
+            </span>
+          </Link>
+          {/* Links */}
+          <div className="flex flex-wrap items-center justify-center gap-4 text-sm text-[#484f58]">
+            <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-[#8b949e] transition-colors">
+              <Github className="h-3.5 w-3.5" /> GitHub
+            </a>
+            <span>·</span>
+            <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-[#8b949e] transition-colors">
+              <MessageCircle className="h-3.5 w-3.5" /> Discord
+            </a>
+            <span>·</span>
+            <a href="https://docs.codeprism.dev" className="hover:text-[#8b949e] transition-colors">Docs</a>
+            <span>·</span>
+            <Link to="/terms" className="hover:text-[#8b949e] transition-colors">Terms</Link>
+            <span>·</span>
+            <a href={`mailto:${SUPPORT_EMAIL}`} className="hover:text-[#8b949e] transition-colors">Support</a>
+          </div>
+          <p className="text-xs text-[#484f58]">© {new Date().getFullYear()} codeprism · AGPL-3.0 open source</p>
         </div>
       </footer>
     </div>

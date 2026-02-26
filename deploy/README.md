@@ -10,8 +10,10 @@
 curl -sSL https://raw.githubusercontent.com/codeprism/codeprism/main/deploy/setup.sh | bash
 ```
 
-4. Edit `/opt/codeprism/repo/deploy/.env` with your domain
-5. Restart: `cd /opt/codeprism/repo/deploy && docker compose -f docker-compose.prod.yml --env-file .env up -d`
+4. Edit your `.env` (path depends on `APP_DIR`, default shown):
+   - `/opt/codeprism/repo/deploy/.env`
+5. Update safely (preserves DB volume):
+   - `cd /opt/codeprism/repo && ./deploy/update.sh --build`
 
 ## Manual setup
 

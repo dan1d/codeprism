@@ -9,6 +9,7 @@ set -euo pipefail
 #   curl -sSL https://raw.githubusercontent.com/.../setup.sh | bash
 
 CODEPRISM_REPO_URL="${CODEPRISM_REPO_URL:?Error: set CODEPRISM_REPO_URL to your codeprism git repository URL}"
+APP_DIR="${APP_DIR:-/opt/codeprism}"
 
 echo "=== codeprism.dev VPS setup ==="
 
@@ -38,7 +39,6 @@ ufw allow 443/udp   # HTTP/3 (QUIC)
 ufw --force enable
 
 # 4. Create app directory
-APP_DIR=/opt/codeprism
 mkdir -p "$APP_DIR"
 
 # 5. Clone or update repo
@@ -67,7 +67,8 @@ fi
 
 # 7. Build and start
 cd "$APP_DIR/repo/deploy"
-docker compose -f docker-compose.prod.yml --env-file .env up -d --build
+chmod +x ./update.sh ./backup.sh
+./update.sh --build
 
 echo ""
 echo "=== codeprism.dev is running ==="

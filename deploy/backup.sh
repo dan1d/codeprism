@@ -2,11 +2,13 @@
 set -euo pipefail
 
 # codeprism.dev daily backup
-# Add to crontab: 0 3 * * * /opt/codeprism/repo/deploy/backup.sh
+# Add to crontab: 0 3 * * * /path/to/codeprism/deploy/backup.sh
 
-BACKUP_DIR="/opt/codeprism/backups"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+
+BACKUP_DIR="${BACKUP_DIR:-/var/backups/codeprism}"
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-COMPOSE_FILE="${COMPOSE_FILE:-/opt/codeprism/repo/deploy/docker-compose.prod.yml}"
+COMPOSE_FILE="${COMPOSE_FILE:-$SCRIPT_DIR/docker-compose.prod.yml}"
 SERVICE_NAME="codeprism"
 
 mkdir -p "$BACKUP_DIR"
