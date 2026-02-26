@@ -40,6 +40,7 @@ import {
   type CatalogPrompt,
 } from "@/lib/api";
 import { cn, formatTokens } from "@/lib/utils";
+import { SiteNav } from "@/components/shared/SiteNav";
 
 function slugify(repo: string): string {
   return repo.replace(/\//g, "-");
@@ -1394,20 +1395,16 @@ export function Benchmarks() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
+      <SiteNav variant="page" />
+
+      {/* Page header — pushed below the fixed nav */}
       <header
-        className="border-b border-[#30363d] px-6 py-12"
+        className="border-b border-[#30363d] px-6 pt-28 pb-12"
         style={{
           background: "linear-gradient(180deg, #0f1117 0%, #161b22 100%)",
         }}
       >
         <div className="mx-auto max-w-6xl">
-          <Link
-            to="/"
-            className="inline-flex items-center gap-1 text-sm text-[#8b949e] hover:text-accent transition-colors mb-6"
-          >
-            <ArrowLeft className="h-4 w-4" /> Back to home
-          </Link>
           <h1 className="text-3xl font-bold text-[#e1e4e8]">Benchmarks</h1>
           <p className="mt-2 text-[#8b949e] max-w-2xl">
             How codeprism performs across real-world open-source projects.
