@@ -456,53 +456,53 @@ export function Landing() {
         </div>
 
         {/* Pain → Solution visual */}
-        <div className="mx-auto mt-16 max-w-2xl grid grid-cols-1 sm:grid-cols-2 gap-4 text-left">
+        <div className="mx-auto mt-16 max-w-3xl grid grid-cols-1 sm:grid-cols-2 gap-5 text-left">
           {/* Without */}
           <div className="rounded-xl border border-[#f85149]/30 bg-[#0d1117] overflow-hidden">
-            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[#21262d] bg-[#161b22]">
-              <AlertTriangle className="h-3.5 w-3.5 text-[#f85149]" />
-              <span className="text-xs text-[#484f58] font-mono">Without codeprism</span>
+            <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-[#21262d] bg-[#161b22]">
+              <AlertTriangle className="h-4 w-4 text-[#f85149]" />
+              <span className="text-sm font-semibold text-[#f85149]">Without codeprism</span>
             </div>
-            <ul className="p-4 space-y-2 text-xs text-[#8b949e]">
-              <li className="flex items-start gap-2">
-                <span className="mt-0.5 text-[#f85149]">✗</span>
+            <ul className="px-5 py-5 space-y-4 text-sm text-[#8b949e] leading-relaxed">
+              <li className="flex items-start gap-3">
+                <span className="mt-0.5 text-[#f85149] text-base font-bold shrink-0">✗</span>
                 Alice figures out the billing flow. Bob re-discovers it tomorrow.
               </li>
-              <li className="flex items-start gap-2">
-                <span className="mt-0.5 text-[#f85149]">✗</span>
+              <li className="flex items-start gap-3">
+                <span className="mt-0.5 text-[#f85149] text-base font-bold shrink-0">✗</span>
                 Cursor and Claude give different architectural answers.
               </li>
-              <li className="flex items-start gap-2">
-                <span className="mt-0.5 text-[#f85149]">✗</span>
+              <li className="flex items-start gap-3">
+                <span className="mt-0.5 text-[#f85149] text-base font-bold shrink-0">✗</span>
                 New devs ask AI and get wrong answers — context is missing.
               </li>
-              <li className="flex items-start gap-2">
-                <span className="mt-0.5 text-[#f85149]">✗</span>
+              <li className="flex items-start gap-3">
+                <span className="mt-0.5 text-[#f85149] text-base font-bold shrink-0">✗</span>
                 4,500 tokens of raw files dumped into every query.
               </li>
             </ul>
           </div>
           {/* With */}
           <div className="rounded-xl border border-[#3fb950]/30 bg-[#0d1117] overflow-hidden">
-            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[#21262d] bg-[#161b22]">
-              <Brain className="h-3.5 w-3.5 text-[#3fb950]" />
-              <span className="text-xs text-[#484f58] font-mono">With codeprism</span>
+            <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-[#21262d] bg-[#161b22]">
+              <Brain className="h-4 w-4 text-[#3fb950]" />
+              <span className="text-sm font-semibold text-[#3fb950]">With codeprism</span>
             </div>
-            <ul className="p-4 space-y-2 text-xs text-[#8b949e]">
-              <li className="flex items-start gap-2">
-                <span className="mt-0.5 text-[#3fb950]">✓</span>
+            <ul className="px-5 py-5 space-y-4 text-sm text-[#c9d1d9] leading-relaxed">
+              <li className="flex items-start gap-3">
+                <span className="mt-0.5 text-[#3fb950] text-base font-bold shrink-0">✓</span>
                 One shared knowledge graph — visible to every tool, every dev.
               </li>
-              <li className="flex items-start gap-2">
-                <span className="mt-0.5 text-[#3fb950]">✓</span>
+              <li className="flex items-start gap-3">
+                <span className="mt-0.5 text-[#3fb950] text-base font-bold shrink-0">✓</span>
                 Consistent architectural answers across Cursor, Claude, Windsurf.
               </li>
-              <li className="flex items-start gap-2">
-                <span className="mt-0.5 text-[#3fb950]">✓</span>
+              <li className="flex items-start gap-3">
+                <span className="mt-0.5 text-[#3fb950] text-base font-bold shrink-0">✓</span>
                 New devs get the team's accumulated knowledge from day one.
               </li>
-              <li className="flex items-start gap-2">
-                <span className="mt-0.5 text-[#3fb950]">✓</span>
+              <li className="flex items-start gap-3">
+                <span className="mt-0.5 text-[#3fb950] text-base font-bold shrink-0">✓</span>
                 ~{REDUCTION_PCT}% fewer tokens — same answer, fraction of the cost.
               </li>
             </ul>
