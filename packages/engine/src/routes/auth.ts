@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { createMagicLink, verifyMagicLink, ensureUser, createSession, validateSession, destroySession } from "../services/auth.js";
 import { inviteMembers, listMembers, activateMember, deactivateMember, getActiveSeatCount } from "../services/members.js";
-import { sendMagicLinkEmail, sendInvitationEmail } from "../services/email.js";
-import { getTenantBySlug, isMemberOfTenant, isEmailInvitedToTenant } from "../tenant/registry.js";
+import { sendMagicLinkEmail, sendInvitationEmail, sendForgotWorkspaceEmail } from "../services/email.js";
+import { getTenantBySlug, isMemberOfTenant, isEmailInvitedToTenant, getTenantsForEmail } from "../tenant/registry.js";
 
 /**
  * Authentication + member management routes.
@@ -54,6 +54,29 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         user: { id: user.id, email: user.email, name: user.name },
         tenant: { slug: result.tenantSlug, name: tenant?.name ?? "" },
       });
+    },
+  );
+
+  /**
+   * Forgot workspace: looks up all tenants for an email and sends a list.
+   * Always returns 200 to avoid leaking whether the email exists.
+   */
+  app.post<{ Body: { email: string } }>(
+    "/api/auth/forgot-workspace",
+    { config: { rateLimit: { max: 5, timeWindow: "5 minutes" } } },
+    async (request, reply) => {
+      const { email } = request.body ?? {};
+      if (!email || typeof email !== "string" || !email.includes("@")) {
+        return reply.code(400).send({ error: "Valid email is required" });
+      }
+      const workspaces = getTenantsForEmail(email.trim());
+      if (workspaces.length > 0) {
+        sendForgotWorkspaceEmail(email.trim(), workspaces).catch((err) =>
+          app.log.warn({ err }, "Failed to send forgot-workspace email"),
+        );
+      }
+      // Always respond the same way — prevents email enumeration
+      return reply.send({ ok: true, message: "If we found workspaces for that email, we sent you a list." });
     },
   );
 

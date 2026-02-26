@@ -173,6 +173,8 @@ export async function registerBenchmarkRoutes(app: FastifyInstance): Promise<voi
         const id = addCatalogPrompt(repo, prompt);
         return reply.code(201).send({ ok: true, id });
       } catch (err) {
+        const statusCode = (err as { statusCode?: number }).statusCode;
+        if (statusCode === 404) return reply.code(404).send({ error: (err as Error).message });
         app.log.error(err, "Failed to save catalog prompt");
         return reply.code(500).send({ error: "Failed to save prompt" });
       }

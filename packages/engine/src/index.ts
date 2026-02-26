@@ -20,6 +20,7 @@ import { tenantMiddleware } from "./tenant/middleware.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerTenantRoutes } from "./routes/tenants.js";
 import { registerBenchmarkRoutes } from "./routes/benchmarks.js";
+import { closeCatalogDb } from "./services/catalog.js";
 import { registerMiscRoutes } from "./routes/misc.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -64,7 +65,10 @@ async function main(): Promise<void> {
 
   await app.register(cors, {
     origin: isMultiTenant && codeprismDomain
-      ? [`https://${codeprismDomain}`, `https://*.${codeprismDomain}`]
+      ? [
+          `https://${codeprismDomain}`,
+          new RegExp(`^https://[^.]+\\.${codeprismDomain.replace(/\./g, "\\.")}$`),
+        ]
       : true,
   });
   await app.register(rateLimit, { global: false });
@@ -152,6 +156,7 @@ async function main(): Promise<void> {
     stopTelemetryReporter();
     await app.close();
     closeTenantRegistry();
+    closeCatalogDb();
     closeAllDbs();
     process.exit(0);
   };

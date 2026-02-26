@@ -312,6 +312,35 @@ export function rotateApiKey(slug: string): string | null {
   return result.changes > 0 ? newKey : null;
 }
 
+/**
+ * Returns all tenants where the given email is a member or owner.
+ * Used by the "forgot workspace" flow.
+ */
+export function getTenantsForEmail(email: string): Array<{ slug: string; name: string }> {
+  const db = getRegistryDb();
+  const normalized = email.trim().toLowerCase();
+
+  // Members via team_members
+  const memberOf = db.prepare(`
+    SELECT DISTINCT t.slug, t.name FROM tenants t
+    JOIN team_members tm ON tm.tenant_slug = t.slug
+    JOIN users u ON u.id = tm.user_id
+    WHERE u.email = ? AND tm.status != 'deactivated'
+  `).all(normalized) as Array<{ slug: string; name: string }>;
+
+  // Owner (may not have a team_members row)
+  const ownedOf = db.prepare(`
+    SELECT slug, name FROM tenants WHERE lower(owner_email) = ?
+  `).all(normalized) as Array<{ slug: string; name: string }>;
+
+  const seen = new Set<string>();
+  const result: Array<{ slug: string; name: string }> = [];
+  for (const t of [...memberOf, ...ownedOf]) {
+    if (!seen.has(t.slug)) { seen.add(t.slug); result.push(t); }
+  }
+  return result;
+}
+
 /** Deletes a tenant from the registry. Returns true if a row was removed. */
 export function deleteTenant(slug: string): boolean {
   const db = getRegistryDb();

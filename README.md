@@ -259,7 +259,7 @@ codeprism/
 codeprism works with zero config. For customization:
 
 - **`codeprism.config.json`** — repo paths, workspace root, exclude patterns. See [docs/configuration.md](docs/configuration.md).
-- **`.codeprismi gnore`** — gitignore-style file exclusion.
+- **`.codeprismignore`** — gitignore-style file exclusion.
 - **Environment variables** — `GOOGLE_API_KEY`, `CODEPRISM_PORT`, `CODEPRISM_DB_PATH`, and more. See [docs/configuration.md](docs/configuration.md).
 
 ---
@@ -278,6 +278,15 @@ codeprism works with zero config. For customization:
 | [Evaluation](docs/evaluation.md) | Running and extending the eval suite |
 
 ---
+
+## Roadmap
+
+See [docs/roadmap.md](docs/roadmap.md) for the full plan.
+
+- **Q1 2026**: API Contracts 2.0 — structured OpenAPI/Swagger ingestion + “contract confidence” when specs disagree with code.
+- **Q2 2026**: Index request specs + serializers to infer real request/response shapes (as evidence; code remains the source of truth).
+- **Q3 2026**: Stronger “do not do” Team Rules packs + clearer wording and better edge-case handling in checks.
+- **Q4 2026**: Service-object pattern detection and flow hygiene improvements across monorepos and versioned APIs.
 
 ---
 

@@ -11,9 +11,21 @@ const EMAIL_FOOTER = `
   </div>
 `;
 
+const isLocalhost = CODEPRISM_DOMAIN.startsWith("localhost");
+const protocol = isLocalhost ? "http" : "https";
+
 function getBaseUrl(): string {
-  const protocol = CODEPRISM_DOMAIN.includes("localhost") ? "http" : "https";
   return `${protocol}://${CODEPRISM_DOMAIN}`;
+}
+
+/**
+ * Returns the tenant-scoped base URL.
+ * On localhost: http://localhost:4000  (no subdomains in dev)
+ * In production: https://gobiobridge.codeprism.dev
+ */
+function getTenantBaseUrl(tenantSlug: string): string {
+  if (isLocalhost) return getBaseUrl();
+  return `${protocol}://${tenantSlug}.${CODEPRISM_DOMAIN}`;
 }
 
 async function sendEmail(to: string, subject: string, html: string): Promise<void> {
@@ -43,7 +55,7 @@ export async function sendMagicLinkEmail(
   tenantSlug: string,
   tenantName: string,
 ): Promise<void> {
-  const link = `${getBaseUrl()}/auth/verify?token=${encodeURIComponent(token)}&tenant=${encodeURIComponent(tenantSlug)}`;
+  const link = `${getTenantBaseUrl(tenantSlug)}/auth/verify?token=${encodeURIComponent(token)}&tenant=${encodeURIComponent(tenantSlug)}`;
 
   const html = `
     <div style="font-family: -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 0;">
@@ -71,7 +83,7 @@ export async function sendInvitationEmail(
   tenantName: string,
   inviterEmail?: string,
 ): Promise<void> {
-  const link = `${getBaseUrl()}/accept-invite?token=${encodeURIComponent(token)}&tenant=${encodeURIComponent(tenantSlug)}`;
+  const link = `${getTenantBaseUrl(tenantSlug)}/accept-invite?token=${encodeURIComponent(token)}&tenant=${encodeURIComponent(tenantSlug)}`;
 
   const inviterLine = inviterEmail
     ? `<p style="color: #8b949e; font-size: 14px;"><strong>${inviterEmail}</strong> invited you to join <strong>${tenantName}</strong> on codeprism.</p>`
@@ -95,4 +107,40 @@ export async function sendInvitationEmail(
   `;
 
   await sendEmail(email, `Join ${tenantName} on codeprism`, html);
+}
+
+export async function sendForgotWorkspaceEmail(
+  email: string,
+  workspaces: Array<{ slug: string; name: string }>,
+): Promise<void> {
+  const workspaceRows = workspaces
+    .map((w) => {
+      const url = getTenantBaseUrl(w.slug);
+      return `
+        <tr>
+          <td style="padding: 10px 0; border-bottom: 1px solid #21262d;">
+            <strong style="color: #e1e4e8;">${w.name}</strong><br/>
+            <a href="${url}/login" style="color: #58a6ff; font-size: 13px; text-decoration: none;">${url.replace(`${protocol}://`, "")}</a>
+          </td>
+        </tr>`;
+    })
+    .join("");
+
+  const html = `
+    <div style="font-family: -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 0;">
+      <h2 style="color: #e1e4e8; font-size: 20px;">Your codeprism workspaces</h2>
+      <p style="color: #8b949e; font-size: 14px;">
+        Here are the codeprism workspaces associated with <strong>${email}</strong>:
+      </p>
+      <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+        ${workspaceRows}
+      </table>
+      <p style="color: #484f58; font-size: 12px; margin-top: 24px;">
+        Click any workspace URL to sign in. If you don't recognise these workspaces, you can safely ignore this email.
+      </p>
+      ${EMAIL_FOOTER}
+    </div>
+  `;
+
+  await sendEmail(email, "Your codeprism workspaces", html);
 }

@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Outlet, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Outlet, useLocation, Navigate, useParams } from "react-router-dom";
 import { Toaster } from "sonner";
 import { useEffect, useState } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
@@ -17,6 +17,7 @@ import { AcceptInvite } from "@/pages/AcceptInvite";
 import { Team } from "@/pages/Team";
 import { Benchmarks, BenchmarkDetail } from "@/pages/Benchmarks";
 import { Terms } from "@/pages/Terms";
+import { ForgotWorkspace } from "@/pages/ForgotWorkspace";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { api, type InstanceInfo } from "@/lib/api";
 
@@ -55,6 +56,7 @@ function DashboardRoutes() {
       <Route path="/accept-invite" element={<AcceptInvite />} />
       <Route path="/auth/verify" element={<AcceptInvite />} />
       <Route path="/terms" element={<Terms />} />
+      <Route path="/forgot-workspace" element={<ForgotWorkspace />} />
 
       {/* Protected dashboard pages — share one Layout via Outlet */}
       <Route path="/dashboard" element={<DashboardLayout />}>
@@ -66,6 +68,12 @@ function DashboardRoutes() {
         <Route path="analytics" element={<Analytics />} />
         <Route path="settings" element={<SettingsOutlet />} />
       </Route>
+
+      {/* Transitional: redirect old /:slug path-based URLs to subdomain login */}
+      <Route path="/:slug" element={<SlugRedirect />} />
+
+      {/* Catch-all → home */}
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }
@@ -100,5 +108,23 @@ export default function App() {
   );
 }
 
-// Local import to keep the file self-contained
+// Local imports to keep the file self-contained
 import { useOutletContext } from "react-router-dom";
+
+/**
+ * Transitional redirect for old path-based tenant URLs (e.g. codeprism.dev/acme-corp).
+ * Sends users to the correct subdomain login page. Remove after 60 days.
+ */
+function SlugRedirect() {
+  const { slug } = useParams<{ slug: string }>();
+  if (slug && /^[a-z0-9-]+$/.test(slug)) {
+    const host = window.location.hostname;
+    const parts = host.split(".");
+    // Only redirect if we're on the apex domain (not already on a subdomain)
+    if (parts.length === 2) {
+      window.location.href = `https://${slug}.${host}/login`;
+      return null;
+    }
+  }
+  return <Navigate to="/" replace />;
+}

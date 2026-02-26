@@ -311,6 +311,12 @@ export const api = {
       body: JSON.stringify({ email, tenant }),
     }),
 
+  forgotWorkspace: (email: string) =>
+    fetchJSON<{ ok: boolean; message: string }>("/api/auth/forgot-workspace", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+
   verifyToken: (token: string) =>
     fetchJSON<AuthResponse>("/api/auth/verify", {
       method: "POST",

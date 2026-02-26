@@ -3,6 +3,15 @@ import { Copy, Check, ArrowRight, ArrowLeft, Users, Sparkles, Terminal } from "l
 import { api, type TenantInfo, type FoundingStatus } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
+/** Mirror of the server-side generateSlug logic — keeps the preview accurate. */
+function toSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 40);
+}
+
 const SUPPORT_EMAIL = "support@codeprism.dev";
 
 function CopyButton({ text }: { text: string }) {
@@ -145,6 +154,14 @@ export function Onboard() {
                     "focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                   )}
                 />
+                {name.trim() && (
+                  <p className="mt-1.5 text-xs text-[#484f58]">
+                    Your workspace URL:{" "}
+                    <span className="font-mono text-[#8b949e]">
+                      codeprism.dev/<span className="text-accent">{toSlug(name.trim())}</span>
+                    </span>
+                  </p>
+                )}
               </div>
               <div>
                 <label htmlFor="admin-email" className="mb-1 block text-sm font-medium text-[#e1e4e8]">
@@ -259,7 +276,7 @@ export function Onboard() {
                 <div className="pt-1 border-t border-[#21262d]">
                   <p className="text-xs text-[#8b949e] mb-2 font-medium">Branch-aware context</p>
                   <div className="flex flex-wrap gap-1.5 mb-2">
-                    {["main / master", "feature/*", "staging", "demo"].map((b) => (
+                    {["main / master", "feature/*", "hotfix/*", "release/2.x", "staging", "demo"].map((b) => (
                       <span key={b} className="inline-flex items-center rounded-full border border-[#30363d] bg-[#21262d] px-2.5 py-0.5 text-[11px] font-mono text-[#8b949e]">
                         {b}
                       </span>

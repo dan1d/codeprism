@@ -391,7 +391,7 @@ export function Landing() {
         {/* Badge */}
         <div className="inline-flex items-center gap-2 rounded-full border border-[#30363d] bg-[#161b22] px-4 py-1.5 text-sm text-[#8b949e] mb-8">
           <span className="h-2 w-2 rounded-full bg-[#3fb950] animate-pulse" />
-          <span>Open source · Cross-repo · Cursor · Claude Code · Windsurf · Lovable · Zed</span>
+          <span>Open source · Frontend + backend share one brain · Cursor · Claude Code · Windsurf · Zed</span>
         </div>
 
         <h1 className="mx-auto max-w-4xl text-5xl font-bold leading-tight text-[#e1e4e8] sm:text-6xl lg:text-7xl">
@@ -403,6 +403,10 @@ export function Landing() {
           <span className="text-[#e1e4e8] font-semibold">persistent knowledge layer</span> for AI coding tools.
           Your team's architectural decisions, flows, and context — indexed once, available to every developer
           in every AI tool, forever.
+        </p>
+        <p className="mx-auto mt-4 max-w-xl text-base text-[#484f58] leading-relaxed">
+          The only tool that bridges your frontend and backend repos into a{" "}
+          <span className="text-[#8b949e]">single shared brain</span> — so your React component and the Rails controller it calls are always in the same answer.
         </p>
 
         <div className="mt-12 flex flex-col items-center gap-5">
@@ -435,8 +439,39 @@ export function Landing() {
           )}
         </div>
 
+        {/* Real-world proof point */}
+        <div className="mx-auto mt-14 max-w-3xl rounded-xl border border-[#30363d] bg-[#0d1117] px-6 py-5 text-left">
+          <p className="text-xs text-[#484f58] uppercase tracking-wider mb-4">Real benchmark · Express.js · "Trace how a 404 error propagates through middleware"</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-[#f85149] uppercase tracking-wide">Without codeprism</p>
+              <div className="flex items-center gap-3">
+                <span className="text-2xl font-bold text-[#e1e4e8]">42k</span>
+                <span className="text-sm text-[#8b949e]">tokens consumed</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-2xl font-bold text-[#e1e4e8]">31s</span>
+                <span className="text-sm text-[#8b949e]">to first answer</span>
+              </div>
+              <p className="text-xs text-[#484f58]">Missed the <code className="font-mono">finalhandler</code> package — answer was incomplete</p>
+            </div>
+            <div className="space-y-2 sm:border-l sm:border-[#21262d] sm:pl-4">
+              <p className="text-xs font-semibold text-[#3fb950] uppercase tracking-wide">With codeprism</p>
+              <div className="flex items-center gap-3">
+                <span className="text-2xl font-bold text-[#e1e4e8]">3.1k</span>
+                <span className="text-sm text-[#8b949e]">tokens consumed</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-2xl font-bold text-[#e1e4e8]">4s</span>
+                <span className="text-sm text-[#8b949e]">to first answer</span>
+              </div>
+              <p className="text-xs text-[#484f58]">Complete path including <code className="font-mono">finalhandler</code> — correct on first try</p>
+            </div>
+          </div>
+        </div>
+
         {/* Pain → Solution visual */}
-        <div className="mx-auto mt-20 max-w-4xl grid grid-cols-1 sm:grid-cols-2 gap-6 text-left">
+        <div className="mx-auto mt-10 max-w-4xl grid grid-cols-1 sm:grid-cols-2 gap-6 text-left">
           {/* Without */}
           <div className="rounded-xl border border-[#f85149]/30 bg-[#0d1117] overflow-hidden">
             <div className="flex items-center gap-3 px-6 py-4 border-b border-[#21262d] bg-[#161b22]">
@@ -819,7 +854,7 @@ export function Landing() {
                     <span className="text-4xl font-bold text-[#e1e4e8]">Free</span>
                     <span className="text-sm text-[#484f58]">for founding teams</span>
                   </div>
-                  <p className="text-xs text-[#484f58] mt-1">Up to 10 devs · pricing announced at launch · no credit card</p>
+                  <p className="text-xs text-[#484f58] mt-1">Up to 10 devs · free forever for founding teams · no credit card</p>
                 </div>
 
                 {/* Features */}
@@ -942,7 +977,7 @@ export function Landing() {
                 <span className="text-4xl font-bold text-accent">Free</span>
                 <span className="text-sm text-[#8b949e] ml-1">for founding teams</span>
               </div>
-              <p className="text-xs text-[#484f58] mb-5">First 100 teams · pricing announced at launch</p>
+              <p className="text-xs text-[#484f58] mb-5">First 100 teams · free forever · we'll tell you before anything changes</p>
               <ul className="space-y-3 text-sm text-[#8b949e] flex-1">
                 {[
                   "Cloud-hosted, zero infra",

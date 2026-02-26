@@ -1,24 +1,25 @@
 import Database from "better-sqlite3";
 import { mkdirSync } from "node:fs";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+import { join } from "node:path";
+import { getDataDir } from "../db/connection.js";
 
 function getCatalogDbPath(): string {
-  const dataDir = process.env["CODEPRISM_DATA_DIR"] ?? join(__dirname, "../..", "data");
-  const dir = join(dataDir, "benchmarks");
+  const dir = join(getDataDir(), "benchmarks");
   mkdirSync(dir, { recursive: true });
   return join(dir, "catalog.db");
 }
 
 let _db: InstanceType<typeof Database> | null = null;
 
+export function closeCatalogDb(): void {
+  if (_db) { _db.close(); _db = null; }
+}
+
 function db(): InstanceType<typeof Database> {
   if (_db) return _db;
   _db = new Database(getCatalogDbPath());
   _db.pragma("journal_mode = WAL");
+  _db.pragma("foreign_keys = ON");
   _db.exec(`
     CREATE TABLE IF NOT EXISTS benchmark_catalog (
       repo         TEXT PRIMARY KEY,
@@ -270,11 +271,14 @@ export interface CatalogEntry {
   prompts: Array<{ id: number; prompt: string; isDefault: boolean; createdAt: string }>;
 }
 
+let _seeded = false;
+
 /** Seed the catalog on first boot if empty. Safe to call repeatedly. */
 export function seedCatalogIfEmpty(): void {
+  if (_seeded) return;
   const d = db();
   const count = (d.prepare("SELECT COUNT(*) as n FROM benchmark_catalog").get() as { n: number }).n;
-  if (count > 0) return;
+  if (count > 0) { _seeded = true; return; }
 
   const insertProject = d.prepare(
     "INSERT OR IGNORE INTO benchmark_catalog (repo, name, language, description, requires_key, sort_order) VALUES (?, ?, ?, ?, ?, ?)"
@@ -299,6 +303,7 @@ export function seedCatalogIfEmpty(): void {
     });
   });
   seedAll();
+  _seeded = true;
 }
 
 /** Return all catalog projects ordered by sort_order, with their prompts. */
@@ -343,18 +348,13 @@ export function getCatalog(): CatalogEntry[] {
   }));
 }
 
-/** Add a user-submitted prompt for a repo. Returns the new prompt id. */
+/** Add a user-submitted prompt for a repo. Returns the new prompt id. Throws if repo is not in the catalog. */
 export function addCatalogPrompt(repo: string, prompt: string): number {
   const d = db();
   seedCatalogIfEmpty();
-  // Ensure the repo exists (create a minimal entry if it's a fresh submission)
   const exists = d.prepare("SELECT 1 FROM benchmark_catalog WHERE repo = ?").get(repo);
   if (!exists) {
-    const parts = repo.split("/");
-    const name = parts[parts.length - 1] ?? repo;
-    d.prepare(
-      "INSERT OR IGNORE INTO benchmark_catalog (repo, name, language, description, requires_key, sort_order) VALUES (?, ?, ?, ?, 0, 9999)"
-    ).run(repo, name, "Unknown", "User-submitted project");
+    throw Object.assign(new Error(`Repo '${repo}' is not in the benchmark catalog`), { statusCode: 404 });
   }
   const result = d.prepare(
     "INSERT INTO benchmark_catalog_prompts (repo, prompt, is_default) VALUES (?, ?, 0)"
