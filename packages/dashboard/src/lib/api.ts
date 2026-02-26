@@ -273,10 +273,10 @@ export const api = {
   benchmarkDetail: (slug: string) =>
     fetchJSON<BenchmarkProject>(`/api/benchmarks/${encodeURIComponent(slug)}`),
 
-  sandboxQuery: (query: string, repo: string) =>
+  sandboxQuery: (query: string, repo: string, llmLabel?: string) =>
     fetchJSON<SandboxResponse>("/api/benchmarks/sandbox", {
       method: "POST",
-      body: JSON.stringify({ query, repo }),
+      body: JSON.stringify({ query, repo, llmLabel }),
     }),
 
   benchmarkCatalog: () =>

@@ -157,15 +157,28 @@ export function getBenchmarkProject(slug: string): BenchmarkProject | null {
 }
 
 /** Opens the per-repo benchmark DB (read-only for sandbox queries). */
-export function openBenchmarkDb(repo: string): InstanceType<typeof Database> | null {
-  const dbPath = getBenchDbPath(repo);
-  try {
-    const db = new Database(dbPath, { readonly: true });
-    sqliteVec.load(db);
-    return db;
-  } catch {
-    return null;
+export function openBenchmarkDb(repo: string, llmLabel?: string): InstanceType<typeof Database> | null {
+  const candidates: string[] = [];
+  if (llmLabel) candidates.push(getBenchDbPath(repo, llmLabel));
+  candidates.push(getBenchDbPath(repo));
+
+  // Fallback: if the caller didn't provide llmLabel (or it's wrong), try the
+  // most recent benchmarked variant for this repo from benchmarks.json.
+  const file = readBenchmarkFileSync();
+  if (file) {
+    const mostRecent = [...file.projects].reverse().find((p) => p.repo === repo);
+    if (mostRecent?.llmLabel) candidates.push(getBenchDbPath(repo, mostRecent.llmLabel));
   }
+
+  for (const dbPath of [...new Set(candidates)]) {
+    try {
+      const db = new Database(dbPath, { readonly: true });
+      sqliteVec.load(db);
+      return db;
+    } catch { /* try next */ }
+  }
+
+  return null;
 }
 
 export async function submitBenchmark(

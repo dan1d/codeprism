@@ -345,7 +345,7 @@ function SandboxPanel({ project }: { project: BenchmarkProject }) {
     setResult(null);
     setSandboxError(null);
     try {
-      const res = await api.sandboxQuery(q, project.repo);
+      const res = await api.sandboxQuery(q, project.repo, project.llmLabel);
       setResult(res);
     } catch (err) {
       setSandboxError(err instanceof Error ? err.message : "Search failed");

@@ -57,11 +57,11 @@ export async function registerBenchmarkRoutes(app: FastifyInstance): Promise<voi
     return reply.send(getQueueStatus());
   });
 
-  app.post<{ Body: { query: string; repo?: string } }>(
+  app.post<{ Body: { query: string; repo?: string; llmLabel?: string } }>(
     "/api/benchmarks/sandbox",
     { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } },
     async (request, reply) => {
-      const { query, repo } = request.body ?? {};
+      const { query, repo, llmLabel } = request.body ?? {};
       if (!query || typeof query !== "string" || query.trim().length < 3) {
         return reply.code(400).send({ error: "query is required (min 3 characters)" });
       }
@@ -69,7 +69,7 @@ export async function registerBenchmarkRoutes(app: FastifyInstance): Promise<voi
         return reply.code(400).send({ error: "repo is required" });
       }
 
-      const db = openBenchmarkDb(repo);
+      const db = openBenchmarkDb(repo, typeof llmLabel === "string" && llmLabel.trim() ? llmLabel.trim() : undefined);
       if (!db) {
         return reply.code(404).send({ error: "No indexed data found for this project. Submit it for benchmarking first." });
       }
