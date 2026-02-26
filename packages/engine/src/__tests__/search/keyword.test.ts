@@ -173,8 +173,19 @@ describe("sanitizeFts5Query", () => {
 
   it("handles PascalCase identifiers without crashing", () => {
     const result = sanitizeFts5Query("PatientAuthorization RemoteCheck");
-    expect(result).toContain("PatientAuthorization");
-    expect(result).toContain("RemoteCheck");
+    // CamelCase is split for better recall
+    expect(result).toContain("Patient");
+    expect(result).toContain("Authorization");
+    expect(result).toContain("Remote");
+    expect(result).toContain("Check");
+  });
+
+  it("splits namespaced Ruby constants into searchable tokens", () => {
+    const result = sanitizeFts5Query("How does ActivityPub::ActorSerializer work?");
+    expect(result).toContain("Activity");
+    expect(result).toContain("Pub");
+    expect(result).toContain("Actor");
+    expect(result).toContain("Serializer");
   });
 
   it("handles ticket descriptions with mixed content", () => {

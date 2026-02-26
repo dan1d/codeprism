@@ -442,6 +442,9 @@ function ProjectSection({ project }: { project: BenchmarkProject }) {
   const s = project.stats;
   const maxNaive = Math.max(...project.cases.map((c) => c.naive_tokens));
 
+  const fmtMaybePct = (v: number, applicable: boolean | undefined) =>
+    applicable === false ? "—" : `${Math.round(v * 100)}%`;
+
   return (
     <div className="rounded-lg border border-[#30363d] bg-[#0d1117] overflow-hidden">
       <div className="px-5 py-4 border-b border-[#21262d] flex items-center justify-between">
@@ -546,32 +549,40 @@ function ProjectSection({ project }: { project: BenchmarkProject }) {
                     <span
                       className={cn(
                         "font-mono",
-                        c.flow_hit_rate >= 0.8
+                        c.diagnostics?.flow_applicable === false
+                          ? "text-[#484f58]"
+                          : c.flow_hit_rate >= 0.8
                           ? "text-[#3fb950]"
                           : c.flow_hit_rate >= 0.5
                             ? "text-[#d29922]"
                             : "text-[#f85149]"
                       )}
                     >
-                      {Math.round(c.flow_hit_rate * 100)}%
+                      {fmtMaybePct(c.flow_hit_rate, c.diagnostics?.flow_applicable)}
                     </span>
                   </td>
                   <td className="text-right py-1.5">
                     <span
                       className={cn(
                         "font-mono",
-                        c.file_hit_rate >= 0.8
+                        c.diagnostics?.file_applicable === false
+                          ? "text-[#484f58]"
+                          : c.file_hit_rate >= 0.8
                           ? "text-[#3fb950]"
                           : c.file_hit_rate >= 0.5
                             ? "text-[#d29922]"
                             : "text-[#f85149]"
                       )}
                     >
-                      {Math.round(c.file_hit_rate * 100)}%
+                      {fmtMaybePct(c.file_hit_rate, c.diagnostics?.file_applicable)}
                     </span>
                   </td>
-                  <td className="text-right py-1.5 font-mono text-[#e1e4e8]">
-                    {Math.round(c.precision_at_k * 100)}%
+                  <td className="text-right py-1.5 font-mono">
+                    {c.diagnostics?.precision_applicable === false ? (
+                      <span className="text-[#484f58]">—</span>
+                    ) : (
+                      <span className="text-[#e1e4e8]">{Math.round(c.precision_at_k * 100)}%</span>
+                    )}
                   </td>
                   {project.cases.some((x) => x.quality_score !== undefined) && (
                     <td className="text-right py-1.5">
@@ -602,7 +613,7 @@ function ProjectSection({ project }: { project: BenchmarkProject }) {
           </table>
 
           {/* Summary stats */}
-          <div className={`mt-4 grid gap-2 ${s.avg_quality_score !== undefined ? "grid-cols-5" : "grid-cols-4"}`}>
+          <div className={`mt-4 grid gap-2 ${s.avg_quality_score !== undefined ? "grid-cols-6" : "grid-cols-5"}`}>
             <div className="rounded bg-[#161b22] p-2 text-center">
               <p className="text-xs text-[#8b949e]">Flow Hit</p>
               <p className="text-sm font-bold text-[#e1e4e8]">
@@ -619,6 +630,12 @@ function ProjectSection({ project }: { project: BenchmarkProject }) {
               <p className="text-xs text-[#8b949e]">P@5</p>
               <p className="text-sm font-bold text-[#e1e4e8]">
                 {Math.round(s.precision_at_5 * 100)}%
+              </p>
+            </div>
+            <div className="rounded bg-[#161b22] p-2 text-center">
+              <p className="text-xs text-[#8b949e]">Retrieval</p>
+              <p className="text-sm font-bold text-[#e1e4e8]">
+                {Math.round((s.retrieval_success_rate ?? 0) * 100)}%
               </p>
             </div>
             <div className="rounded bg-[#161b22] p-2 text-center">
@@ -1729,7 +1746,10 @@ export function BenchmarkDetail() {
             <div>
               <div className="flex items-center gap-3 mb-2">
                 <LanguageBadge language={project.language} />
-                <h1 className="text-2xl font-bold text-[#e1e4e8]">{project.name}</h1>
+                <div className="flex items-center gap-2">
+                  <PrismLogo className="h-5 w-5 text-accent" />
+                  <h1 className="text-2xl font-bold text-[#e1e4e8]">{project.name}</h1>
+                </div>
                 <span className={cn(
                   "text-xs px-2 py-0.5 rounded-full border",
                   project.llmEnhanced

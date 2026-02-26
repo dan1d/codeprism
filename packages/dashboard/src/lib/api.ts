@@ -388,6 +388,24 @@ export interface BenchmarkCase {
   precision_at_k: number;
   result_count: number;
   quality_score?: number;
+  diagnostics?: {
+    v: 1;
+    query_type: "flow" | "files" | "unknown";
+    expected_flow?: string;
+    expected_files_total?: number;
+    expected_files_scored?: number;
+    fts_query?: string;
+    fts_attempted: boolean;
+    fts_matched: boolean;
+    fallback_used: "none" | "recent_cards" | "no_cards";
+    retrieval_success: boolean;
+    precision_applicable: boolean;
+    flow_applicable: boolean;
+    file_applicable: boolean;
+    returned_cards: number;
+    returned_unique_files: number;
+    error?: string;
+  };
 }
 
 export interface BenchmarkProject {
@@ -398,9 +416,15 @@ export interface BenchmarkProject {
   llmLabel?: string;
   stats: {
     queries_tested: number;
+    queries_with_results?: number;
+    queries_failed?: number;
+    retrieval_success_rate?: number;
+    fts_match_rate?: number;
+    fallback_rate?: number;
     avg_tokens_with_codeprism: number;
     avg_tokens_without: number;
     token_reduction_pct: number;
+    token_reduction_pct_on_success?: number;
     avg_latency_ms: number;
     p50_latency_ms: number;
     p95_latency_ms: number;

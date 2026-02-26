@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
 import { getDataDir } from "../db/connection.js";
+import { sanitizeFts5Query } from "../search/keyword.js";
 import {
   submitBenchmark as submitBenchmarkJob,
   getQueueStatus,
@@ -76,7 +77,7 @@ export async function registerBenchmarkRoutes(app: FastifyInstance): Promise<voi
 
       try {
         const start = Date.now();
-        const searchTerm = query.trim().replace(/[^a-zA-Z0-9\s]/g, "");
+        const searchTerm = sanitizeFts5Query(query);
 
         type CardRow = {
           id: string; title: string; flow: string;

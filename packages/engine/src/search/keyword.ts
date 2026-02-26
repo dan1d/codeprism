@@ -22,7 +22,11 @@ const FTS5_OPERATORS = new Set(["AND", "OR", "NOT", "NEAR"]);
  * blocklist rather than quoting.
  */
 export function sanitizeFts5Query(raw: string): string {
-  const cleaned = raw
+  // Split CamelCase so identifier queries match FTS tokens better
+  // (e.g. ActivityPub::ActorSerializer -> Activity Pub Actor Serializer).
+  const camelSplit = raw.replace(/([a-z])([A-Z])/g, "$1 $2");
+
+  const cleaned = camelSplit
     .replace(/https?:\/\/\S+/g, "")
     .replace(/[^a-zA-Z0-9_\s]/g, " ");
 

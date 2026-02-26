@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
 import * as sqliteVec from "sqlite-vec";
 import { getDataDir } from "../db/connection.js";
+import { sanitizeFts5Query } from "../search/keyword.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -80,6 +81,24 @@ interface BenchmarkCase {
   precision_at_k: number;
   result_count: number;
   quality_score?: number;
+  diagnostics?: {
+    v: 1;
+    query_type: "flow" | "files" | "unknown";
+    expected_flow?: string;
+    expected_files_total?: number;
+    expected_files_scored?: number;
+    fts_query?: string;
+    fts_attempted: boolean;
+    fts_matched: boolean;
+    fallback_used: "none" | "recent_cards" | "no_cards";
+    retrieval_success: boolean;
+    precision_applicable: boolean;
+    flow_applicable: boolean;
+    file_applicable: boolean;
+    returned_cards: number;
+    returned_unique_files: number;
+    error?: string;
+  };
 }
 
 interface BenchmarkProject {
@@ -581,14 +600,13 @@ const STOP_WORDS = new Set([
   "for", "from", "has", "have", "how", "i", "if", "in", "is", "it",
   "its", "of", "on", "or", "the", "to", "was", "what", "when",
   "where", "which", "who", "why", "with", "work", "works",
-  "implement", "implementation", "data", "model", "module",
 ]);
 
 function extractKeyTerms(query: string): string {
-  const words = query
-    .replace(/[^a-zA-Z0-9\s]/g, "")
-    .split(/\s+/)
-    .filter((w) => w.length > 1 && !STOP_WORDS.has(w.toLowerCase()));
+  // Used for some lightweight heuristics (quality eval, etc).
+  // Keep punctuation as spaces to avoid gluing identifiers together.
+  const normalized = query.replace(/[^a-zA-Z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  const words = normalized.split(/\s+/).filter((w) => w.length > 1 && !STOP_WORDS.has(w.toLowerCase()));
   return words.join(" ");
 }
 
@@ -702,12 +720,41 @@ function runBenchmarkQueries(
       cardCount = (db.prepare("SELECT COUNT(*) as cnt FROM cards WHERE stale = 0").get() as { cnt: number }).cnt;
     } catch { /* ignore */ }
 
+    const K = 5;
+    const EXPECTED_FILES_CAP = 50;
+
     const queries: Array<{ query: string; expectedFlow: string; expectedFiles?: string[] }> = [];
+
+    // Title/identifier-aligned queries (better match for FTS/title weighting).
+    try {
+      const rows = db
+        .prepare("SELECT title, flow, identifiers FROM cards WHERE stale = 0 ORDER BY updated_at DESC LIMIT 12")
+        .all() as Array<{ title: string; flow: string; identifiers: string }>;
+      for (const r of rows) {
+        if (queries.length >= MAX_QUERIES_PER_PROJECT) break;
+        const title = (r.title ?? "").trim();
+        if (!title) continue;
+        queries.push({ query: `Explain ${title}`, expectedFlow: r.flow ?? "" });
+
+        if (queries.length >= MAX_QUERIES_PER_PROJECT) break;
+        const ids = (r.identifiers ?? "").trim();
+        const route = ids.match(/\b(GET|POST|PUT|PATCH|DELETE)\s+\/\S+/)?.[0];
+        if (route) {
+          queries.push({ query: `What does ${route} do?`, expectedFlow: r.flow ?? "" });
+          continue;
+        }
+        const className = ids.match(/\b[A-Z][A-Za-z0-9_]{2,}\b/)?.[0];
+        if (className) {
+          queries.push({ query: `How does ${className} work?`, expectedFlow: r.flow ?? "" });
+        }
+      }
+    } catch { /* ignore */ }
+
     for (const row of flowRows) {
       if (queries.length >= MAX_QUERIES_PER_PROJECT) break;
       queries.push(
-        { query: `How does the ${row.flow} work?`, expectedFlow: row.flow },
-        { query: `${row.flow} implementation and data model`, expectedFlow: row.flow },
+        { query: `How does the ${row.flow} flow work?`, expectedFlow: row.flow },
+        { query: `${row.flow} routes controllers models`, expectedFlow: row.flow },
       );
     }
 
@@ -731,26 +778,74 @@ function runBenchmarkQueries(
 
     for (const q of queries.slice(0, MAX_QUERIES_PER_PROJECT)) {
       const start = Date.now();
+      let diagnostics: BenchmarkCase["diagnostics"] = {
+        v: 1,
+        query_type: q.expectedFlow ? "flow" : q.expectedFiles?.length ? "files" : "unknown",
+        expected_flow: q.expectedFlow || undefined,
+        expected_files_total: undefined,
+        expected_files_scored: undefined,
+        fts_query: undefined,
+        fts_attempted: false,
+        fts_matched: false,
+        fallback_used: "none",
+        retrieval_success: false,
+        precision_applicable: false,
+        flow_applicable: Boolean(q.expectedFlow),
+        file_applicable: Boolean(q.expectedFlow || (q.expectedFiles && q.expectedFiles.length > 0)),
+        returned_cards: 0,
+        returned_unique_files: 0,
+      };
+
       try {
-        let cards: Array<{ content: string; flow: string; source_files: string }> = [];
+        let cards: Array<{ title?: string; content: string; flow: string; source_files: string }> = [];
 
         if (cardCount > 0) {
-          // Search against cards — use key terms only (strip stop words for better FTS precision)
-          const ftsTerms = extractKeyTerms(q.query);
-          if (ftsTerms) {
+          const ftsQuery = sanitizeFts5Query(q.query);
+          diagnostics.fts_query = ftsQuery || undefined;
+          if (ftsQuery) {
+            diagnostics.fts_attempted = true;
             try {
               const ftsCards = db
-                .prepare(`SELECT c.content, c.flow, c.source_files FROM cards_fts f JOIN cards c ON c.rowid = f.rowid WHERE cards_fts MATCH ? AND c.stale = 0 LIMIT 5`)
-                .all(ftsTerms) as typeof cards;
-              if (ftsCards.length > 0) cards = ftsCards;
+                .prepare(
+                  `SELECT c.title, c.content, c.flow, c.source_files
+                   FROM cards_fts f JOIN cards c ON c.rowid = f.rowid
+                   WHERE cards_fts MATCH ? AND c.stale = 0 LIMIT ${K}`,
+                )
+                .all(ftsQuery) as typeof cards;
+              if (ftsCards.length > 0) {
+                cards = ftsCards;
+                diagnostics.fts_matched = true;
+              }
             } catch { /* FTS may not be set up */ }
+          }
+
+          // Retry: if sanitize yields no tokens, try a simple keyword set.
+          if (cards.length === 0) {
+            const fallbackTerms = extractKeyTerms(q.query);
+            if (fallbackTerms && fallbackTerms !== ftsQuery) {
+              diagnostics.fts_attempted = true;
+              try {
+                const ftsCards = db
+                  .prepare(
+                    `SELECT c.title, c.content, c.flow, c.source_files
+                     FROM cards_fts f JOIN cards c ON c.rowid = f.rowid
+                     WHERE cards_fts MATCH ? AND c.stale = 0 LIMIT ${K}`,
+                  )
+                  .all(fallbackTerms) as typeof cards;
+                if (ftsCards.length > 0) {
+                  cards = ftsCards;
+                  diagnostics.fts_matched = true;
+                }
+              } catch { /* ignore */ }
+            }
           }
 
           if (cards.length === 0) {
             try {
               cards = db
-                .prepare("SELECT content, flow, source_files FROM cards WHERE stale = 0 ORDER BY updated_at DESC LIMIT 5")
+                .prepare(`SELECT title, content, flow, source_files FROM cards WHERE stale = 0 ORDER BY updated_at DESC LIMIT ${K}`)
                 .all() as typeof cards;
+              diagnostics.fallback_used = cards.length > 0 ? "recent_cards" : "no_cards";
             } catch { /* ignore */ }
           }
         }
@@ -765,12 +860,49 @@ function runBenchmarkQueries(
             files.forEach((f) => sourceFiles.add(f));
           } catch { /* ignore */ }
         }
+        diagnostics.returned_cards = cards.length;
+        diagnostics.returned_unique_files = sourceFiles.size;
+
+        // Expected file set (used for accuracy + naive baseline).
+        // For expectedFlow queries, compute expected files from the flow cards, then cap for scoring.
+        let expectedFilesUnion: Set<string> | null = null;
+        let expectedFilesScored: Set<string> | null = null;
+        if (q.expectedFlow) {
+          expectedFilesUnion = new Set<string>();
+          const counts = new Map<string, number>();
+          try {
+            const flowCards = db
+              .prepare("SELECT source_files FROM cards WHERE flow = ?")
+              .all(q.expectedFlow) as Array<{ source_files: string }>;
+            for (const fc of flowCards) {
+              const files = JSON.parse(fc.source_files || "[]") as string[];
+              files.forEach((f) => {
+                expectedFilesUnion!.add(f);
+                counts.set(f, (counts.get(f) ?? 0) + 1);
+              });
+            }
+          } catch { /* ignore */ }
+          if (expectedFilesUnion.size > 0) {
+            const ranked = [...counts.entries()]
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, EXPECTED_FILES_CAP)
+              .map(([f]) => f);
+            expectedFilesScored = new Set(ranked);
+          } else {
+            expectedFilesUnion = null;
+          }
+        } else if (q.expectedFiles && q.expectedFiles.length > 0) {
+          expectedFilesUnion = new Set(q.expectedFiles);
+          expectedFilesScored = new Set(q.expectedFiles.slice(0, EXPECTED_FILES_CAP));
+        }
+        diagnostics.expected_files_total = expectedFilesUnion?.size;
+        diagnostics.expected_files_scored = expectedFilesScored?.size;
 
         // Naive tokens: estimate actual tokens from the underlying source files.
-        // If we have no cards (or cards have no sources), fall back to expectedFiles (from file-structure queries).
-        const naiveFiles = sourceFiles.size > 0
-          ? Array.from(sourceFiles)
-          : (q.expectedFiles?.length ? q.expectedFiles : []);
+        // Prefer expected/ground-truth scope; otherwise fall back to the retrieved card sources.
+        const naiveFiles = expectedFilesUnion?.size
+          ? Array.from(expectedFilesUnion)
+          : (sourceFiles.size > 0 ? Array.from(sourceFiles) : []);
 
         let naiveTokens = 0;
         if (naiveFiles.length > 0) {
@@ -778,7 +910,6 @@ function runBenchmarkQueries(
             naiveTokens += estimateFileTokens(repoDir, f) ?? 500;
           }
         } else {
-          // Conservative fallback when we can't map to files.
           naiveTokens = 2500;
         }
 
@@ -786,37 +917,39 @@ function runBenchmarkQueries(
         let fileHit = 0;
         if (q.expectedFlow) {
           flowHit = cards.some((c) => c.flow === q.expectedFlow) ? 1 : 0;
-          const expectedFiles = new Set<string>();
-          try {
-            const flowCards = db
-              .prepare("SELECT source_files FROM cards WHERE flow = ?")
-              .all(q.expectedFlow) as Array<{ source_files: string }>;
-            for (const fc of flowCards) {
-              const files = JSON.parse(fc.source_files || "[]") as string[];
-              files.forEach((f) => expectedFiles.add(f));
-            }
-          } catch { /* ignore */ }
-          if (expectedFiles.size > 0) {
+          if (expectedFilesScored && expectedFilesScored.size > 0) {
             let hits = 0;
-            for (const f of expectedFiles) {
+            for (const f of expectedFilesScored) {
               if (sourceFiles.has(f)) hits++;
             }
-            fileHit = hits / expectedFiles.size;
+            fileHit = hits / expectedFilesScored.size;
           }
-        } else if (q.expectedFiles && q.expectedFiles.length > 0) {
-          // For file-structure queries, check if cards reference any of the expected files
-          const expected = new Set(q.expectedFiles);
+        } else if (expectedFilesScored && expectedFilesScored.size > 0) {
           let hits = 0;
-          for (const f of expected) {
+          for (const f of expectedFilesScored) {
             if (sourceFiles.has(f)) hits++;
           }
-          fileHit = expected.size > 0 ? hits / expected.size : 0;
-          flowHit = cards.length > 0 ? 1 : 0;
+          fileHit = hits / expectedFilesScored.size;
+          flowHit = 0;
         }
 
-        const precisionK = cards.length > 0 && q.expectedFlow
-          ? cards.filter((c) => c.flow === q.expectedFlow).length / cards.length
-          : cards.length > 0 ? 1 : 0;
+        const relevantCards = q.expectedFlow
+          ? cards.filter((c) => c.flow === q.expectedFlow).length
+          : expectedFilesScored && expectedFilesScored.size > 0
+            ? cards.filter((c) => {
+              try {
+                const files = JSON.parse(c.source_files || "[]") as string[];
+                return files.some((f) => expectedFilesScored!.has(f));
+              } catch { return false; }
+            }).length
+            : 0;
+
+        diagnostics.precision_applicable = Boolean(q.expectedFlow || (expectedFilesScored && expectedFilesScored.size > 0));
+        diagnostics.flow_applicable = Boolean(q.expectedFlow);
+        diagnostics.file_applicable = Boolean(expectedFilesScored && expectedFilesScored.size > 0);
+
+        const precisionK = diagnostics.precision_applicable ? relevantCards / K : 0;
+        diagnostics.retrieval_success = cards.length > 0;
 
         cases.push({
           query: q.query,
@@ -828,8 +961,23 @@ function runBenchmarkQueries(
           file_hit_rate: Math.round(fileHit * 100) / 100,
           precision_at_k: Math.round(precisionK * 100) / 100,
           result_count: cards.length,
+          diagnostics,
         });
       } catch (err) {
+        diagnostics.error = err instanceof Error ? err.message : String(err);
+        diagnostics.retrieval_success = false;
+        cases.push({
+          query: q.query,
+          codeprism_tokens: 0,
+          naive_tokens: 0,
+          latency_ms: Date.now() - start,
+          cache_hit: false,
+          flow_hit_rate: 0,
+          file_hit_rate: 0,
+          precision_at_k: 0,
+          result_count: 0,
+          diagnostics,
+        });
         console.warn(`[benchmark] Query failed: "${q.query}":`, err);
       }
     }
@@ -851,10 +999,24 @@ function buildProjectResult(
 ): BenchmarkProject {
   const name = repoSlug.split("/")[1] ?? repoSlug;
   const queriesTested = cases.length;
+  const queriesWithResults = cases.filter((c) => c.result_count > 0).length;
+  const queriesFailed = cases.filter((c) => Boolean(c.diagnostics?.error)).length;
+  const ftsMatched = cases.filter((c) => c.diagnostics?.fts_matched).length;
+  const fallbackUsed = cases.filter((c) => (c.diagnostics?.fallback_used ?? "none") !== "none").length;
+
   const avgCodeprism = cases.length > 0 ? Math.round(cases.reduce((s, c) => s + c.codeprism_tokens, 0) / cases.length) : 0;
   const avgNaive = cases.length > 0 ? Math.round(cases.reduce((s, c) => s + c.naive_tokens, 0) / cases.length) : 0;
   const anyResults = cases.some((c) => c.result_count > 0);
   const tokenReduction = avgNaive > 0 && anyResults ? Math.round((1 - avgCodeprism / avgNaive) * 1000) / 10 : 0;
+  const avgCodeprismOnSuccess = queriesWithResults > 0
+    ? Math.round(cases.filter((c) => c.result_count > 0).reduce((s, c) => s + c.codeprism_tokens, 0) / queriesWithResults)
+    : 0;
+  const avgNaiveOnSuccess = queriesWithResults > 0
+    ? Math.round(cases.filter((c) => c.result_count > 0).reduce((s, c) => s + c.naive_tokens, 0) / queriesWithResults)
+    : 0;
+  const tokenReductionOnSuccess = avgNaiveOnSuccess > 0 && queriesWithResults > 0
+    ? Math.round((1 - avgCodeprismOnSuccess / avgNaiveOnSuccess) * 1000) / 10
+    : 0;
   const avgLatency = cases.length > 0 ? Math.round(cases.reduce((s, c) => s + c.latency_ms, 0) / cases.length) : 0;
 
   const latencies = cases.map((c) => c.latency_ms).sort((a, b) => a - b);
@@ -892,9 +1054,15 @@ function buildProjectResult(
       : `benchmarks/${slugify(repoSlug)}.db`,
     stats: {
       queries_tested: queriesTested,
+      queries_with_results: queriesWithResults,
+      queries_failed: queriesFailed,
+      retrieval_success_rate: queriesTested > 0 ? Math.round((queriesWithResults / queriesTested) * 1000) / 1000 : 0,
+      fts_match_rate: queriesTested > 0 ? Math.round((ftsMatched / queriesTested) * 1000) / 1000 : 0,
+      fallback_rate: queriesTested > 0 ? Math.round((fallbackUsed / queriesTested) * 1000) / 1000 : 0,
       avg_tokens_with_codeprism: avgCodeprism,
       avg_tokens_without: avgNaive,
       token_reduction_pct: tokenReduction,
+      token_reduction_pct_on_success: tokenReductionOnSuccess,
       avg_latency_ms: avgLatency,
       p50_latency_ms: p50,
       p95_latency_ms: p95,

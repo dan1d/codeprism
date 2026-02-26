@@ -105,7 +105,27 @@ export function buildIdentifiers(files: ParsedFile[]): string {
   const routes = files.flatMap((f) =>
     f.routes.map((r) => `${r.method} ${r.path}`),
   ).slice(0, 10);
-  return [...names, ...routes].filter(Boolean).join(" ");
+  // Preserve the historical contract: if there are no explicit identifiers,
+  // don't add path tokens (avoids noisy identifiers for empty/unknown files).
+  if (names.length === 0 && routes.length === 0) return "";
+
+  // Add light path-derived tokens to improve recall for namespaced identifiers,
+  // especially in languages where namespaces map to directories (e.g. Ruby).
+  const pathTokens = files.flatMap((f) => {
+    const p = (f.path ?? "").replace(/\\\\/g, "/");
+    const parts = p.split("/").filter(Boolean);
+    const tail = parts.slice(Math.max(0, parts.length - 4)); // last few segments only
+    return tail
+      .join(" ")
+      .replace(/\.[a-zA-Z0-9]+$/g, "") // drop extension on final segment
+      .replace(/[^a-zA-Z0-9_\s]/g, " ")
+      .replace(/([a-z])([A-Z])/g, "$1 $2")
+      .split(/\s+/)
+      .map((t) => t.toLowerCase())
+      .filter((t) => t.length > 1 && !/^\d+$/.test(t));
+  });
+
+  return [...names, ...routes, ...pathTokens].filter(Boolean).join(" ");
 }
 
 /** @deprecated Use buildIdentifiers — returns plain text for identifiers column. */
