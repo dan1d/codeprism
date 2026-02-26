@@ -55,12 +55,17 @@ fi
 
 cd "$SCRIPT_DIR"
 
+if command -v flock >/dev/null 2>&1; then
+  exec 9>/var/lock/codeprism-deploy.lock
+  flock -n 9 || { echo "Another deploy is running; aborting." >&2; exit 1; }
+fi
+
 echo "Validating compose config..."
 docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" config -q
 
 if [ "$NO_BACKUP" != "true" ]; then
   echo "Creating backup..."
-  COMPOSE_FILE="$COMPOSE_FILE" "$SCRIPT_DIR/backup.sh" || {
+  COMPOSE_FILE="$COMPOSE_FILE" ENV_FILE="$ENV_FILE" "$SCRIPT_DIR/backup.sh" || {
     echo "Backup failed; aborting update." >&2
     exit 1
   }

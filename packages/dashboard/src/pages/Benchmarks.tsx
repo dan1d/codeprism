@@ -987,11 +987,11 @@ function ProjectCatalog({
   );
 }
 
-const PROVIDERS: Array<{ id: BenchmarkProvider; label: string; hint: string }> = [
-  { id: "gemini", label: "Google Gemini", hint: "Free tier available at ai.google.dev" },
-  { id: "openai", label: "OpenAI", hint: "GPT-4o-mini or similar" },
-  { id: "deepseek", label: "DeepSeek", hint: "~$0.14/1M input tokens" },
-  { id: "anthropic", label: "Anthropic", hint: "Claude models" },
+const PROVIDERS: Array<{ id: BenchmarkProvider; label: string; hint: string; keyUrl: string }> = [
+  { id: "gemini", label: "Google Gemini", hint: "Free tier available", keyUrl: "https://aistudio.google.com/app/apikey" },
+  { id: "openai", label: "OpenAI", hint: "GPT-4o-mini or similar", keyUrl: "https://platform.openai.com/api-keys" },
+  { id: "deepseek", label: "DeepSeek", hint: "~$0.14/1M input tokens", keyUrl: "https://platform.deepseek.com/api_keys" },
+  { id: "anthropic", label: "Anthropic", hint: "Claude models", keyUrl: "https://console.anthropic.com/settings/keys" },
 ];
 
 const PROVIDER_MODELS: Record<BenchmarkProvider, Array<{ id: string; label: string }>> = {
@@ -1062,15 +1062,7 @@ function BenchmarkStepper({ currentStage }: { currentStage: BenchmarkStage }) {
   );
 }
 
-function SubmitForm({
-  onSubmitted,
-  slotsUsed,
-  slotsTotal,
-}: {
-  onSubmitted: () => void;
-  slotsUsed: number;
-  slotsTotal: number;
-}) {
+function SubmitForm({ onSubmitted }: { onSubmitted: () => void }) {
   const navigate = useNavigate();
   const [url, setUrl] = useState("");
   const [provider, setProvider] = useState<BenchmarkProvider>("gemini");
@@ -1087,7 +1079,6 @@ function SubmitForm({
   const submittedRepoRef = useRef<string | null>(null);
   const submittedLlmLabelRef = useRef<string | null>(null);
 
-  const isFull = slotsUsed >= slotsTotal;
   const busy = submitting || queuePosition !== null;
 
   const stopPolling = useCallback(() => {
@@ -1205,31 +1196,20 @@ function SubmitForm({
 
   return (
     <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-6 mb-10">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-medium text-[#e1e4e8] uppercase tracking-wide">
           Benchmark a project
         </h3>
-        <span
-          className={cn(
-            "text-xs font-mono px-2 py-0.5 rounded border",
-            isFull
-              ? "text-[#f85149] border-[#f85149]/30 bg-[#f85149]/10"
-              : "text-[#8b949e] border-[#30363d] bg-[#0d1117]"
-          )}
-        >
-          {slotsUsed}/{slotsTotal} slots used
+        <span className="text-xs text-[#484f58] border border-[#30363d] bg-[#0d1117] px-2 py-0.5 rounded font-mono">
+          cap: 50 GB storage
         </span>
       </div>
 
       <p className="text-sm text-[#8b949e] mb-4">
-        Results are saved and available for everyone. Re-analyze with your own API key for LLM-enhanced insights.
+        Results are shared with everyone. Bring your own API key to benchmark larger repos and get LLM-enhanced insights — no slot limits.
       </p>
 
-      {isFull ? (
-        <p className="text-sm text-[#8b949e]">
-          All benchmark slots are taken. Check back later or self-host codeprism to run unlimited benchmarks.
-        </p>
-      ) : queuePosition ? (
+      {queuePosition ? (
         <BenchmarkStepper currentStage={currentStage} />
       ) : (
         <>
@@ -1276,11 +1256,8 @@ function SubmitForm({
                 <Shield className="h-4 w-4 text-[#3fb950] mt-0.5 shrink-0" />
                 <div className="space-y-1">
                   <p className="text-xs text-[#8b949e]">
-                    Your API key is used exclusively for this benchmark run.
-                    It is never stored, logged, or transmitted to any third party.
-                  </p>
-                  <p className="text-xs text-[#58a6ff]">
-                    Already benchmarked? Provide your API key to re-run with deeper, LLM-powered analysis.
+                    Your API key is used only for this benchmark run — never stored, logged, or shared.
+                    Bringing your key also unlocks larger repositories (no storage cap per run).
                   </p>
                 </div>
               </div>
@@ -1319,6 +1296,27 @@ function SubmitForm({
                 disabled={busy}
                 className="rounded border border-[#30363d] bg-[#161b22] px-3 py-2 text-sm text-[#e1e4e8] placeholder-[#484f58] focus:border-accent focus:outline-none disabled:opacity-50 w-full"
               />
+
+              {/* API key creation links */}
+              <div className="flex flex-wrap gap-x-4 gap-y-1">
+                {PROVIDERS.map((p) => (
+                  <a
+                    key={p.id}
+                    href={p.keyUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={cn(
+                      "text-[10px] flex items-center gap-0.5 transition-colors",
+                      provider === p.id
+                        ? "text-accent hover:text-[#79b8ff]"
+                        : "text-[#484f58] hover:text-[#8b949e]"
+                    )}
+                  >
+                    <ExternalLink className="h-2.5 w-2.5" />
+                    Get {p.label} key
+                  </a>
+                ))}
+              </div>
 
               <p className="text-[10px] text-[#484f58]">
                 {PROVIDERS.find((p) => p.id === provider)?.hint} · Results tagged as <span className="font-mono">{provider}-{model}</span>
