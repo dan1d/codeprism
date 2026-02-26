@@ -30,7 +30,6 @@ import {
   type BenchmarkResponse,
   type BenchmarkProject,
   type BenchmarkProvider,
-  type BenchmarkQueueResponse,
   type BenchmarkStage,
   type SandboxCard,
   type SandboxResponse,
