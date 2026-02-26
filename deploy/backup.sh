@@ -41,8 +41,9 @@ fi
 JS_SNAPSHOTTER="$(cat <<'NODE'
 const Database = require("better-sqlite3");
 
-const dbPath = process.argv[2];
-const outPath = process.argv[3];
+// When running via `node -e`, args start at argv[1].
+const dbPath = process.argv[1];
+const outPath = process.argv[2];
 
 if (!dbPath || !outPath) {
   // eslint-disable-next-line no-console

@@ -897,28 +897,35 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-function ProjectCatalog({
-  onSelect,
-}: {
-  onSelect: (url: string) => void;
-}) {
+const CATALOG_PAGE_SIZE = 6;
+
+function ProjectCatalog({ onSelect }: { onSelect: (url: string) => void }) {
   const [filter, setFilter] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
   const languages = [...new Set(CATALOG.map((p) => p.language))];
 
   const filtered = filter ? CATALOG.filter((p) => p.language === filter) : CATALOG;
+  const totalPages = Math.ceil(filtered.length / CATALOG_PAGE_SIZE);
+  const clampedPage = Math.min(page, totalPages - 1);
+  const visible = filtered.slice(clampedPage * CATALOG_PAGE_SIZE, (clampedPage + 1) * CATALOG_PAGE_SIZE);
+
+  const handleFilterChange = (lang: string | null) => {
+    setFilter(lang);
+    setPage(0);
+  };
 
   return (
-    <div className="mt-4">
-      <div className="flex items-center justify-between mb-3">
-        <h4 className="text-xs font-medium text-[#8b949e] uppercase tracking-wide flex items-center gap-1.5">
-          <GitBranch className="h-3.5 w-3.5" />
+    <div className="mt-6">
+      <div className="flex items-center justify-between mb-4">
+        <h4 className="text-sm font-semibold text-[#e1e4e8] flex items-center gap-1.5">
+          <GitBranch className="h-4 w-4 text-accent" />
           Understand how real projects work
         </h4>
-        <div className="flex gap-1">
+        <div className="flex flex-wrap gap-1">
           <button
-            onClick={() => setFilter(null)}
+            onClick={() => handleFilterChange(null)}
             className={cn(
-              "text-[10px] px-2 py-0.5 rounded-full border transition-colors",
+              "text-xs px-2.5 py-1 rounded-full border transition-colors",
               !filter
                 ? "border-accent text-accent bg-accent/10"
                 : "border-[#30363d] text-[#484f58] hover:text-[#8b949e]"
@@ -929,9 +936,9 @@ function ProjectCatalog({
           {languages.map((lang) => (
             <button
               key={lang}
-              onClick={() => setFilter(lang === filter ? null : lang)}
+              onClick={() => handleFilterChange(lang === filter ? null : lang)}
               className={cn(
-                "text-[10px] px-2 py-0.5 rounded-full border transition-colors",
+                "text-xs px-2.5 py-1 rounded-full border transition-colors",
                 filter === lang
                   ? "border-accent text-accent bg-accent/10"
                   : "border-[#30363d] text-[#484f58] hover:text-[#8b949e]"
@@ -943,38 +950,43 @@ function ProjectCatalog({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-        {filtered.map((project) => (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {visible.map((project) => (
           <div
             key={project.repo}
-            className="rounded border border-[#21262d] bg-[#0d1117] p-3 hover:border-[#30363d] transition-colors"
+            className="rounded-lg border border-[#21262d] bg-[#0d1117] p-5 hover:border-[#30363d] transition-colors flex flex-col"
           >
-            <div className="flex items-start justify-between mb-1.5">
-              <div className="flex items-center gap-1.5">
+            {/* Card header */}
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex flex-wrap items-center gap-1.5">
                 <LanguageBadge language={project.language} />
-                <span className="text-xs font-medium text-[#e1e4e8]">{project.name}</span>
+                <span className="text-sm font-semibold text-[#e1e4e8]">{project.name}</span>
                 {project.requiresKey && (
-                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#30363d] text-[#8b949e]">
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#d29922]/10 border border-[#d29922]/30 text-[#d29922]">
                     key needed
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1.5 shrink-0 ml-2">
                 <CopyButton text={`https://github.com/${project.repo}`} />
                 <button
                   onClick={() => onSelect(`https://github.com/${project.repo}`)}
-                  className="text-[10px] text-accent hover:text-[#79b8ff] transition-colors font-medium"
+                  className="text-xs text-accent hover:text-[#79b8ff] transition-colors font-semibold px-2 py-0.5 rounded border border-accent/30 hover:border-accent/60 bg-accent/5"
                 >
-                  Use
+                  Use →
                 </button>
               </div>
             </div>
-            <p className="text-[10px] text-[#484f58] mb-2">{project.description}</p>
-            <div className="space-y-1">
+
+            {/* Description */}
+            <p className="text-xs text-[#8b949e] leading-relaxed mb-4">{project.description}</p>
+
+            {/* Example prompts */}
+            <div className="space-y-2 flex-1">
               {project.prompts.map((prompt, i) => (
-                <div key={i} className="flex items-start gap-1 group">
+                <div key={i} className="flex items-start gap-2 group">
                   <CopyButton text={prompt} />
-                  <span className="text-[10px] text-[#8b949e] group-hover:text-[#e1e4e8] transition-colors leading-tight">
+                  <span className="text-xs text-[#8b949e] group-hover:text-[#c9d1d9] transition-colors leading-snug">
                     {prompt}
                   </span>
                 </div>
@@ -983,6 +995,47 @@ function ProjectCatalog({
           </div>
         ))}
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-5 pt-4 border-t border-[#21262d]">
+          <p className="text-xs text-[#484f58]">
+            {clampedPage * CATALOG_PAGE_SIZE + 1}–{Math.min((clampedPage + 1) * CATALOG_PAGE_SIZE, filtered.length)} of {filtered.length} projects
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={clampedPage === 0}
+              className="flex items-center gap-1 px-3 py-1.5 rounded border border-[#30363d] text-xs text-[#8b949e] hover:text-[#e1e4e8] hover:border-[#484f58] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" /> Previous
+            </button>
+            <div className="flex gap-1">
+              {Array.from({ length: totalPages }).map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setPage(i)}
+                  className={cn(
+                    "w-7 h-7 rounded text-xs font-mono transition-colors",
+                    i === clampedPage
+                      ? "bg-accent text-black font-bold"
+                      : "text-[#484f58] hover:text-[#e1e4e8] hover:bg-[#21262d]"
+                  )}
+                >
+                  {i + 1}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              disabled={clampedPage >= totalPages - 1}
+              className="flex items-center gap-1 px-3 py-1.5 rounded border border-[#30363d] text-xs text-[#8b949e] hover:text-[#e1e4e8] hover:border-[#484f58] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              Next <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1365,13 +1418,11 @@ function SubmitForm({ onSubmitted }: { onSubmitted: () => void }) {
 export function Benchmarks() {
   const [data, setData] = useState<BenchmarkResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [queue, setQueue] = useState<BenchmarkQueueResponse | null>(null);
   const [page, setPage] = useState(0);
   const PROJECTS_PER_PAGE = 10;
 
   const loadData = useCallback(() => {
     api.benchmarks().then(setData).catch(() => {});
-    api.benchmarkQueue().then(setQueue).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -1423,24 +1474,20 @@ export function Benchmarks() {
       </header>
 
       <div className="mx-auto max-w-6xl px-6 py-10">
-        <SubmitForm
-          onSubmitted={loadData}
-          slotsUsed={queue?.slotsUsed ?? data?.benchmarks?.projects?.length ?? 0}
-          slotsTotal={queue?.slotsTotal ?? 20}
-        />
+        <SubmitForm onSubmitted={loadData} />
 
         {loading ? (
           <p className="text-center text-[#8b949e] py-20">
             Loading benchmarks…
           </p>
         ) : !bench ? (
-          <p className="text-center text-[#8b949e] py-20">
-            No benchmark data available yet. Run{" "}
-            <code className="text-accent">
-              python eval/generate_benchmarks.py
-            </code>{" "}
-            to generate.
-          </p>
+          <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-12 text-center">
+            <Database className="h-10 w-10 text-[#30363d] mx-auto mb-4" />
+            <h3 className="text-base font-semibold text-[#e1e4e8] mb-2">No benchmarks yet</h3>
+            <p className="text-sm text-[#8b949e] max-w-sm mx-auto">
+              Submit a GitHub repository above to run the first benchmark. Results are shared with everyone.
+            </p>
+          </div>
         ) : (
           <>
             {/* Hero stat cards */}
@@ -1641,7 +1688,9 @@ export function Benchmarks() {
           </Link>
           <span className="text-[#30363d]">|</span>
           <a
-            href="https://github.com/codeprism/codeprism"
+            href="https://github.com/dan1d/codeprism"
+            target="_blank"
+            rel="noopener noreferrer"
             className="hover:text-accent transition-colors"
           >
             GitHub
