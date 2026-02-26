@@ -99,7 +99,8 @@ export function Onboard() {
   };
 
   const mcpJson = makeMcpJson(activeEditor);
-  const hookCmd = `curl -fsSL https://raw.githubusercontent.com/codeprism/codeprism/main/scripts/install-hook.sh | sh -s -- --engine-url ${typeof window !== "undefined" ? window.location.origin : ""}`;
+  const engineUrl = typeof window !== "undefined" ? window.location.origin : "";
+  const hookCmd = `curl -fsSL https://raw.githubusercontent.com/dan1d/codeprism/main/scripts/install-hook.sh | sh -s -- --engine-url ${engineUrl}`;
 
   return (
     <div className="min-h-screen bg-background">
@@ -234,19 +235,40 @@ export function Onboard() {
                 </pre>
               </div>
 
-              <div className="rounded-lg border border-[#30363d] bg-[#0f1117] p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Terminal className="h-4 w-4 text-[#8b949e]" />
-                  <span className="text-sm text-[#e1e4e8]">Auto-sync on git commit</span>
-                  <span className="text-xs text-[#8b949e]">(works with any editor)</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <code className="text-xs text-[#8b949e]">{hookCmd}</code>
+              <div className="rounded-lg border border-[#30363d] bg-[#0f1117] p-4 space-y-3">
+                {/* Header */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Terminal className="h-4 w-4 text-[#8b949e]" />
+                    <span className="text-sm font-medium text-[#e1e4e8]">Auto-sync on git commit</span>
+                    <span className="text-xs text-[#484f58]">works with any editor</span>
+                  </div>
                   <CopyButton text={hookCmd} />
                 </div>
-                <p className="mt-2 text-xs text-[#484f58]">
-                  Run once per repo. Installs git hooks that sync your knowledge base after every merge, checkout and rebase.
+
+                {/* Command block */}
+                <pre className="rounded border border-[#21262d] bg-[#161b22] px-3 py-2.5 text-xs text-[#8b949e] whitespace-pre-wrap break-all leading-relaxed">
+                  {hookCmd}
+                </pre>
+
+                <p className="text-xs text-[#484f58]">
+                  Run once per repo. Installs git hooks that sync after every merge, checkout, and rebase.
                 </p>
+
+                {/* Branch awareness */}
+                <div className="pt-1 border-t border-[#21262d]">
+                  <p className="text-xs text-[#8b949e] mb-2 font-medium">Branch-aware context</p>
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {["main / master", "feature/*", "staging", "demo"].map((b) => (
+                      <span key={b} className="inline-flex items-center rounded-full border border-[#30363d] bg-[#21262d] px-2.5 py-0.5 text-[11px] font-mono text-[#8b949e]">
+                        {b}
+                      </span>
+                    ))}
+                  </div>
+                  <p className="text-xs text-[#484f58]">
+                    Each branch gets its own context. Feature branches stay isolated — merged changes propagate to main automatically.
+                  </p>
+                </div>
               </div>
             </div>
 

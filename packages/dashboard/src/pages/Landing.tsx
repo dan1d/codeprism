@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   FileText, GitBranch, Zap, Users, RefreshCw, Brain,
@@ -7,32 +7,11 @@ import {
 } from "lucide-react";
 import { api, type PublicStats, type FoundingStatus, type BenchmarkResponse } from "@/lib/api";
 import { formatTokens, stackColor, cn } from "@/lib/utils";
+import { PrismLogo } from "@/components/shared/PrismLogo";
 
 const SUPPORT_EMAIL = "support@codeprism.dev";
 const GITHUB_URL = "https://github.com/dan1d/codeprism";
 const DISCORD_URL = "https://discord.gg/nsWERSde";
-
-function PrismLogo({ className }: { className?: string }) {
-  const uid = useId();
-  const gradId = `prismFill-${uid}`;
-  return (
-    <svg viewBox="0 0 36 36" fill="none" className={className} aria-hidden="true">
-      <polygon points="18,3 33,30 3,30" fill={`url(#${gradId})`} stroke="#58a6ff" strokeWidth="1.8" strokeLinejoin="round" />
-      <line x1="18" y1="3" x2="10" y2="30" stroke="#58a6ff" strokeWidth="0.8" strokeOpacity="0.35" />
-      <circle cx="6" cy="30" r="1.8" fill="#f85149" />
-      <circle cx="10" cy="30" r="1.8" fill="#d29922" />
-      <circle cx="14" cy="30" r="1.8" fill="#3fb950" />
-      <circle cx="18" cy="30" r="1.8" fill="#58a6ff" />
-      <circle cx="22" cy="30" r="1.8" fill="#a371f7" />
-      <defs>
-        <linearGradient id={gradId} x1="3" y1="30" x2="33" y2="3" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#58a6ff" stopOpacity="0.08" />
-          <stop offset="100%" stopColor="#58a6ff" stopOpacity="0.22" />
-        </linearGradient>
-      </defs>
-    </svg>
-  );
-}
 
 const NAV_LINKS = [
   { label: "Pricing", anchor: "pricing" },
@@ -72,11 +51,12 @@ function Navbar() {
     >
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 h-16">
         {/* Logo */}
-        <Link to="/" className="flex items-center gap-2.5 group" onClick={() => setMobileOpen(false)}>
-          <PrismLogo className="h-8 w-8 flex-shrink-0" />
-          <span className="text-lg font-bold tracking-tight text-[#e1e4e8] group-hover:text-white transition-colors">
-            code<span className="text-accent">prism</span>
-          </span>
+        <Link to="/" className="group" onClick={() => setMobileOpen(false)}>
+          <PrismLogo
+            wordmark
+            className="h-8 w-8 flex-shrink-0"
+            wordmarkClassName="text-lg group-hover:text-white transition-colors"
+          />
         </Link>
 
         {/* Center nav — desktop only */}
@@ -808,37 +788,63 @@ export function Landing() {
               </div>
             </div>
 
-            {/* Cloud */}
-            <div className="rounded-xl border border-accent/50 bg-[#161b22] p-7 flex flex-col">
-              <div className="flex items-center justify-between mb-1">
-                <h3 className="text-lg font-semibold text-[#e1e4e8]">codeprism Cloud</h3>
-                {founding?.founding && (
-                  <span className="rounded-full bg-[#3fb950]/10 border border-[#3fb950]/30 px-2 py-0.5 text-[10px] font-medium text-[#3fb950]">
-                    {founding.remaining} spots left
-                  </span>
-                )}
+            {/* Cloud — featured card */}
+            <div className="relative rounded-xl overflow-hidden flex flex-col"
+              style={{ background: "linear-gradient(135deg, #0d1117 0%, #0f1a2e 60%, #0d1117 100%)" }}
+            >
+              {/* Glowing accent border */}
+              <div className="absolute inset-0 rounded-xl border border-[#58a6ff]/40 pointer-events-none" />
+              <div className="absolute inset-0 rounded-xl shadow-[inset_0_0_40px_0_rgba(88,166,255,0.06)] pointer-events-none" />
+
+              <div className="relative p-7 flex flex-col flex-1">
+                {/* Header with logo */}
+                <div className="flex items-start justify-between mb-5">
+                  <div className="flex items-center gap-3">
+                    <PrismLogo className="h-9 w-9 flex-shrink-0" />
+                    <div>
+                      <h3 className="text-lg font-bold text-[#e1e4e8] leading-tight">codeprism Cloud</h3>
+                      <p className="text-xs text-[#484f58] mt-0.5">Zero infra. Full team.</p>
+                    </div>
+                  </div>
+                  {founding?.founding && (
+                    <span className="shrink-0 rounded-full bg-[#3fb950]/10 border border-[#3fb950]/30 px-2.5 py-1 text-xs font-semibold text-[#3fb950]">
+                      {founding.remaining} spots left
+                    </span>
+                  )}
+                </div>
+
+                {/* Price */}
+                <div className="mb-6 pb-6 border-b border-[#21262d]">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-4xl font-bold text-[#e1e4e8]">Free</span>
+                    <span className="text-sm text-[#484f58]">for founding teams</span>
+                  </div>
+                  <p className="text-xs text-[#484f58] mt-1">Up to 10 devs · pricing announced at launch · no credit card</p>
+                </div>
+
+                {/* Features */}
+                <ul className="space-y-3.5 flex-1">
+                  {[
+                    "Ready in under 2 minutes — no server to manage",
+                    "Cross-repo knowledge graph shared across your whole team",
+                    "Team invitations, analytics, and seat tracking built-in",
+                    "Works with Cursor, Claude Code, Windsurf, Lovable, Zed",
+                  ].map((feat) => (
+                    <li key={feat} className="flex items-start gap-3">
+                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+                      <span className="text-sm text-[#8b949e] leading-snug">{feat}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                {/* CTA */}
+                <Link
+                  to="/onboard"
+                  className="mt-7 block rounded-lg bg-accent px-4 py-3 text-center text-base font-semibold text-black hover:bg-[#79b8ff] transition-colors shadow-lg shadow-accent/20"
+                >
+                  Get started free →
+                </Link>
               </div>
-              <p className="text-xs text-[#484f58] mb-5">Teams who want zero infra</p>
-              <ul className="space-y-3 text-sm text-[#8b949e] flex-1">
-                <li className="flex items-start gap-2">
-                  <span className="mt-0.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
-                  Ready in under 2 minutes — no server to manage
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="mt-0.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
-                  Team invitations, analytics, and seat tracking built-in
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="mt-0.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
-                  First 100 teams: up to 10 devs free · no credit card
-                </li>
-              </ul>
-              <Link
-                to="/onboard"
-                className="mt-6 block rounded-lg bg-accent px-4 py-2.5 text-center text-sm font-semibold text-black hover:bg-[#79b8ff] transition-colors"
-              >
-                Get started free →
-              </Link>
             </div>
           </div>
         </div>
@@ -1051,11 +1057,12 @@ export function Landing() {
       <footer className="border-t border-[#30363d] px-6 py-8">
         <div className="mx-auto max-w-6xl flex flex-col items-center gap-4">
           {/* Logo row */}
-          <Link to="/" className="flex items-center gap-2">
-            <PrismLogo className="h-6 w-6" />
-            <span className="text-sm font-bold text-[#8b949e]">
-              code<span className="text-accent">prism</span>
-            </span>
+          <Link to="/">
+            <PrismLogo
+              wordmark
+              className="h-6 w-6"
+              wordmarkClassName="text-sm text-[#8b949e]"
+            />
           </Link>
           {/* Links */}
           <div className="flex flex-wrap items-center justify-center gap-4 text-sm text-[#484f58]">
