@@ -1,12 +1,12 @@
 /**
- * Writes generated project documentation to the filesystem under /ai-srcmap/.
+ * Writes generated project documentation to the filesystem under /ai-codeprism/.
  *
  * Files are written idempotently: if the content hash matches the existing
  * file, the write is skipped to avoid spurious git diffs.
  *
  * Layout:
- *   <repo-root>/ai-srcmap/<FILENAME>.md   — per-repo docs
- *   <workspace-root>/ai-srcmap/CROSS_REPO.md — workspace-level cross-repo doc
+ *   <repo-root>/ai-codeprism/<FILENAME>.md   — per-repo docs
+ *   <workspace-root>/ai-codeprism/CROSS_REPO.md — workspace-level cross-repo doc
  */
 
 import { createHash } from "node:crypto";
@@ -15,7 +15,9 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { DocType } from "./doc-prompts.js";
 
-/** Maps DocType → filename in /ai-srcmap/ */
+const AI_DOCS_DIR = "ai-codeprism";
+
+/** Maps DocType → filename in /ai-codeprism/ */
 const DOC_FILENAME: Record<DocType, string> = {
   readme:        "README.md",
   about:         "ABOUT.md",
@@ -47,7 +49,7 @@ export interface WriteResult {
 }
 
 /**
- * Writes a batch of generated docs to their /ai-srcmap/ filesystem locations.
+ * Writes a batch of generated docs to their /ai-codeprism/ filesystem locations.
  * Skips files where the content hash matches the existing file content.
  *
  * @param docs — list of docs to write
@@ -62,13 +64,13 @@ export async function writeDocsToFilesystem(
   for (const doc of docs) {
     try {
       const dir = doc.docType === "cross_repo"
-        ? join(workspaceAbsPath, "ai-srcmap")
-        : join(doc.repoAbsPath, "ai-srcmap");
+        ? join(workspaceAbsPath, AI_DOCS_DIR)
+        : join(doc.repoAbsPath, AI_DOCS_DIR);
 
       const filename = DOC_FILENAME[doc.docType];
       const filePath = join(dir, filename);
 
-      // Ensure /ai-srcmap/ directory exists; on first creation also update .gitignore
+      // Ensure /ai-codeprism/ directory exists; on first creation also update .gitignore
       const dirIsNew = !existsSync(dir);
       if (dirIsNew) {
         await mkdir(dir, { recursive: true });
@@ -102,14 +104,14 @@ function sha256(content: string): string {
 }
 
 /**
- * Appends `ai-srcmap/` to the repo's .gitignore if the entry isn't already
- * present. Called once per repo on the first time the ai-srcmap/ dir is created.
+ * Appends `ai-codeprism/` to the repo's .gitignore if the entry isn't already
+ * present. Called once per repo on the first time the ai-codeprism/ dir is created.
  * Failures are silently ignored — the absence of a .gitignore entry is a
  * cosmetic issue, not a functional one.
  */
 async function ensureGitignoreEntry(repoAbsPath: string): Promise<void> {
   const gitignorePath = join(repoAbsPath, ".gitignore");
-  const entry = "ai-srcmap/";
+  const entry = `${AI_DOCS_DIR}/`;
   try {
     const existing = existsSync(gitignorePath)
       ? await readFile(gitignorePath, "utf-8")

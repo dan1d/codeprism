@@ -1,6 +1,6 @@
 # Architecture
 
-srcmap's pipeline has four stages: **parse**, **graph + detect**, **generate**, and **search + serve**.
+codeprism's pipeline has four stages: **parse**, **graph + detect**, **generate**, and **search + serve**.
 
 ## 1. Parsing
 
@@ -116,7 +116,7 @@ Query
 
 ### Semantic cache
 
-Before running the full pipeline, srcmap checks the `metrics` table for a recent query whose embedding has cosine similarity > 0.92. If found, the same cards are returned instantly (cache hit). This means repeated or paraphrased questions are near-free.
+Before running the full pipeline, codeprism checks the `metrics` table for a recent query whose embedding has cosine similarity > 0.92. If found, the same cards are returned instantly (cache hit). This means repeated or paraphrased questions are near-free.
 
 ## Database schema
 
@@ -148,7 +148,7 @@ Uses Matryoshka Representation Learning with task-type prefixes:
 - Documents: `"search_document: "` + content
 - Queries: `"search_query: "` + query
 
-The model (~300 MB) is downloaded to `~/.cache/srcmap/models/` on first use.
+The model (~300 MB) is downloaded to `~/.cache/codeprism/models/` on first use.
 
 Fallback: set `CODEPRISM_EMBEDDING_MODEL=Xenova/all-MiniLM-L6-v2` and `CODEPRISM_EMBEDDING_DIM=384` for a smaller model.
 

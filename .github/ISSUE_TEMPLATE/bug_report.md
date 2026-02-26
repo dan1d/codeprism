@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Report a bug in srcmap
+about: Report a bug in codeprism
 title: ''
 labels: bug
 assignees: ''
@@ -18,11 +18,11 @@ Steps to reproduce the behavior:
 What you expected to happen.
 
 **Environment**
-- srcmap version: (e.g. 0.1.0)
+- codeprism version: (e.g. 0.1.0)
 - Node.js version: (e.g. 22.1.0)
 - OS: (e.g. macOS 15, Ubuntu 24.04)
 - AI tool: (e.g. Cursor, Claude Code, Windsurf)
-- Deployment: (self-hosted / srcmap Cloud)
+- Deployment: (self-hosted / codeprism Cloud)
 
 **Logs**
 If applicable, paste relevant log output (redact any sensitive info).

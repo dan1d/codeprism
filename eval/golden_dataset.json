@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "description": "Golden dataset for srcmap Ragas evaluation. Queries are based on real Biobridge tickets (ENG-755, ENG-756) and common codebase questions. Each test case has a query, a ground-truth answer describing what context the ideal response should contain, and expected_flows / expected_file_fragments for deterministic precision/recall.",
+  "description": "Golden dataset for codeprism Ragas evaluation. Queries are based on real Biobridge tickets (ENG-755, ENG-756) and common codebase questions. Each test case has a query, a ground-truth answer describing what context the ideal response should contain, and expected_flows / expected_file_fragments for deterministic precision/recall.",
   "test_cases": [
     {
       "id": "eng755-cpt-icd",

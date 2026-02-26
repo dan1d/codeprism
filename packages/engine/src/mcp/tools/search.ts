@@ -22,7 +22,7 @@ export function registerSearchTools(server: McpServer): void {
     "codeprism_search",
     {
       description:
-        "Search srcmap knowledge cards by query. Returns matching cards with " +
+        "Search codeprism knowledge cards by query. Returns matching cards with " +
         "content, flow, and source files. Uses hybrid FTS + semantic vector search.",
       inputSchema: {
         query: z.string().describe("The search query string"),
@@ -85,7 +85,7 @@ export function registerSearchTools(server: McpServer): void {
     async ({ description, branch }) => {
       try {
         // If no description provided, fall back to the stored branch context
-        // (set automatically by `srcmap sync --event-type checkout` via git hook).
+        // (set automatically by `codeprism sync --event-type checkout` via git hook).
         let autoContextNote = "";
         let effectiveDescription = description ?? "";
 
@@ -149,7 +149,7 @@ export function registerSearchTools(server: McpServer): void {
         }
 
         const summary =
-          `## srcmap Context\n\n` +
+          `## codeprism Context\n\n` +
           autoContextNote +
           `**Entities:** ${entities.length > 0 ? entities.join(", ") : "(none extracted)"}\n` +
           `**Flows:** ${flows.join(", ")}\n` +

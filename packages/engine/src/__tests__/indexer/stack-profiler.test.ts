@@ -13,7 +13,7 @@ vi.mock("../../db/connection.js", () => ({
 }));
 
 function makeRepo(structure: Record<string, string>): string {
-  const dir = mkdtempSync(join(tmpdir(), "srcmap-profiler-"));
+  const dir = mkdtempSync(join(tmpdir(), "codeprism-profiler-"));
   for (const [relPath, content] of Object.entries(structure)) {
     const abs = join(dir, relPath);
     mkdirSync(join(abs, ".."), { recursive: true });

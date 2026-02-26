@@ -1,7 +1,7 @@
 /**
- * Sprint January 1 — srcmap knowledge validation tests.
+ * Sprint January 1 — codeprism knowledge validation tests.
  *
- * Each test verifies that when the codebase is indexed, srcmap surfaces
+ * Each test verifies that when the codebase is indexed, codeprism surfaces
  * the correct cards and file paths for that sprint's tickets.
  *
  * Tests use an in-memory DB seeded with representative cards; they validate:
@@ -12,7 +12,7 @@
  *   5. Area-level repo assignments are consistent (FE-only → no BE controller files)
  *
  * These tests serve as a living acceptance checklist: if any test fails after
- * a `srcmap index` run the knowledge graph is missing coverage for that ticket.
+ * a `codeprism index` run the knowledge graph is missing coverage for that ticket.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -340,7 +340,7 @@ describe("Sprint January 1 — aggregate coverage report", () => {
     const lines: string[] = [
       "",
       "═══════════════════════════════════════════════════════════════",
-      " Sprint January 1 — srcmap Knowledge Index Readiness           ",
+      " Sprint January 1 — codeprism Knowledge Index Readiness         ",
       "═══════════════════════════════════════════════════════════════",
       "",
     ];

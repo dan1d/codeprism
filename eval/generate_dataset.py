@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 """
-Generate a golden dataset from a running srcmap instance.
+Generate a golden dataset from a running codeprism instance.
 
-Connects to the srcmap API, discovers indexed flows and cards, and produces
+Connects to the codeprism API, discovers indexed flows and cards, and produces
 a golden_dataset.json file tailored to your actual codebase.  This lets you
 run the evaluation suite (evaluate.py) against any project — not just biobridge.
 
 Usage:
-    # Generate from a local srcmap with 10 test cases (default):
+    # Generate from a local codeprism with 10 test cases (default):
     python generate_dataset.py
 
     # Specify sample size and output path:
     python generate_dataset.py --sample 20 --output my_dataset.json
 
     # Point at a remote server:
-    python generate_dataset.py --server http://my-srcmap:4000
+    python generate_dataset.py --server http://my-codeprism:4000
 """
 
 import argparse
@@ -27,7 +27,7 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
-SRCMAP_DEFAULT = "http://localhost:4000"
+CODEPRISM_DEFAULT = "http://localhost:4000"
 DEFAULT_OUTPUT = Path(__file__).parent / "golden_dataset.json"
 DEFAULT_SAMPLE = 10
 
@@ -41,8 +41,8 @@ def api_get(server: str, path: str, params: Optional[dict] = None) -> Any:
         resp.raise_for_status()
         return resp.json()
     except requests.exceptions.ConnectionError:
-        print(f"\n[ERROR] Cannot reach srcmap at {server}.")
-        print("        Make sure the server is running: cd srcmap && pnpm dev")
+        print(f"\n[ERROR] Cannot reach codeprism at {server}.")
+        print("        Make sure the server is running: cd codeprism && pnpm dev")
         sys.exit(1)
     except requests.exceptions.HTTPError as e:
         print(f"\n[ERROR] HTTP {e.response.status_code} from {path}: {e.response.text}")
@@ -203,9 +203,9 @@ def select_flows(flows: List[dict], sample: int) -> List[dict]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Generate a golden evaluation dataset from a running srcmap instance."
+        description="Generate a golden evaluation dataset from a running codeprism instance."
     )
-    parser.add_argument("--server", default=SRCMAP_DEFAULT, help="srcmap base URL (default: %(default)s)")
+    parser.add_argument("--server", default=CODEPRISM_DEFAULT, help="codeprism base URL (default: %(default)s)")
     parser.add_argument("--sample", type=int, default=DEFAULT_SAMPLE, help="Number of test cases to generate (default: %(default)s)")
     parser.add_argument("--output", type=str, default=None, help="Output file path (default: golden_dataset.json)")
     parser.add_argument("--seed", type=int, default=None, help="Random seed for reproducible sampling")
@@ -217,7 +217,7 @@ def main() -> None:
     output_path = Path(args.output) if args.output else DEFAULT_OUTPUT
 
     # Discover flows
-    print(f"[generate] Connecting to srcmap at {args.server}…")
+    print(f"[generate] Connecting to codeprism at {args.server}…")
     health = api_get(args.server, "/api/health")
     total_cards = health.get("cards", "?")
     total_flows = health.get("flows", "?")
@@ -242,7 +242,7 @@ def main() -> None:
     dataset = {
         "version": "1.0",
         "description": (
-            f"Auto-generated golden dataset from srcmap instance at {args.server}. "
+            f"Auto-generated golden dataset from codeprism instance at {args.server}. "
             f"Contains {len(test_cases)} test cases derived from {total_flows} indexed flows."
         ),
         "test_cases": test_cases,

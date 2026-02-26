@@ -2,23 +2,24 @@ import * as http from "node:http";
 import * as https from "node:https";
 import * as url from "node:url";
 
-export interface FileDiff {
+export interface ChangedFile {
   path: string;
-  action: "add" | "modify" | "delete";
-  diff?: string;
+  content: string;
+  status: "added" | "modified" | "deleted";
 }
 
 export interface SyncPayload {
   repo: string;
   branch: string;
-  files: FileDiff[];
-  timestamp: string;
+  commitSha?: string;
+  eventType?: "save" | "merge" | "pull" | "rebase";
+  changedFiles: ChangedFile[];
+  devId?: string;
 }
 
 export interface SyncResult {
-  ok: boolean;
-  staleCards?: number;
-  error?: string;
+  indexed: number;
+  invalidated: number;
 }
 
 export interface HealthResult {
@@ -55,6 +56,10 @@ export class SyncClient {
         let data = "";
         res.on("data", (chunk) => (data += chunk));
         res.on("end", () => {
+          if (res.statusCode && res.statusCode >= 400) {
+            reject(new Error(`HTTP ${res.statusCode} from ${path}: ${data.slice(0, 200)}`));
+            return;
+          }
           try {
             resolve(JSON.parse(data) as T);
           } catch {
@@ -91,6 +96,10 @@ export class SyncClient {
           let data = "";
           res.on("data", (chunk) => (data += chunk));
           res.on("end", () => {
+            if (res.statusCode && res.statusCode >= 400) {
+              reject(new Error(`HTTP ${res.statusCode} from ${path}: ${data.slice(0, 200)}`));
+              return;
+            }
             try {
               resolve(JSON.parse(data) as T);
             } catch {

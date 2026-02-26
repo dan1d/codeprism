@@ -1,6 +1,6 @@
 # Contributing Framework Skills
 
-srcmap uses framework-specific "skills" to improve card generation, search relevance, file classification, and documentation baselines. Each skill teaches srcmap the conventions and patterns of a specific technology.
+codeprism uses framework-specific "skills" to improve card generation, search relevance, file classification, and documentation baselines. Each skill teaches codeprism the conventions and patterns of a specific technology.
 
 ## What a skill provides
 
@@ -27,7 +27,7 @@ Create `packages/engine/src/skills/knowledge/<framework>.md`:
 ```markdown
 # <Framework> Best Practices
 
-> Curated conventions used by srcmap to seed code_style and rules documentation.
+> Curated conventions used by codeprism to seed code_style and rules documentation.
 > Project-specific patterns discovered during indexing extend or override these baselines.
 
 ## Architecture
@@ -154,9 +154,9 @@ Look at existing extractors (`rails.ts`, `react.ts`, `express.ts`) for the patte
 Skill knowledge files can be regenerated using an LLM:
 
 ```bash
-pnpm srcmap generate-skills              # all skills
-pnpm srcmap generate-skills --skill vue   # specific skill
-pnpm srcmap generate-skills --force       # overwrite existing
+pnpm codeprism generate-skills              # all skills
+pnpm codeprism generate-skills --skill vue   # specific skill
+pnpm codeprism generate-skills --force       # overwrite existing
 ```
 
 Output requires human review before committing -- LLMs sometimes produce overly opinionated or framework-version-specific rules.

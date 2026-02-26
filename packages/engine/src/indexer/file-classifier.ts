@@ -9,7 +9,7 @@ import type { FileRole, ParsedFile, Association } from "./types.js";
  *  2. Filename-basename entry-point detection
  *  3. Content signals (class types already parsed by tree-sitter)
  *  4. Statistical graph signals (inbound import degree — computed post-parse)
- *  5. Optional per-repo srcmap.json config overrides
+ *  5. Optional per-repo codeprism.json config overrides
  */
 
 // ---------------------------------------------------------------------------
@@ -139,7 +139,7 @@ export function classifyFileRole(
   const baseNoExt = fileBasenameWithoutExt(filePath).toLowerCase();
   const ext = extname(filePath).toLowerCase();
 
-  // Config override: explicit test/exclude paths from srcmap.json
+  // Config override: explicit test/exclude paths from codeprism.json
   if (repoConfig) {
     if (repoConfig.testDirs?.some((d) => filePath.includes(`/${d}/`))) {
       return "test";
@@ -287,7 +287,7 @@ export function computeInboundDegrees(files: ParsedFile[]): {
 }
 
 // ---------------------------------------------------------------------------
-// Per-repo srcmap.json config
+// Per-repo codeprism.json config
 // ---------------------------------------------------------------------------
 
 export interface RepoConfig {

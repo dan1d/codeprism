@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 /**
- * srcmap check — LLM-powered PR rule checker.
+ * codeprism check — LLM-powered PR rule checker.
  *
  * Core logic lives in `runCheckCore` which returns structured data.
  * The `runCheckCli` wrapper handles stdout formatting and process.exit for CLI use.
  * The HTTP API calls `runCheckCore` directly — no stdout capture, no process.exit.
  *
  * CLI usage:
- *   srcmap check                      # diff HEAD vs main
- *   srcmap check --base develop       # diff HEAD vs develop
- *   srcmap check --repo biobridge-fe  # override repo name in report
- *   srcmap check --strict             # exit 1 on any violation (incl. warnings)
- *   srcmap check --json               # machine-readable output
+ *   codeprism check                      # diff HEAD vs main
+ *   codeprism check --base develop       # diff HEAD vs develop
+ *   codeprism check --repo biobridge-fe  # override repo name in report
+ *   codeprism check --strict             # exit 1 on any violation (incl. warnings)
+ *   codeprism check --json               # machine-readable output
  */
 
 import { execSync } from "node:child_process";
@@ -213,21 +213,21 @@ export async function runCheckCore(cwd: string, opts: CheckOptions): Promise<Che
 
 // ---------------------------------------------------------------------------
 // CLI wrapper — formats output and calls process.exit.
-// ONLY called by the `srcmap check` CLI command, never by the HTTP API.
+// ONLY called by the `codeprism check` CLI command, never by the HTTP API.
 // ---------------------------------------------------------------------------
 
 export async function runCheckCli(cwd: string, opts: CheckOptions & { json: boolean }): Promise<void> {
   const allRules = getDb().prepare("SELECT * FROM team_rules WHERE enabled = 1").all() as TeamRule[];
 
   if (allRules.length === 0) {
-    console.log("srcmap check: No active rules defined. Add rules via the dashboard or `srcmap rules add`.");
+    console.log("codeprism check: No active rules defined. Add rules via the dashboard or `codeprism rules add`.");
     return;
   }
 
   if (!opts.json) {
     const repoName = opts.repo ?? getRepoName(cwd);
     const branch   = getCurrentBranch(cwd);
-    console.log(`\nsrcmap check · ${repoName} · ${branch} vs ${opts.base}`);
+    console.log(`\ncodeprism check · ${repoName} · ${branch} vs ${opts.base}`);
     console.log(`Checking ${allRules.length} rule${allRules.length !== 1 ? "s" : ""}…\n`);
   }
 

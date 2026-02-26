@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to srcmap are documented here.
+All notable changes to codeprism are documented here.
 
 ## [0.1.0] - 2026-02-23
 
@@ -28,7 +28,7 @@ Initial release.
 - SSE transport for streaming connections
 - Proactive usage instructions in server manifest
 
-### Multi-tenancy (srcmap Cloud)
+### Multi-tenancy (codeprism Cloud)
 
 - Tenant isolation with per-tenant SQLite databases via AsyncLocalStorage
 - API key authentication with SHA-256 hashing (keys never stored in plaintext)

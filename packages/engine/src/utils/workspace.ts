@@ -5,18 +5,18 @@ import { loadWorkspaceConfig, type LoadedWorkspaceConfig } from "../config/works
 
 /**
  * Walk up the directory tree from `start` until a `pnpm-workspace.yaml` is
- * found, returning that directory as the srcmap monorepo root.
+ * found, returning that directory as the codeprism monorepo root.
  *
  * @throws if no `pnpm-workspace.yaml` is found before reaching the filesystem root
  */
-export function findSrcmapRoot(start: string): string {
+export function findCodeprismRoot(start: string): string {
   let dir = start;
   while (true) {
     if (existsSync(join(dir, "pnpm-workspace.yaml"))) return dir;
     const parent = resolve(dir, "..");
     if (parent === dir) {
       throw new Error(
-        `Could not find srcmap root — no pnpm-workspace.yaml found above "${start}"`,
+        `Could not find codeprism root — no pnpm-workspace.yaml found above "${start}"`,
       );
     }
     dir = parent;
@@ -25,7 +25,7 @@ export function findSrcmapRoot(start: string): string {
 
 /**
  * Find the user's workspace root — the directory that contains the repos
- * being indexed. By convention this is the parent of the srcmap installation
+ * being indexed. By convention this is the parent of the codeprism installation
  * directory (i.e. one level above the pnpm-workspace.yaml).
  *
  * Using `import.meta.url` as the anchor makes this independent of
@@ -38,12 +38,12 @@ export function findSrcmapRoot(start: string): string {
  */
 export function userWorkspaceRootFrom(importMetaUrl: string): string {
   const scriptDir = fileURLToPath(new URL(".", importMetaUrl));
-  const srcmapRoot = findSrcmapRoot(scriptDir);
-  return resolve(srcmapRoot, "..");
+  const codeprismRoot = findCodeprismRoot(scriptDir);
+  return resolve(codeprismRoot, "..");
 }
 
 /**
- * Load the full workspace configuration, checking for `srcmap.config.json`
+ * Load the full workspace configuration, checking for `codeprism.config.json`
  * at the workspace root first and falling back to auto-discovery.
  *
  * This is the recommended entry point for CLI scripts that need both the

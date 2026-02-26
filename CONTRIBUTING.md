@@ -1,13 +1,13 @@
-# Contributing to srcmap
+# Contributing to codeprism
 
-Thanks for considering contributing to srcmap. This guide covers the development setup, how to submit changes, and how to add framework skills.
+Thanks for considering contributing to codeprism. This guide covers the development setup, how to submit changes, and how to add framework skills.
 
 ## Development setup
 
 ```bash
 # Clone and install
 git clone https://github.com/dan1d/codeprism.git
-cd srcmap
+cd codeprism
 pnpm install
 
 # Start the engine in dev mode (hot-reload)
@@ -23,7 +23,7 @@ The engine runs on `http://localhost:4000`. The dashboard dev server proxies API
 
 - Node.js 22+
 - pnpm 9+
-- A codebase to index (point `srcmap.config.json` at your repos)
+- A codebase to index (point `codeprism.config.json` at your repos)
 
 ### Running tests
 
@@ -60,7 +60,7 @@ pnpm build:dashboard # dashboard only
 
 ## Adding framework skills
 
-srcmap ships with 16 framework skills. Adding a new one is one of the easiest ways to contribute.
+codeprism ships with 16 framework skills. Adding a new one is one of the easiest ways to contribute.
 
 Each skill is a JSON file in `packages/engine/src/skills/definitions/` with this structure:
 
@@ -90,7 +90,7 @@ See [docs/contributing-skills.md](docs/contributing-skills.md) for the full refe
 packages/
   engine/          Core: indexer, search, MCP server, CLI, services
   dashboard/       React SPA (Tremor, Tailwind, dark GitHub theme)
-  extension/       Cursor extension (git watcher)
+  extension/       VS Code extension (git watcher)
 eval/              Python evaluation suite
 docs/              Documentation
 deploy/            Production deployment configs

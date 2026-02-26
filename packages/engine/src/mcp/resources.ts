@@ -2,15 +2,15 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getDb } from "../db/connection.js";
 
 /**
- * Registers all srcmap MCP resources on the given server instance.
+ * Registers all codeprism MCP resources on the given server instance.
  */
 export function registerResources(server: McpServer): void {
   server.registerResource(
-    "srcmap-stats",
-    "srcmap://stats",
+    "codeprism-stats",
+    "codeprism://stats",
     {
       description:
-        "Current srcmap engine statistics: total cards, total flows, " +
+        "Current codeprism engine statistics: total cards, total flows, " +
         "total queries, and cache hit rate.",
       mimeType: "application/json",
     },

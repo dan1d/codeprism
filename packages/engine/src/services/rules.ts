@@ -161,7 +161,7 @@ export async function runCheck(repo?: string, base = "main") {
   }
 
   if (!repoPath) {
-    throw new Error("No repo path found. Add a repository in the Repositories page, or ensure srcmap.config.json is configured.");
+    throw new Error("No repo path found. Add a repository in the Repositories page, or ensure codeprism.config.json is configured.");
   }
 
   const { runCheckCore } = await import("../cli/check.js");

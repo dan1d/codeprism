@@ -2,16 +2,16 @@
 set -euo pipefail
 
 # codeprism.dev daily backup
-# Add to crontab: 0 3 * * * /opt/srcmap/repo/deploy/backup.sh
+# Add to crontab: 0 3 * * * /opt/codeprism/repo/deploy/backup.sh
 
-BACKUP_DIR="/opt/srcmap/backups"
+BACKUP_DIR="/opt/codeprism/backups"
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-COMPOSE_FILE="${COMPOSE_FILE:-/opt/srcmap/repo/deploy/docker-compose.prod.yml}"
-SERVICE_NAME="srcmap"
+COMPOSE_FILE="${COMPOSE_FILE:-/opt/codeprism/repo/deploy/docker-compose.prod.yml}"
+SERVICE_NAME="codeprism"
 
 mkdir -p "$BACKUP_DIR"
 
-echo "Backing up srcmap databases..."
+echo "Backing up codeprism databases..."
 
 # Use docker compose cp to safely extract DB files from the running container
 CONTAINER_DATA="/data"

@@ -173,11 +173,11 @@ export function SettingsPage({ instanceInfo, onUpdate }: SettingsPageProps) {
 
   return (
     <div className="max-w-2xl">
-      <PageHeader title="Settings" subtitle="Configure your srcmap instance" />
+      <PageHeader title="Settings" subtitle="Configure your codeprism instance" />
 
       <div className="space-y-4">
         {/* Company */}
-        <Section title="Company" description="Identity for this srcmap instance">
+        <Section title="Company" description="Identity for this codeprism instance">
           <FormRow label="Company name" hint="Displayed in the sidebar">
             <input
               value={companyName}

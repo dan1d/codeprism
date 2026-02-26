@@ -48,7 +48,7 @@ export function registerOperationsTools(server: McpServer): void {
   server.registerTool(
     "codeprism_configure",
     {
-      description: "View or modify srcmap search configuration.",
+      description: "View or modify codeprism search configuration.",
       inputSchema: {
         action: z.enum(["get", "set", "list"]).describe("Action to perform"),
         key: z.string().optional().describe("Config key"),
@@ -95,12 +95,12 @@ export function registerOperationsTools(server: McpServer): void {
     "codeprism_workspace_status",
     {
       description:
-        "Returns a real-time status of the srcmap knowledge base.",
+        "Returns a real-time status of the codeprism knowledge base.",
     },
     async () => {
       try {
         const status = getWorkspaceStatus();
-        const lines: string[] = ["## srcmap Workspace Status\n"];
+        const lines: string[] = ["## codeprism Workspace Status\n"];
 
         for (const repo of status.repos) {
           lines.push(`### ${repo.repo}`);

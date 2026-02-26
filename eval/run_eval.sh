@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────
-#  srcmap Ragas evaluation runner
+#  codeprism Ragas evaluation runner
 #  Usage:
 #    ./run_eval.sh              # full eval (all 8 test cases, Ragas on)
 #    ./run_eval.sh --verbose    # print raw search results too
@@ -56,11 +56,11 @@ if ! python3 -c "import requests" 2>/dev/null; then
   pip install -r requirements.txt --quiet
 fi
 
-# ── Check srcmap is reachable ─────────────────────────────────────────
+# ── Check codeprism is reachable ──────────────────────────────────────
 CODEPRISM_SERVER="${CODEPRISM_SERVER:-http://localhost:4000}"
 if ! curl -sf "$CODEPRISM_SERVER/api/health" > /dev/null 2>&1; then
   echo ""
-  echo "  ✗  srcmap is not running at $CODEPRISM_SERVER"
+  echo "  ✗  codeprism is not running at $CODEPRISM_SERVER"
   echo "     Start it first:  cd $(dirname "$SCRIPT_DIR") && pnpm dev"
   echo ""
   exit 1
@@ -78,7 +78,7 @@ else
 fi
 
 echo ""
-echo "  srcmap Ragas Evaluation"
+echo "  codeprism Ragas Evaluation"
 echo "  Server : $CODEPRISM_SERVER"
 echo "  Judge  : $JUDGE_LLM"
 echo ""

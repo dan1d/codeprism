@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-srcmap Benchmark Generator
+codeprism Benchmark Generator
 ===========================
-Runs the eval suite against a srcmap server and produces benchmark data.
+Runs the eval suite against a codeprism server and produces benchmark data.
 Can generate a standalone benchmarks.json or append to an existing multi-project file.
 
 Usage:
     python generate_benchmarks.py
-    python generate_benchmarks.py --server http://my-srcmap:4000
+    python generate_benchmarks.py --server http://my-codeprism:4000
     python generate_benchmarks.py --project mastodon --repo mastodon/mastodon --lang Ruby --framework Rails
     python generate_benchmarks.py --append  # merge into existing benchmarks.json
 
@@ -24,7 +24,7 @@ from typing import List
 
 import requests
 
-SRCMAP_DEFAULT = "http://localhost:4000"
+CODEPRISM_DEFAULT = "http://localhost:4000"
 DATASET_PATH = Path(__file__).parent / "golden_dataset.json"
 OUTPUT_PATH = Path(__file__).parent / "benchmarks.json"
 SEARCH_LIMIT = 10
@@ -52,7 +52,7 @@ def search_with_timing(server: str, query: str, limit: int = SEARCH_LIMIT) -> di
 
 def estimate_naive_tokens(results: List[dict]) -> int:
     """
-    Estimate how many tokens an AI would read WITHOUT srcmap.
+    Estimate how many tokens an AI would read WITHOUT codeprism.
     Each unique source file averages ~500 tokens (conservative).
     """
     all_files = set()
@@ -62,8 +62,8 @@ def estimate_naive_tokens(results: List[dict]) -> int:
     return len(all_files) * 500
 
 
-def estimate_srcmap_tokens(results: List[dict]) -> int:
-    """Estimate tokens in srcmap's response (card content)."""
+def estimate_codeprism_tokens(results: List[dict]) -> int:
+    """Estimate tokens in codeprism's response (card content)."""
     total = 0
     for r in results:
         content = r.get("content", "")
@@ -113,7 +113,7 @@ def run_benchmarks(server: str, test_cases: list, limit: int) -> tuple:
         results = data["results"]
         latency = data["latency_ms"]
 
-        srcmap_tokens = estimate_srcmap_tokens(results)
+        codeprism_tokens = estimate_codeprism_tokens(results)
         naive_tokens = estimate_naive_tokens(results)
         accuracy = compute_accuracy(tc, results)
 
@@ -124,7 +124,7 @@ def run_benchmarks(server: str, test_cases: list, limit: int) -> tuple:
         cases.append({
             "query": tc["query"],
             "ticket": tc.get("ticket"),
-            "srcmap_tokens": srcmap_tokens,
+            "codeprism_tokens": codeprism_tokens,
             "naive_tokens": naive_tokens,
             "latency_ms": latency,
             "cache_hit": data["cache_hit"],
@@ -145,13 +145,13 @@ def build_project_stats(cases: list, latencies: list, cache_hits: int) -> dict:
     if n == 0:
         return {}
     sorted_latencies = sorted(latencies)
-    avg_srcmap = round(sum(c["srcmap_tokens"] for c in cases) / n)
+    avg_codeprism = round(sum(c["codeprism_tokens"] for c in cases) / n)
     avg_naive = round(sum(c["naive_tokens"] for c in cases) / n)
-    token_reduction = round((1 - avg_srcmap / avg_naive) * 100, 1) if avg_naive > 0 else 0
+    token_reduction = round((1 - avg_codeprism / avg_naive) * 100, 1) if avg_naive > 0 else 0
 
     return {
         "queries_tested": n,
-        "avg_tokens_with_srcmap": avg_srcmap,
+        "avg_tokens_with_codeprism": avg_codeprism,
         "avg_tokens_without": avg_naive,
         "token_reduction_pct": token_reduction,
         "avg_latency_ms": round(statistics.mean(latencies)),
@@ -166,8 +166,8 @@ def build_project_stats(cases: list, latencies: list, cache_hits: int) -> dict:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Generate srcmap benchmarks.")
-    parser.add_argument("--server", default=SRCMAP_DEFAULT)
+    parser = argparse.ArgumentParser(description="Generate codeprism benchmarks.")
+    parser.add_argument("--server", default=CODEPRISM_DEFAULT)
     parser.add_argument("--project", default="biobridge", help="Project name")
     parser.add_argument("--repo", default=None, help="GitHub repo (e.g. mastodon/mastodon)")
     parser.add_argument("--lang", default=None, help="Primary language")
@@ -235,7 +235,7 @@ def main() -> None:
     print(f"{'=' * 50}")
     print(f"  Queries tested     : {n}")
     print(f"  Token reduction    : {stats.get('token_reduction_pct', 0)}%")
-    print(f"  Avg srcmap tokens  : {stats.get('avg_tokens_with_srcmap', 0)}")
+    print(f"  Avg codeprism tokens: {stats.get('avg_tokens_with_codeprism', 0)}")
     print(f"  Avg naive tokens   : {stats.get('avg_tokens_without', 0)}")
     print(f"  Avg latency        : {stats.get('avg_latency_ms', 0)}ms")
     print(f"  P95 latency        : {stats.get('p95_latency_ms', 0)}ms")

@@ -53,7 +53,7 @@ interface QueueEntry {
 
 interface BenchmarkCase {
   query: string;
-  srcmap_tokens: number;
+  codeprism_tokens: number;
   naive_tokens: number;
   latency_ms: number;
   cache_hit: boolean;
@@ -230,7 +230,7 @@ async function processQueue(): Promise<void> {
 }
 
 async function runBenchmarkJob(job: QueueEntry & { llmConfig?: LLMConfig; tmpDir?: string }): Promise<void> {
-  const tmpDir = await mkdtemp(join(tmpdir(), "srcmap-bench-"));
+  const tmpDir = await mkdtemp(join(tmpdir(), "codeprism-bench-"));
   job.tmpDir = tmpDir;
   // Clone into a named subdirectory so autoDiscover finds it as a repo
   const repoShortName = job.repo.split("/").pop() ?? "repo";
@@ -265,7 +265,7 @@ async function runBenchmarkJob(job: QueueEntry & { llmConfig?: LLMConfig; tmpDir
   // Stage 4: Benchmark queries (against per-repo DB)
   job.stage = "benchmarking";
   console.log(`[benchmark] Running benchmark queries for ${job.repo}…`);
-  const { cases, flows, cardCount } = runBenchmarkQueries(benchDbPath, job.repo);
+  const { cases, flows, cardCount } = runBenchmarkQueries(benchDbPath, job.repo, clonePath);
 
   // Stage 4b: LLM-as-judge quality evaluation (only when LLM key is provided)
   if (job.llmConfig && cases.some((c) => c.result_count > 0)) {
@@ -529,16 +529,32 @@ function deriveModuleQueries(
   return queries;
 }
 
+function estimateTokens(text: string): number {
+  // Keep benchmark accounting consistent with the rest of the codebase (~4 chars/token).
+  return Math.ceil(text.length / 4);
+}
+
+function estimateFileTokens(repoDir: string, relPath: string): number | null {
+  try {
+    // Note: benchmark DB source file paths are relative to repo root.
+    const content = readFileSync(join(repoDir, relPath), "utf-8");
+    return estimateTokens(content);
+  } catch {
+    return null;
+  }
+}
+
 function runBenchmarkQueries(
   benchDbPath: string,
   repoName: string,
+  repoDir: string,
 ): { cases: BenchmarkCase[]; flows: number; cardCount: number } {
   let db: InstanceType<typeof Database>;
   try {
     db = new Database(benchDbPath, { readonly: true });
     sqliteVec.load(db);
   } catch {
-    return { cases: [], flows: 0 };
+    return { cases: [], flows: 0, cardCount: 0 };
   }
 
   try {
@@ -614,7 +630,7 @@ function runBenchmarkQueries(
 
         const latency = Date.now() - start;
 
-        const srcmapTokens = cards.reduce((sum, c) => sum + Math.ceil(c.content.length / 4), 0);
+        const codeprismTokens = cards.reduce((sum, c) => sum + estimateTokens(c.content), 0);
         const sourceFiles = new Set<string>();
         for (const card of cards) {
           try {
@@ -623,12 +639,21 @@ function runBenchmarkQueries(
           } catch { /* ignore */ }
         }
 
-        // Naive tokens: use expected files when available (file-structure queries)
-        let naiveFileCount = sourceFiles.size;
-        if (naiveFileCount === 0 && q.expectedFiles) {
-          naiveFileCount = q.expectedFiles.length;
+        // Naive tokens: estimate actual tokens from the underlying source files.
+        // If we have no cards (or cards have no sources), fall back to expectedFiles (from file-structure queries).
+        const naiveFiles = sourceFiles.size > 0
+          ? Array.from(sourceFiles)
+          : (q.expectedFiles?.length ? q.expectedFiles : []);
+
+        let naiveTokens = 0;
+        if (naiveFiles.length > 0) {
+          for (const f of naiveFiles) {
+            naiveTokens += estimateFileTokens(repoDir, f) ?? 500;
+          }
+        } else {
+          // Conservative fallback when we can't map to files.
+          naiveTokens = 2500;
         }
-        const naiveTokens = naiveFileCount * 500;
 
         let flowHit = 0;
         let fileHit = 0;
@@ -668,8 +693,8 @@ function runBenchmarkQueries(
 
         cases.push({
           query: q.query,
-          srcmap_tokens: srcmapTokens,
-          naive_tokens: naiveTokens || 2500,
+          codeprism_tokens: codeprismTokens,
+          naive_tokens: naiveTokens,
           latency_ms: latency,
           cache_hit: false,
           flow_hit_rate: flowHit,
@@ -698,10 +723,10 @@ function buildProjectResult(
 ): BenchmarkProject {
   const name = repoSlug.split("/")[1] ?? repoSlug;
   const queriesTested = cases.length;
-  const avgSrcmap = cases.length > 0 ? Math.round(cases.reduce((s, c) => s + c.srcmap_tokens, 0) / cases.length) : 0;
+  const avgCodeprism = cases.length > 0 ? Math.round(cases.reduce((s, c) => s + c.codeprism_tokens, 0) / cases.length) : 0;
   const avgNaive = cases.length > 0 ? Math.round(cases.reduce((s, c) => s + c.naive_tokens, 0) / cases.length) : 0;
   const anyResults = cases.some((c) => c.result_count > 0);
-  const tokenReduction = avgNaive > 0 && anyResults ? Math.round((1 - avgSrcmap / avgNaive) * 1000) / 10 : 0;
+  const tokenReduction = avgNaive > 0 && anyResults ? Math.round((1 - avgCodeprism / avgNaive) * 1000) / 10 : 0;
   const avgLatency = cases.length > 0 ? Math.round(cases.reduce((s, c) => s + c.latency_ms, 0) / cases.length) : 0;
 
   const latencies = cases.map((c) => c.latency_ms).sort((a, b) => a - b);
@@ -736,7 +761,7 @@ function buildProjectResult(
     dbPath: `benchmarks/${slugify(repoSlug)}.db`,
     stats: {
       queries_tested: queriesTested,
-      avg_tokens_with_srcmap: avgSrcmap,
+      avg_tokens_with_codeprism: avgCodeprism,
       avg_tokens_without: avgNaive,
       token_reduction_pct: tokenReduction,
       avg_latency_ms: avgLatency,

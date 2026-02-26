@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-srcmap DeepEval evaluation — per-card relevance scoring.
+codeprism DeepEval evaluation — per-card relevance scoring.
 
 Runs alongside the existing Ragas evaluation. DeepEval's ContextualRelevancy
 gives per-card relevance scores which reveal *which card types* are causing
@@ -37,11 +37,11 @@ RESULTS_PATH = SCRIPT_DIR / "deepeval_results.json"
 
 
 # ---------------------------------------------------------------------------
-# srcmap search helper
+# codeprism search helper
 # ---------------------------------------------------------------------------
 
-def search_srcmap(server: str, query: str, limit: int = 10) -> list[dict]:
-    """Call srcmap hybrid search and return the raw card list."""
+def search_codeprism(server: str, query: str, limit: int = 10) -> list[dict]:
+    """Call codeprism hybrid search and return the raw card list."""
     try:
         resp = requests.get(
             f"{server}/api/search",
@@ -62,7 +62,7 @@ def search_srcmap(server: str, query: str, limit: int = 10) -> list[dict]:
 
 def build_test_cases(server: str, golden: list[dict], ids: list[str] | None = None):
     """
-    For each golden entry, call srcmap and build a DeepEvalTestCase.
+    For each golden entry, call codeprism and build a DeepEvalTestCase.
     Returns list of (test_case, expected_flows) tuples.
     """
     from deepeval.test_case import LLMTestCase
@@ -77,7 +77,7 @@ def build_test_cases(server: str, golden: list[dict], ids: list[str] | None = No
         ground_truth = entry.get("ground_truth", " ".join(expected_flows))
 
         print(f"  Searching: {query[:60]}...")
-        cards = search_srcmap(server, query)
+        cards = search_codeprism(server, query)
         if not cards:
             print(f"  [skip] no results for {entry['id']}")
             continue
@@ -99,7 +99,7 @@ def build_test_cases(server: str, golden: list[dict], ids: list[str] | None = No
             name=entry["id"],
         )
         cases.append((tc, expected_flows, cards))
-        time.sleep(0.2)  # be gentle with srcmap
+        time.sleep(0.2)  # be gentle with codeprism
 
     return cases
 
@@ -256,18 +256,18 @@ def get_git_sha() -> str | None:
 # ---------------------------------------------------------------------------
 
 def main():
-    parser = argparse.ArgumentParser(description="srcmap DeepEval evaluation")
-    parser.add_argument("--server", default="http://localhost:4000", help="srcmap server URL")
+    parser = argparse.ArgumentParser(description="codeprism DeepEval evaluation")
+    parser.add_argument("--server", default="http://localhost:4000", help="codeprism server URL")
     parser.add_argument("--model", default=None, help="Judge model (e.g. ollama/qwen2.5:7b)")
     parser.add_argument("--id", dest="ids", action="append", help="Run specific test case IDs")
     parser.add_argument("--no-history", action="store_true", help="Skip appending to history.json")
     args = parser.parse_args()
 
-    # Check srcmap is running
+    # Check codeprism is running
     try:
         requests.get(f"{args.server}/api/health", timeout=5).raise_for_status()
     except Exception:
-        print(f"\n  ✗  srcmap is not running at {args.server}")
+        print(f"\n  ✗  codeprism is not running at {args.server}")
         print(f"     Start it first: cd {SCRIPT_DIR.parent} && pnpm dev\n")
         sys.exit(1)
 
@@ -277,7 +277,7 @@ def main():
         sys.exit(1)
 
     golden = json.loads(GOLDEN_PATH.read_text())
-    print(f"\n  srcmap DeepEval Evaluation")
+    print(f"\n  codeprism DeepEval Evaluation")
     print(f"  Server : {args.server}")
     print(f"  Judge  : {args.model or 'default (requires API key)'}")
     print(f"  Cases  : {len(golden)} in dataset\n")
@@ -285,7 +285,7 @@ def main():
     # Build test cases
     test_cases_data = build_test_cases(args.server, golden, args.ids)
     if not test_cases_data:
-        print("[error] No test cases could be built (check srcmap is running and has cards)")
+        print("[error] No test cases could be built (check codeprism is running and has cards)")
         sys.exit(1)
 
     # Run metrics

@@ -16,7 +16,7 @@ vi.mock("../../db/connection.js", () => ({
 
 // Mock tree-sitter — returns a minimal parse result without native binaries
 vi.mock("../../indexer/tree-sitter.js", () => ({
-  parseFile: vi.fn(async (path: string, repo: string) => ({
+  parseVirtualFile: vi.fn(async (path: string, repo: string) => ({
     path,
     repo,
     language: "ruby",

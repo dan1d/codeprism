@@ -728,8 +728,8 @@ export async function generateProjectDocs(
   //
   // Knowledge is loaded from (priority order):
   //   1. CODEPRISM_KNOWLEDGE_DIR/<id>.md   — user / team override
-  //   2. <workspace>/.srcmap/knowledge/<id>.md — workspace-local community contribution
-  //   3. src/skills/knowledge/<id>.md   — built-in (shipped with srcmap)
+  //   2. <workspace>/.codeprism/knowledge/<id>.md — workspace-local community contribution
+  //   3. src/skills/knowledge/<id>.md             — built-in (shipped with codeprism)
   const resolvedSkills = stackProfile ? resolveSkills(stackProfile.skillIds) : [];
   const workspaceRoot = resolve(repoPath, "..");
   const knowledgeMap = resolvedSkills.length > 0

@@ -16,5 +16,5 @@ Describe what you'd like to see.
 Any alternative approaches you've thought about.
 
 **Context**
-- Which part of srcmap does this affect? (engine, dashboard, MCP tools, skills, deployment)
+- Which part of codeprism does this affect? (engine, dashboard, MCP tools, skills, deployment)
 - How many people would benefit?

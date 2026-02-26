@@ -130,5 +130,5 @@ async function tenantPlugin(app: FastifyInstance): Promise<void> {
 }
 
 export const tenantMiddleware = fp(tenantPlugin, {
-  name: "srcmap-tenant",
+  name: "codeprism-tenant",
 });

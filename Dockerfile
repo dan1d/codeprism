@@ -15,9 +15,9 @@ COPY --from=deps /app/packages/engine/node_modules ./packages/engine/node_module
 COPY --from=deps /app/packages/dashboard/node_modules ./packages/dashboard/node_modules
 COPY . .
 # Build engine (TypeScript → dist/)
-RUN pnpm --filter @srcmap/engine build
+RUN pnpm --filter @codeprism/engine build
 # Build dashboard (Vite → dist/)
-RUN pnpm --filter @srcmap/dashboard build
+RUN pnpm --filter @codeprism/dashboard build
 
 FROM base AS runtime
 COPY --from=deps /app/node_modules ./node_modules
@@ -29,8 +29,8 @@ COPY --from=build /app/packages/dashboard/dist ./packages/dashboard/dist
 COPY --from=build /app/package.json ./
 
 ENV NODE_ENV=production
-ENV SRCMAP_PORT=4000
-ENV SRCMAP_DB_PATH=/data/srcmap.db
+ENV CODEPRISM_PORT=4000
+ENV CODEPRISM_DB_PATH=/data/codeprism.db
 VOLUME /data
 EXPOSE 4000
 

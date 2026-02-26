@@ -1,6 +1,6 @@
 # MCP Tools Reference
 
-srcmap exposes 12 tools and 1 resource via MCP. Your AI calls these automatically when srcmap is connected.
+codeprism exposes 12 tools and 1 resource via MCP. Your AI calls these automatically when codeprism is connected.
 
 ## Tools
 
@@ -66,7 +66,7 @@ codeprism_save_insight({
 })
 ```
 
-Every 10 dev insights, srcmap automatically patches the team memory doc.
+Every 10 dev insights, codeprism automatically patches the team memory doc.
 
 ---
 
@@ -157,7 +157,7 @@ Promote a conversation-extracted insight to the rules or code_style doc after hu
 
 ## Resources
 
-### `srcmap://stats`
+### `codeprism://stats`
 
 JSON resource with current engine statistics:
 - `totalCards` -- non-stale card count

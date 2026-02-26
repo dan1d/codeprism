@@ -9,7 +9,7 @@ let client: SyncClient;
 let healthInterval: ReturnType<typeof setInterval>;
 
 export function activate(context: vscode.ExtensionContext): void {
-  const config = vscode.workspace.getConfiguration("srcmap");
+  const config = vscode.workspace.getConfiguration("codeprism");
   const engineUrl = config.get<string>("engineUrl", "http://localhost:4000");
   const autoSync = config.get<boolean>("autoSync", true);
   const debounceMs = config.get<number>("syncDebounceMs", 2000);
@@ -31,17 +31,13 @@ export function activate(context: vscode.ExtensionContext): void {
     statusBar.setSyncing();
     try {
       const result = await client.sync(payload);
-      if (result.ok) {
-        const health = await client.health();
-        statusBar.setConnected(health.cards);
-        if (result.staleCards && result.staleCards > 0) {
-          vscode.window.setStatusBarMessage(
-            `srcmap: ${result.staleCards} card(s) marked stale`,
-            3000,
-          );
-        }
-      } else {
-        statusBar.setDisconnected();
+      const health = await client.health();
+      statusBar.setConnected(health.cards);
+      if (result.invalidated && result.invalidated > 0) {
+        vscode.window.setStatusBarMessage(
+          `codeprism: ${result.invalidated} card(s) marked stale`,
+          3000,
+        );
       }
     } catch {
       statusBar.setDisconnected();
@@ -56,37 +52,37 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     statusBar,
     watcher,
-    vscode.commands.registerCommand("srcmap.syncNow", async () => {
+    vscode.commands.registerCommand("codeprism.syncNow", async () => {
       statusBar.setSyncing();
       try {
         await watcher.syncNow();
         const health = await client.health();
         statusBar.setConnected(health.cards);
         vscode.window.showInformationMessage(
-          `srcmap: Synced. ${health.cards} cards across ${health.flows} flows.`,
+          `codeprism: Synced. ${health.cards} cards across ${health.flows} flows.`,
         );
       } catch (err) {
         statusBar.setDisconnected();
         vscode.window.showErrorMessage(
-          `srcmap: Sync failed – ${err instanceof Error ? err.message : err}`,
+          `codeprism: Sync failed – ${err instanceof Error ? err.message : err}`,
         );
       }
     }),
-    vscode.commands.registerCommand("srcmap.showStatus", async () => {
+    vscode.commands.registerCommand("codeprism.showStatus", async () => {
       try {
         const health = await client.health();
         vscode.window.showInformationMessage(
-          `srcmap engine: ${health.cards} cards, ${health.flows} flows – ${engineUrl}`,
+          `codeprism engine: ${health.cards} cards, ${health.flows} flows – ${engineUrl}`,
         );
         statusBar.setConnected(health.cards);
       } catch {
         vscode.window.showWarningMessage(
-          `srcmap engine unreachable at ${engineUrl}`,
+          `codeprism engine unreachable at ${engineUrl}`,
         );
         statusBar.setDisconnected();
       }
     }),
-    vscode.commands.registerCommand("srcmap.reindex", async () => {
+    vscode.commands.registerCommand("codeprism.reindex", async () => {
       const confirm = await vscode.window.showWarningMessage(
         "Trigger a full re-index of the codebase? This runs the indexer CLI.",
         "Yes",
@@ -94,17 +90,17 @@ export function activate(context: vscode.ExtensionContext): void {
       );
       if (confirm !== "Yes") return;
 
-      const terminal = vscode.window.createTerminal("srcmap reindex");
+      const terminal = vscode.window.createTerminal("codeprism reindex");
       terminal.show();
       terminal.sendText(
-        `cd "${workspaceRoot}" && npx tsx node_modules/.bin/srcmap-index || echo "Run the indexer from the srcmap directory"`,
+        `cd "${workspaceRoot}" && npx codeprism-index || echo "Run the indexer from the codeprism directory"`,
       );
     }),
   );
 
   vscode.workspace.onDidChangeConfiguration((e) => {
-    if (e.affectsConfiguration("srcmap")) {
-      const newConfig = vscode.workspace.getConfiguration("srcmap");
+    if (e.affectsConfiguration("codeprism")) {
+      const newConfig = vscode.workspace.getConfiguration("codeprism");
       const newUrl = newConfig.get<string>("engineUrl", "http://localhost:4000");
       client.setBaseUrl(newUrl);
       checkHealth();

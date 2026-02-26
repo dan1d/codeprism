@@ -10,8 +10,8 @@ describe("writeDocsToFilesystem", () => {
   let repoDir: string;
 
   beforeEach(async () => {
-    workspaceDir = await mkdtemp(join(tmpdir(), "srcmap-test-"));
-    repoDir = await mkdtemp(join(tmpdir(), "srcmap-repo-"));
+    workspaceDir = await mkdtemp(join(tmpdir(), "codeprism-test-"));
+    repoDir = await mkdtemp(join(tmpdir(), "codeprism-repo-"));
   });
 
   afterEach(async () => {
@@ -19,7 +19,7 @@ describe("writeDocsToFilesystem", () => {
     await rm(repoDir, { recursive: true, force: true });
   });
 
-  it("writes docs to /ai-srcmap/ under each repo root", async () => {
+  it("writes docs to /ai-codeprism/ under each repo root", async () => {
     const docs: DocToWrite[] = [
       { repoAbsPath: repoDir, docType: "readme", content: "# Hello" },
       { repoAbsPath: repoDir, docType: "about", content: "About the project" },
@@ -31,10 +31,10 @@ describe("writeDocsToFilesystem", () => {
     expect(result.skipped).toBe(0);
     expect(result.errors).toHaveLength(0);
 
-    const readmeContent = await readFile(join(repoDir, "ai-srcmap", "README.md"), "utf-8");
+    const readmeContent = await readFile(join(repoDir, "ai-codeprism", "README.md"), "utf-8");
     expect(readmeContent).toBe("# Hello");
 
-    const aboutContent = await readFile(join(repoDir, "ai-srcmap", "ABOUT.md"), "utf-8");
+    const aboutContent = await readFile(join(repoDir, "ai-codeprism", "ABOUT.md"), "utf-8");
     expect(aboutContent).toBe("About the project");
   });
 
@@ -46,7 +46,7 @@ describe("writeDocsToFilesystem", () => {
     const result = await writeDocsToFilesystem(docs, workspaceDir);
 
     expect(result.written).toBe(1);
-    expect(existsSync(join(workspaceDir, "ai-srcmap", "CROSS_REPO.md"))).toBe(true);
+    expect(existsSync(join(workspaceDir, "ai-codeprism", "CROSS_REPO.md"))).toBe(true);
   });
 
   it("skips files whose content hash matches existing file (idempotent write)", async () => {
@@ -73,7 +73,7 @@ describe("writeDocsToFilesystem", () => {
     expect(result.written).toBe(1);
     expect(result.skipped).toBe(0);
 
-    const content = await readFile(join(repoDir, "ai-srcmap", "README.md"), "utf-8");
+    const content = await readFile(join(repoDir, "ai-codeprism", "README.md"), "utf-8");
     expect(content).toBe("v2");
   });
 });

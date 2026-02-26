@@ -7,11 +7,11 @@
 3. SSH in and run:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/yourusername/srcmap/main/deploy/setup.sh | bash
+curl -sSL https://raw.githubusercontent.com/codeprism/codeprism/main/deploy/setup.sh | bash
 ```
 
-4. Edit `/opt/srcmap/repo/deploy/.env` with your domain
-5. Restart: `cd /opt/srcmap/repo/deploy && docker compose -f docker-compose.prod.yml --env-file .env up -d`
+4. Edit `/opt/codeprism/repo/deploy/.env` with your domain
+5. Restart: `cd /opt/codeprism/repo/deploy && docker compose -f docker-compose.prod.yml --env-file .env up -d`
 
 ## Manual setup
 
@@ -26,7 +26,7 @@ docker compose -f docker-compose.prod.yml --env-file .env up -d
 Add to crontab for daily 3am backups:
 ```bash
 crontab -e
-# Add: 0 3 * * * /opt/srcmap/repo/deploy/backup.sh
+# Add: 0 3 * * * /opt/codeprism/repo/deploy/backup.sh
 ```
 
 ## Monitoring
@@ -39,7 +39,7 @@ curl https://yourdomain.com/api/health
 docker compose -f docker-compose.prod.yml logs -f
 
 # Check disk usage
-du -sh /var/lib/docker/volumes/deploy_srcmap-data/
+du -sh /var/lib/docker/volumes/deploy_codeprism-data/
 ```
 
 ## Scaling

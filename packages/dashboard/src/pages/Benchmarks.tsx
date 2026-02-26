@@ -85,18 +85,18 @@ function StatCard({
 
 function TokenBar({
   label,
-  srcmap,
+  codeprism,
   naive,
   maxNaive,
 }: {
   label: string;
-  srcmap: number;
+  codeprism: number;
   naive: number;
   maxNaive: number;
 }) {
   const naivePct = Math.min((naive / maxNaive) * 100, 100);
-  const srcmapPct = Math.min((srcmap / maxNaive) * 100, 100);
-  const reduction = naive > 0 ? Math.round((1 - srcmap / naive) * 100) : 0;
+  const codeprismPct = Math.min((codeprism / maxNaive) * 100, 100);
+  const reduction = naive > 0 ? Math.round((1 - codeprism / naive) * 100) : 0;
 
   return (
     <div className="py-2">
@@ -125,16 +125,16 @@ function TokenBar({
         </div>
         <div className="flex items-center gap-2">
           <span className="text-[10px] text-[#8b949e] w-14 text-right">
-            srcmap
+            codeprism
           </span>
           <div className="flex-1 h-3 bg-[#21262d] rounded-sm overflow-hidden">
             <div
               className="h-full bg-[#3fb950]/70 rounded-sm"
-              style={{ width: `${srcmapPct}%` }}
+              style={{ width: `${codeprismPct}%` }}
             />
           </div>
           <span className="text-[10px] font-mono text-[#8b949e] w-12 text-right">
-            {formatTokens(srcmap)}
+            {formatTokens(codeprism)}
           </span>
         </div>
       </div>
@@ -202,8 +202,8 @@ function ContextPreview({ result }: { result: SandboxResponse }) {
           <p className="text-[10px] text-[#8b949e]">tokens saved</p>
         </div>
         <div className="rounded bg-[#161b22] border border-[#21262d] p-3 text-center">
-          <p className="text-lg font-bold text-accent">{result.srcmapTokens.toLocaleString()}</p>
-          <p className="text-[10px] text-[#8b949e]">srcmap context tokens</p>
+          <p className="text-lg font-bold text-accent">{result.codeprismTokens.toLocaleString()}</p>
+          <p className="text-[10px] text-[#8b949e]">codeprism context tokens</p>
         </div>
         <div className="rounded bg-[#161b22] border border-[#21262d] p-3 text-center">
           <p className="text-lg font-bold text-[#f85149]">{result.naiveTokens.toLocaleString()}</p>
@@ -217,14 +217,14 @@ function ContextPreview({ result }: { result: SandboxResponse }) {
         </div>
       </div>
 
-      {/* Without srcmap vs With srcmap comparison */}
+      {/* Without codeprism vs With codeprism comparison */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {/* Without srcmap */}
+        {/* Without codeprism */}
         <div className="rounded border border-[#f85149]/30 bg-[#f85149]/5 p-4">
           <div className="flex items-center gap-1.5 mb-2">
             <span className="h-2 w-2 rounded-full bg-[#f85149]" />
             <h5 className="text-xs font-medium text-[#f85149] uppercase tracking-wide">
-              Without srcmap
+              Without codeprism
             </h5>
           </div>
           <p className="text-xs text-[#8b949e] mb-2">
@@ -249,17 +249,17 @@ function ContextPreview({ result }: { result: SandboxResponse }) {
           </div>
         </div>
 
-        {/* With srcmap */}
+        {/* With codeprism */}
         <div className="rounded border border-[#3fb950]/30 bg-[#3fb950]/5 p-4">
           <div className="flex items-center gap-1.5 mb-2">
             <span className="h-2 w-2 rounded-full bg-[#3fb950]" />
             <h5 className="text-xs font-medium text-[#3fb950] uppercase tracking-wide">
-              With srcmap
+              With codeprism
             </h5>
           </div>
           <p className="text-xs text-[#8b949e] mb-2">
-            srcmap injects <span className="text-[#e1e4e8] font-mono">{result.cards.length}</span> pre-digested knowledge cards,
-            only ~<span className="text-[#e1e4e8] font-mono">{result.srcmapTokens.toLocaleString()}</span> tokens. No file reads needed.
+            codeprism injects <span className="text-[#e1e4e8] font-mono">{result.cards.length}</span> pre-digested knowledge cards,
+            only ~<span className="text-[#e1e4e8] font-mono">{result.codeprismTokens.toLocaleString()}</span> tokens. No file reads needed.
           </p>
           <div className="flex flex-wrap gap-1">
             {result.cards.map((c) => (
@@ -285,7 +285,7 @@ function ContextPreview({ result }: { result: SandboxResponse }) {
             What gets injected into AI context
           </span>
           <span className="flex items-center gap-1">
-            <span className="font-mono text-[10px]">~{result.srcmapTokens} tokens</span>
+            <span className="font-mono text-[10px]">~{result.codeprismTokens} tokens</span>
             {showRaw ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
           </span>
         </button>
@@ -415,7 +415,7 @@ function SandboxPanel({ project }: { project: BenchmarkProject }) {
                 No cards found for <span className="text-[#e1e4e8] font-mono">{project.repo}</span>.
               </p>
               <p className="text-xs text-[#484f58] mt-1">
-                This project needs to be live-indexed first. Use the "Benchmark a project" form above to index it with srcmap.
+                This project needs to be live-indexed first. Use the "Benchmark a project" form above to index it with codeprism.
               </p>
             </div>
           ) : (
@@ -499,7 +499,7 @@ function ProjectSection({ project }: { project: BenchmarkProject }) {
               <TokenBar
                 key={i}
                 label={c.query}
-                srcmap={c.srcmap_tokens}
+                codeprism={c.codeprism_tokens}
                 naive={c.naive_tokens}
                 maxNaive={maxNaive}
               />
@@ -1108,7 +1108,7 @@ function SubmitForm({
 
       {isFull ? (
         <p className="text-sm text-[#8b949e]">
-          All benchmark slots are taken. Check back later or self-host srcmap to run unlimited benchmarks.
+          All benchmark slots are taken. Check back later or self-host codeprism to run unlimited benchmarks.
         </p>
       ) : queuePosition ? (
         <BenchmarkStepper currentStage={currentStage} />
@@ -1274,7 +1274,7 @@ export function Benchmarks() {
           </Link>
           <h1 className="text-3xl font-bold text-[#e1e4e8]">Benchmarks</h1>
           <p className="mt-2 text-[#8b949e] max-w-2xl">
-            How srcmap performs across real-world open-source projects.
+            How codeprism performs across real-world open-source projects.
             {agg && (
               <>
                 {" "}
@@ -1466,8 +1466,9 @@ export function Benchmarks() {
                 <li className="flex items-start gap-2">
                   <span className="mt-1 block h-1.5 w-1.5 shrink-0 rounded-full bg-[#30363d]" />
                   <strong className="text-[#e1e4e8]">Token reduction</strong>:
-                  srcmap response tokens vs. estimated tokens from reading all
-                  source files referenced in matched cards (~500 tokens/file)
+                  codeprism card tokens vs. naive tokens from reading referenced
+                  source files (estimated as ~4 chars/token), using the repository
+                  checkout from the benchmark run
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="mt-1 block h-1.5 w-1.5 shrink-0 rounded-full bg-[#30363d]" />
@@ -1506,7 +1507,7 @@ export function Benchmarks() {
           </Link>
           <span className="text-[#30363d]">|</span>
           <a
-            href="https://github.com/srcmap/srcmap"
+            href="https://github.com/codeprism/codeprism"
             className="hover:text-accent transition-colors"
           >
             GitHub
@@ -1631,8 +1632,8 @@ export function BenchmarkDetail() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-4 text-center">
             <TrendingDown className="h-5 w-5 text-[#3fb950] mx-auto mb-2" />
-            <p className="text-xl font-bold text-[#3fb950]">{s.avg_tokens_with_srcmap}</p>
-            <p className="text-xs text-[#8b949e] mt-0.5">srcmap tokens/query</p>
+            <p className="text-xl font-bold text-[#3fb950]">{s.avg_tokens_with_codeprism}</p>
+            <p className="text-xs text-[#8b949e] mt-0.5">codeprism tokens/query</p>
           </div>
           <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-4 text-center">
             <TrendingDown className="h-5 w-5 text-[#f85149] mx-auto mb-2" />

@@ -1,9 +1,17 @@
 import { useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { Copy, Check, ArrowRight, Loader2, AlertCircle } from "lucide-react";
+import { Copy, Check, ArrowRight, Loader2, AlertCircle, Terminal } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
+
+const EDITORS = [
+  { id: "cursor",   label: "Cursor",     file: ".cursor/mcp.json" },
+  { id: "windsurf", label: "Windsurf",   file: ".windsurf/mcp_config.json" },
+  { id: "claude",   label: "Claude",     file: "~/.claude/claude_desktop_config.json" },
+  { id: "zed",      label: "Zed",        file: "~/.config/zed/settings.json" },
+  { id: "lovable",  label: "Lovable",    file: "Settings → Integrations → MCP" },
+] as const;
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -33,10 +41,10 @@ export function AcceptInvite() {
   const { login } = useAuth();
 
   const token = params.get("token");
-  const tenantSlug = params.get("tenant");
 
   const [verifying, setVerifying] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeEditor, setActiveEditor] = useState<typeof EDITORS[number]["id"]>("cursor");
   const [verified, setVerified] = useState<{
     email: string;
     tenantName: string;
@@ -66,23 +74,22 @@ export function AcceptInvite() {
   }, [token]);
 
   const baseUrl = window.location.origin;
-  const mcpConfig = verified
-    ? JSON.stringify(
-        {
-          mcpServers: {
-            codeprism: {
-              url: `${baseUrl}/${verified.tenantSlug}/mcp/sse`,
-              headers: {
-                Authorization: "Bearer YOUR_TEAM_API_KEY",
-                "X-Dev-Email": verified.email,
-              },
-            },
-          },
-        },
-        null,
-        2
-      )
-    : "";
+  const makeMcpConfig = (editorId: string) => {
+    if (!verified) return "";
+    const server = {
+      url: `${baseUrl}/${verified.tenantSlug}/mcp/sse`,
+      headers: {
+        Authorization: "Bearer YOUR_TEAM_API_KEY",
+        "X-Dev-Email": verified.email,
+      },
+    };
+    if (editorId === "zed") {
+      return JSON.stringify({ context_servers: { codeprism: server } }, null, 2);
+    }
+    return JSON.stringify({ mcpServers: { codeprism: server } }, null, 2);
+  };
+  const mcpConfig = makeMcpConfig(activeEditor);
+  const hookCmd = `curl -fsSL https://raw.githubusercontent.com/codeprism/codeprism/main/scripts/install-hook.sh | sh -s -- --engine-url ${baseUrl}`;
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center">
@@ -125,10 +132,27 @@ export function AcceptInvite() {
             </div>
 
             <div>
+              <p className="mb-2 text-sm text-[#e1e4e8]">Add to your AI editor</p>
+              <div className="flex flex-wrap gap-1 mb-2">
+                {EDITORS.map((ed) => (
+                  <button
+                    key={ed.id}
+                    onClick={() => setActiveEditor(ed.id)}
+                    className={cn(
+                      "rounded px-3 py-1 text-xs font-medium transition-colors",
+                      activeEditor === ed.id
+                        ? "bg-accent text-black"
+                        : "border border-[#30363d] text-[#8b949e] hover:border-[#8b949e]"
+                    )}
+                  >
+                    {ed.label}
+                  </button>
+                ))}
+              </div>
               <div className="mb-2 flex items-center justify-between">
-                <span className="text-sm text-[#e1e4e8]">
-                  Add to <code className="text-accent">.cursor/mcp.json</code>
-                </span>
+                <code className="text-xs text-[#8b949e]">
+                  {EDITORS.find((e) => e.id === activeEditor)?.file}
+                </code>
                 <CopyButton text={mcpConfig} />
               </div>
               <pre className="rounded-lg border border-[#30363d] bg-[#0f1117] p-4 text-xs text-[#e1e4e8] overflow-x-auto">
@@ -136,6 +160,20 @@ export function AcceptInvite() {
               </pre>
               <p className="mt-2 text-xs text-[#d29922]">
                 Replace <code>YOUR_TEAM_API_KEY</code> with the team API key from your admin.
+              </p>
+            </div>
+
+            <div className="rounded-lg border border-[#30363d] bg-[#0f1117] p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Terminal className="h-4 w-4 text-[#8b949e]" />
+                <span className="text-sm text-[#e1e4e8]">Auto-sync on git commit</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <code className="text-xs text-[#8b949e]">{hookCmd}</code>
+                <CopyButton text={hookCmd} />
+              </div>
+              <p className="mt-2 text-xs text-[#484f58]">
+                Run once per repo. Works with any editor.
               </p>
             </div>
 

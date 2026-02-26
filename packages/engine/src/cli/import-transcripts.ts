@@ -1,5 +1,5 @@
 /**
- * srcmap import-transcripts — discovers and processes AI conversation transcripts.
+ * codeprism import-transcripts — discovers and processes AI conversation transcripts.
  *
  * Auto-discovers Cursor transcripts at ~/.cursor/projects/*\/agent-transcripts/*.jsonl
  * and Claude Code transcripts at ~/.claude/projects/**\/*.jsonl.
@@ -58,7 +58,7 @@ export async function importTranscripts(opts: ImportOptions = {}): Promise<void>
     process.exit(1);
   }
 
-  console.log(`\n=== srcmap import-transcripts${dryRun ? " (dry-run)" : ""} ===\n`);
+  console.log(`\n=== codeprism import-transcripts${dryRun ? " (dry-run)" : ""} ===\n`);
 
   // ---------------------------------------------------------------------------
   // 1. Auto-discover transcript files

@@ -2,7 +2,9 @@ services:
   - type: web
     name: codeprism
     runtime: docker
-    plan: starter
+    # Minimum: standard plan (2 GB RAM) — the local embedding model needs ~1.5 GB.
+    # Starter (512 MB) will OOM on first index.
+    plan: standard
     envVars:
       - key: CODEPRISM_PORT
         value: 4000

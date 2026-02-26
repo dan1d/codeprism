@@ -97,7 +97,7 @@ describe("seedFromReadme", () => {
   let tmpDir: string;
 
   beforeEach(async () => {
-    tmpDir = await mkdtemp(join(tmpdir(), "srcmap-readme-"));
+    tmpDir = await mkdtemp(join(tmpdir(), "codeprism-readme-"));
   });
 
   afterEach(async () => {

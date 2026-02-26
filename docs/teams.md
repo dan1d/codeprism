@@ -1,6 +1,6 @@
 # Teams and User Management
 
-This guide covers how srcmap Cloud handles team workspaces, developer identification, and seat management.
+This guide covers how codeprism Cloud handles team workspaces, developer identification, and seat management.
 
 ## Creating a workspace
 
@@ -38,7 +38,7 @@ Enter email addresses (one per line or comma-separated). Each developer receives
 
 ## Developer identification via X-Dev-Email
 
-In srcmap Cloud, developers are identified by the `X-Dev-Email` header in their MCP config:
+In codeprism Cloud, developers are identified by the `X-Dev-Email` header in their MCP config:
 
 ```json
 {
@@ -62,13 +62,13 @@ This header feeds into the `dev_id` column in the metrics table, enabling:
 
 ### Auto-detection
 
-If a developer uses the team's API key with a new `X-Dev-Email` that hasn't been invited, srcmap automatically registers them as a "detected" member. The admin sees them in the Team page and can promote or deactivate them.
+If a developer uses the team's API key with a new `X-Dev-Email` that hasn't been invited, codeprism automatically registers them as a "detected" member. The admin sees them in the Team page and can promote or deactivate them.
 
 ## Team member statuses
 
 | Status | Meaning |
 |--------|---------|
-| **Active** | Accepted invitation, using srcmap |
+| **Active** | Accepted invitation, using codeprism |
 | **Invited** | Invitation sent, not yet accepted |
 | **Detected** | Auto-registered via X-Dev-Email (not formally invited) |
 | **Deactivated** | Removed by admin (no longer counted as active) |
@@ -125,4 +125,4 @@ CODEPRISM_DOMAIN=your-domain.com
 | `CODEPRISM_ADMIN_KEY` | Secret for admin API routes | (none) |
 | `CODEPRISM_DOMAIN` | Domain for email links | `localhost:4000` |
 | `CODEPRISM_RESEND_API_KEY` | Resend API key for sending emails | (none, logs to console) |
-| `CODEPRISM_FROM_EMAIL` | From address for emails | `srcmap <noreply@codeprism.dev>` |
+| `CODEPRISM_FROM_EMAIL` | From address for emails | `codeprism <noreply@codeprism.dev>` |

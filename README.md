@@ -1,12 +1,10 @@
 # codeprism
 
-**Cut AI coding costs by 90%. Without changing how you work.**
+**Your AI forgets what your team learned yesterday. codeprism fixes that.**
 
-codeprism is a shared context layer for AI coding tools. It indexes your codebase into a knowledge graph and serves pre-digested context cards to Cursor, Claude Code, Windsurf, or any MCP-compatible tool — instead of dumping raw files.
+codeprism is a shared memory layer for AI coding tools. It builds a knowledge graph from your codebase and serves compact, verifiable context cards to Cursor, Claude Code, Windsurf, Lovable, Zed, or any MCP-compatible tool — instead of dumping raw files.
 
-**200 tokens instead of 4,500. Same answer. A fraction of the cost.**
-
-[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%203.0-blue.svg)](LICENSE)
+[![License: BUSL-1.1](https://img.shields.io/badge/License-BUSL%201.1-blue.svg)](LICENSE)
 [![Cloud](https://img.shields.io/badge/cloud-codeprism.dev-58a6ff)](https://codeprism.dev)
 [![Self-host](https://img.shields.io/badge/self--host-docker%20compose%20up-3fb950)](https://codeprism.dev/docs/deployment)
 
@@ -33,23 +31,30 @@ No infrastructure. Get started in 60 seconds:
 
 → **[codeprism.dev](https://codeprism.dev)** — first 100 teams get up to 10 developers free, no credit card
 
-### Self-hosted
+### Self-hosted (5 minutes)
 
 ```bash
 # 1. Start the server
 docker compose up -d
-
-# 2. Index your code
-pnpm codeprism index
 ```
 
-**3. Connect your AI tool** — add to your config file:
+Open the dashboard at `http://localhost:4000`, create a workspace, and copy the MCP config shown in onboarding.
+
+Then, in each repo you want indexed, install git hooks and run an initial sync:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/codeprism/codeprism/main/scripts/install-hook.sh \
+  | sh -s -- --engine-url http://localhost:4000 --sync-now
+```
+
+**Connect your AI tool** — add to your config file:
 
 | Tool | Config file |
 |------|------------|
 | Cursor | `.cursor/mcp.json` |
-| Claude Code | `claude_desktop_config.json` |
-| Windsurf | `~/.codeium/windsurf/mcp_config.json` |
+| Claude Code | `~/.claude/claude_desktop_config.json` |
+| Windsurf | `.windsurf/mcp_config.json` |
+| Zed | `~/.config/zed/settings.json` |
 | Lovable | Project settings → MCP |
 
 ```json
@@ -292,4 +297,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, PR process, and ho
 
 ## License
 
-AGPL-3.0 — free to self-host forever. See [LICENSE](LICENSE).
+This repository is **multi-licensed**. See [`LICENSES.md`](LICENSES.md).
+
+- **Engine**: `BUSL-1.1` (Business Source License 1.1). See [`LICENSE`](LICENSE).
+- **Dashboard + Extension**: `MIT`. See `packages/*/LICENSE`.

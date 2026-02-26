@@ -106,7 +106,7 @@ export async function refreshDocs(targetRepo?: string): Promise<{ refreshed: num
 
 export async function listKnowledgeFiles(): Promise<Array<{ id: string; source: "builtin" | "custom" }>> {
   const workspaceRoot = getWorkspaceRoot();
-  const customDir = join(workspaceRoot, ".srcmap", "knowledge");
+  const customDir = join(workspaceRoot, ".codeprism", "knowledge");
   const builtinDir = resolve(_moduleDir, "../skills/knowledge");
 
   const readDir = async (dir: string, source: "builtin" | "custom") => {
@@ -137,7 +137,7 @@ export async function saveKnowledgeFile(skillId: string, content: string): Promi
   if (content.length > 500_000) throw new Error("Content exceeds 500 KB limit");
 
   const workspaceRoot = getWorkspaceRoot();
-  const customDir = join(workspaceRoot, ".srcmap", "knowledge");
+  const customDir = join(workspaceRoot, ".codeprism", "knowledge");
   await mkdir(customDir, { recursive: true });
 
   const filePath = join(customDir, `${sanitized}.md`);

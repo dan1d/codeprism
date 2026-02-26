@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Copy, Check, ArrowRight, ArrowLeft, Users, Sparkles, SkipForward } from "lucide-react";
+import { Copy, Check, ArrowRight, ArrowLeft, Users, Sparkles, SkipForward, Terminal } from "lucide-react";
 import { api, type TenantInfo, type FoundingStatus } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -97,23 +97,33 @@ export function Onboard() {
     }
   };
 
-  const mcpJson = result
-    ? JSON.stringify(
-        {
-          mcpServers: {
-            codeprism: {
-              url: result.mcpUrl,
-              headers: {
-                Authorization: `Bearer ${result.apiKey}`,
-                "X-Dev-Email": email,
-              },
-            },
-          },
-        },
-        null,
-        2
-      )
-    : "";
+  const EDITORS = [
+    { id: "cursor",      label: "Cursor",      file: ".cursor/mcp.json" },
+    { id: "windsurf",    label: "Windsurf",     file: ".windsurf/mcp_config.json" },
+    { id: "claude",      label: "Claude Code",  file: "~/.claude/claude_desktop_config.json" },
+    { id: "zed",         label: "Zed",          file: "~/.config/zed/settings.json" },
+    { id: "lovable",     label: "Lovable",      file: "Settings → Integrations → MCP" },
+  ] as const;
+
+  const [activeEditor, setActiveEditor] = useState<typeof EDITORS[number]["id"]>("cursor");
+
+  const makeMcpJson = (editorId: string) => {
+    if (!result) return "";
+    const server = {
+      url: result.mcpUrl,
+      headers: {
+        Authorization: `Bearer ${result.apiKey}`,
+        "X-Dev-Email": email,
+      },
+    };
+    if (editorId === "zed") {
+      return JSON.stringify({ context_servers: { codeprism: server } }, null, 2);
+    }
+    return JSON.stringify({ mcpServers: { codeprism: server } }, null, 2);
+  };
+
+  const mcpJson = makeMcpJson(activeEditor);
+  const hookCmd = `curl -fsSL https://raw.githubusercontent.com/codeprism/codeprism/main/scripts/install-hook.sh | sh -s -- --engine-url ${typeof window !== "undefined" ? window.location.origin : ""}`;
 
   return (
     <div className="min-h-screen bg-background">
@@ -220,15 +230,47 @@ export function Onboard() {
               </div>
 
               <div>
+                <p className="mb-2 text-sm text-[#e1e4e8]">Add to your AI editor</p>
+                <div className="flex flex-wrap gap-1 mb-2">
+                  {EDITORS.map((ed) => (
+                    <button
+                      key={ed.id}
+                      onClick={() => setActiveEditor(ed.id)}
+                      className={cn(
+                        "rounded px-3 py-1 text-xs font-medium transition-colors",
+                        activeEditor === ed.id
+                          ? "bg-accent text-black"
+                          : "border border-[#30363d] text-[#8b949e] hover:border-[#8b949e]"
+                      )}
+                    >
+                      {ed.label}
+                    </button>
+                  ))}
+                </div>
                 <div className="mb-2 flex items-center justify-between">
-                  <span className="text-sm text-[#e1e4e8]">
-                    Add to <code className="text-accent">.cursor/mcp.json</code>
-                  </span>
+                  <code className="text-xs text-[#8b949e]">
+                    {EDITORS.find((e) => e.id === activeEditor)?.file}
+                  </code>
                   <CopyButton text={mcpJson} />
                 </div>
                 <pre className="rounded-lg border border-[#30363d] bg-[#0f1117] p-4 text-xs text-[#e1e4e8] overflow-x-auto">
                   {mcpJson}
                 </pre>
+              </div>
+
+              <div className="rounded-lg border border-[#30363d] bg-[#0f1117] p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Terminal className="h-4 w-4 text-[#8b949e]" />
+                  <span className="text-sm text-[#e1e4e8]">Auto-sync on git commit</span>
+                  <span className="text-xs text-[#8b949e]">(works with any editor)</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <code className="text-xs text-[#8b949e]">{hookCmd}</code>
+                  <CopyButton text={hookCmd} />
+                </div>
+                <p className="mt-2 text-xs text-[#484f58]">
+                  Run once per repo. Installs git hooks that sync your knowledge base after every merge, checkout and rebase.
+                </p>
               </div>
             </div>
 

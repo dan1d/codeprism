@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   FileText, GitBranch, Zap, Users, RefreshCw, Brain,
-  TrendingDown, Target, ArrowRight, DollarSign, Cpu, ChevronDown,
+  TrendingDown, Target, ArrowRight, Cpu, ChevronDown, AlertTriangle,
 } from "lucide-react";
 import { api, type PublicStats, type FoundingStatus, type BenchmarkResponse } from "@/lib/api";
 import { formatTokens, stackColor, cn } from "@/lib/utils";
@@ -16,43 +16,43 @@ const FRAMEWORKS = [
 
 const HOW_IT_WORKS = [
   {
-    title: "Parse",
+    title: "Index",
     description:
-      "Tree-sitter extracts structure from Ruby, JS/TS, Vue, Python, Go across all your repos",
+      "Tree-sitter parses your repos into a knowledge graph — models, flows, routes, dependencies — across Ruby, JS/TS, Python, Go and more.",
     icon: FileText,
   },
   {
-    title: "Graph",
+    title: "Learn",
     description:
-      "Louvain community detection finds natural feature flows across services and repos",
+      "Louvain community detection maps your team's real architectural flows. Cards get richer every time a developer verifies or corrects one.",
     icon: GitBranch,
   },
   {
-    title: "Serve",
+    title: "Answer",
     description:
-      "Your AI calls codeprism_search() and gets a 200-token card instead of reading 15 files — works in Cursor, Claude Code, Windsurf, and Lovable",
+      "Any AI tool calls codeprism_search() and gets a 300-token card with the right context — instead of hallucinating or re-reading 15 raw files.",
     icon: Zap,
   },
 ];
 
 const TEAM_BENEFITS = [
   {
-    title: "Ask once, everyone benefits",
+    title: "Alice figured it out. Bob shouldn't have to.",
     description:
-      "When Alice discovers how the billing flow works in Cursor, that knowledge is instantly available to Bob in Claude Code and Charlie in Windsurf.",
+      "When one developer discovers how the billing flow works in Cursor, that knowledge is instantly available to the teammate using Claude Code and the one using Windsurf.",
     icon: Users,
   },
   {
-    title: "Zero repeated context",
+    title: "Every session starts senior, not junior",
     description:
-      "No more burning tokens re-explaining your architecture every session. The knowledge graph remembers what the team already knows.",
-    icon: RefreshCw,
+      "AI tools forget everything between sessions. codeprism gives every new session the accumulated knowledge of your entire team — from day one.",
+    icon: Brain,
   },
   {
-    title: "Knowledge compounds over time",
+    title: "Knowledge compounds, not costs",
     description:
-      "Every insight saved, every card verified, every question asked makes the system smarter. Month 6 is dramatically more valuable than month 1.",
-    icon: Brain,
+      "Month 6 is dramatically smarter than month 1. Every card verified, every insight saved, every question asked makes the whole team's AI sharper.",
+    icon: RefreshCw,
   },
 ];
 
@@ -96,7 +96,7 @@ function SavingsCalculator() {
       {/* Controls */}
       <div className="px-6 py-6 border-b border-[#21262d]">
         <h3 className="text-sm font-semibold text-[#e1e4e8] mb-5">
-          Your token savings
+          Your team's monthly AI spend, before and after
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
           {/* Queries/day */}
@@ -215,7 +215,7 @@ function SavingsCalculator() {
             "hover:bg-[#79b8ff] transition-colors"
           )}
         >
-          Start saving free
+          Start free →
         </Link>
       </div>
     </div>
@@ -243,19 +243,17 @@ export function Landing() {
         {/* Badge */}
         <div className="inline-flex items-center gap-2 rounded-full border border-[#30363d] bg-[#161b22] px-3 py-1 text-xs text-[#8b949e] mb-6">
           <span className="h-1.5 w-1.5 rounded-full bg-[#3fb950] animate-pulse" />
-          <span>Open source · Works with Cursor, Claude Code, Windsurf, Lovable</span>
+          <span>Open source · Cursor · Claude Code · Windsurf · Lovable · Zed</span>
         </div>
 
         <h1 className="mx-auto max-w-3xl text-4xl font-bold leading-tight text-[#e1e4e8] sm:text-5xl">
-          Cut AI coding costs by{" "}
-          <span className="text-accent">{REDUCTION_PCT}%.</span>
-          <br />
-          Without changing how you work.
+          Your AI forgets what your team{" "}
+          <span className="text-accent">learned yesterday.</span>
         </h1>
         <p className="mx-auto mt-6 max-w-2xl text-lg text-[#8b949e]">
-          codeprism indexes your codebase into a knowledge graph. Your AI assistant reads{" "}
-          <span className="text-[#e1e4e8] font-medium">300 tokens of context</span> instead of{" "}
-          <span className="text-[#e1e4e8] font-medium">4,500 tokens of raw files</span> — same answer, fraction of the cost.
+          codeprism is a{" "}
+          <span className="text-[#e1e4e8] font-medium">shared memory layer</span> for AI coding tools.
+          One knowledge graph, shared across your whole team — regardless of which AI tool each developer uses.
         </p>
 
         <div className="mt-10 flex flex-col items-center gap-4">
@@ -267,7 +265,7 @@ export function Landing() {
                 "hover:bg-[#79b8ff] transition-colors"
               )}
             >
-              Get Started Free
+              Give your team a shared brain
             </Link>
             <a
               href="https://github.com/codeprism/codeprism"
@@ -276,44 +274,67 @@ export function Landing() {
                 "hover:border-[#8b949e] transition-colors"
               )}
             >
-              Self-Host
+              Self-Host Free
             </a>
           </div>
           {founding?.founding && (
             <p className="text-sm text-[#3fb950] font-medium">
-              Free for the first 100 teams — {founding.remaining} spots remaining
+              First 100 teams: up to 10 devs free — {founding.remaining} spots remaining
             </p>
           )}
         </div>
 
-        {/* Quick token comparison */}
-        <div className="mx-auto mt-16 max-w-lg">
-          <div className="rounded-xl border border-[#30363d] bg-[#0d1117] overflow-hidden text-left">
+        {/* Pain → Solution visual */}
+        <div className="mx-auto mt-16 max-w-2xl grid grid-cols-1 sm:grid-cols-2 gap-4 text-left">
+          {/* Without */}
+          <div className="rounded-xl border border-[#f85149]/30 bg-[#0d1117] overflow-hidden">
             <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[#21262d] bg-[#161b22]">
-              <span className="h-2.5 w-2.5 rounded-full bg-[#f85149]" />
-              <span className="h-2.5 w-2.5 rounded-full bg-[#e3b341]" />
-              <span className="h-2.5 w-2.5 rounded-full bg-[#3fb950]" />
-              <span className="ml-2 text-xs text-[#484f58] font-mono">AI context per query</span>
+              <AlertTriangle className="h-3.5 w-3.5 text-[#f85149]" />
+              <span className="text-xs text-[#484f58] font-mono">Without codeprism</span>
             </div>
-            <div className="p-4 space-y-3 font-mono text-xs">
-              <div className="flex items-center gap-3">
-                <span className="text-[#484f58] w-28 shrink-0">Without</span>
-                <div className="flex-1 rounded bg-[#f85149]/20 border border-[#f85149]/30 h-5 relative overflow-hidden">
-                  <div className="absolute inset-y-0 left-0 bg-[#f85149]/40 w-full" />
-                </div>
-                <span className="text-[#f85149] w-20 text-right">4,500 tok</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-[#484f58] w-28 shrink-0">With codeprism</span>
-                <div className="flex-1 rounded bg-[#3fb950]/20 border border-[#3fb950]/30 h-5 relative overflow-hidden">
-                  <div
-                    className="absolute inset-y-0 left-0 bg-[#3fb950]/40"
-                    style={{ width: `${(AVG_TOKENS_WITH / AVG_TOKENS_WITHOUT) * 100}%` }}
-                  />
-                </div>
-                <span className="text-[#3fb950] w-20 text-right">~350 tok</span>
-              </div>
+            <ul className="p-4 space-y-2 text-xs text-[#8b949e]">
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 text-[#f85149]">✗</span>
+                Alice figures out the billing flow. Bob re-discovers it tomorrow.
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 text-[#f85149]">✗</span>
+                Cursor and Claude give different architectural answers.
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 text-[#f85149]">✗</span>
+                New devs ask AI and get wrong answers — context is missing.
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 text-[#f85149]">✗</span>
+                4,500 tokens of raw files dumped into every query.
+              </li>
+            </ul>
+          </div>
+          {/* With */}
+          <div className="rounded-xl border border-[#3fb950]/30 bg-[#0d1117] overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[#21262d] bg-[#161b22]">
+              <Brain className="h-3.5 w-3.5 text-[#3fb950]" />
+              <span className="text-xs text-[#484f58] font-mono">With codeprism</span>
             </div>
+            <ul className="p-4 space-y-2 text-xs text-[#8b949e]">
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 text-[#3fb950]">✓</span>
+                One shared knowledge graph — visible to every tool, every dev.
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 text-[#3fb950]">✓</span>
+                Consistent architectural answers across Cursor, Claude, Windsurf.
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 text-[#3fb950]">✓</span>
+                New devs get the team's accumulated knowledge from day one.
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 text-[#3fb950]">✓</span>
+                ~{REDUCTION_PCT}% fewer tokens — same answer, fraction of the cost.
+              </li>
+            </ul>
           </div>
         </div>
       </section>
@@ -334,10 +355,10 @@ export function Landing() {
       {/* Token Savings Calculator */}
       <section className="mx-auto max-w-5xl px-6 py-20">
         <h2 className="mb-3 text-center text-2xl font-bold text-[#e1e4e8]">
-          Calculate your savings
+          The efficiency case, by the numbers
         </h2>
         <p className="mb-10 text-center text-sm text-[#8b949e] max-w-xl mx-auto">
-          Adjust your team's usage below to see exactly how much codeprism saves you every month.
+          Token savings are the measurable side effect. Plug in your team size to see what it looks like on your bill.
         </p>
         <SavingsCalculator />
       </section>
@@ -418,12 +439,12 @@ export function Landing() {
       <section className="border-t border-[#30363d]">
         <div className="mx-auto max-w-5xl px-6 py-20">
           <h2 className="mb-4 text-center text-2xl font-bold text-[#e1e4e8]">
-            Built for teams
+            AI tool fragmentation is real. This fixes it.
           </h2>
           <p className="mb-12 text-center text-sm text-[#8b949e] max-w-2xl mx-auto">
-            5 developers — some on Cursor, some on Claude Code, one on Windsurf — all working on the same codebase.
-            Every new session re-learns what a teammate already figured out yesterday.
-            codeprism makes that stop.
+            Your team won't standardize on one AI tool — and they shouldn't have to.
+            Cursor, Claude Code, Windsurf, Lovable: all of them share the same knowledge graph.
+            One team, one memory.
           </p>
           <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
             {TEAM_BENEFITS.map((benefit) => (
@@ -462,7 +483,7 @@ export function Landing() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="mt-0.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-[#3fb950]" />
-                  Free forever, AGPL-3.0
+                  Source-available engine (BUSL-1.1) · MIT clients
                 </li>
               </ul>
             </div>
@@ -534,7 +555,7 @@ export function Landing() {
       {/* Footer */}
       <footer className="border-t border-[#30363d] px-6 py-6">
         <div className="flex items-center justify-center gap-4 text-sm text-[#8b949e]">
-          <span>AGPL-3.0</span>
+          <span>BUSL-1.1 / MIT</span>
           <span className="text-[#30363d]">|</span>
           <a
             href="https://github.com/codeprism/codeprism"

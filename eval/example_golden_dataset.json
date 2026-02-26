@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "description": "Example golden dataset with generic test cases that work with any typical web application (Rails+React, Django+Vue, Next.js, etc.). Copy this file to golden_dataset.json and customize the expected_flows and expected_file_fragments to match your indexed codebase. Run `python generate_dataset.py` to auto-generate a dataset from your actual srcmap index instead.",
+  "description": "Example golden dataset with generic test cases that work with any typical web application (Rails+React, Django+Vue, Next.js, etc.). Copy this file to golden_dataset.json and customize the expected_flows and expected_file_fragments to match your indexed codebase. Run `python generate_dataset.py` to auto-generate a dataset from your actual codeprism index instead.",
   "test_cases": [
     {
       "id": "auth-flow",
@@ -21,7 +21,7 @@
       "query": "REST API endpoint for listing and creating resources with pagination",
       "ground_truth": "The API exposes index and create actions on a primary resource. The index action supports pagination via page/per_page query params and returns a JSON array. The create action validates input, persists the record, and returns the created resource. Both actions are protected by authentication middleware.",
       "expected_flows": ["Patient", "Order"],
-      "_comment": "Replace with your primary domain model flow names. Use the flow names shown in your srcmap dashboard (e.g. 'Product', 'Invoice', 'Task').",
+      "_comment": "Replace with your primary domain model flow names. Use the flow names shown in your codeprism dashboard (e.g. 'Product', 'Invoice', 'Task').",
       "expected_file_fragments": [
         "controller",
         "serializer"
@@ -33,7 +33,7 @@
       "query": "Database model relationships and associations for the core domain entity",
       "ground_truth": "The core domain model has associations to related models through foreign keys. It defines validations, scopes, and callbacks. Related models reference it via belongs_to or has_many relationships. The schema includes indexes on frequently queried columns.",
       "expected_flows": ["Patient", "Device"],
-      "_comment": "Replace with your core domain models. These should be the model/entity names that srcmap indexed as flows.",
+      "_comment": "Replace with your core domain models. These should be the model/entity names that codeprism indexed as flows.",
       "expected_file_fragments": [
         "model",
         "migration",
@@ -46,7 +46,7 @@
       "query": "Frontend list page component with filtering, sorting, and bulk actions",
       "ground_truth": "The list page renders a data table with rows fetched from the API. Filter controls allow narrowing by status and type. Column headers support click-to-sort. Checkboxes enable multi-select for bulk operations. Pagination is managed via query parameters synced with the URL.",
       "expected_flows": ["Patients", "patients"],
-      "_comment": "Replace with your frontend page flow names. srcmap often indexes page-level flows separately from model flows. Check your dashboard for page flow names.",
+      "_comment": "Replace with your frontend page flow names. codeprism often indexes page-level flows separately from model flows. Check your dashboard for page flow names.",
       "expected_file_fragments": [
         "list",
         "table",
@@ -59,7 +59,7 @@
       "query": "How does the frontend communicate with the backend API for the main workflow?",
       "ground_truth": "The frontend makes HTTP requests to the backend REST API using an API client module. Request payloads are validated on the backend before processing. Responses include the resource data and any error messages. The frontend API client handles authentication headers, error states, and response parsing.",
       "expected_flows": ["Patient ↔ patients_controller"],
-      "_comment": "Cross-service flows use the '↔' separator in srcmap. Replace with actual cross-service flow names from your srcmap index. Run `python generate_dataset.py` to discover these automatically.",
+      "_comment": "Cross-service flows use the '↔' separator in codeprism. Replace with actual cross-service flow names from your codeprism index. Run `python generate_dataset.py` to discover these automatically.",
       "expected_file_fragments": [
         "api",
         "client",

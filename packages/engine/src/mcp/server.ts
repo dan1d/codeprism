@@ -22,7 +22,7 @@ const sessions = new Map<string, SseSession>();
  */
 function buildServer(): McpServer {
   const server = new McpServer(
-    { name: "srcmap", version: "0.1.0" },
+    { name: "codeprism", version: "0.1.0" },
     {
       instructions:
         "codeprism is a code context engine. Use codeprism_search to find knowledge cards about the codebase, " +
@@ -68,7 +68,7 @@ export interface McpContext {
 }
 
 /**
- * Creates the srcmap MCP server context.
+ * Creates the codeprism MCP server context.
  *
  * Usage with Fastify:
  * ```ts

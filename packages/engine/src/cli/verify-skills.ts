@@ -3,7 +3,7 @@
  * Development smoke test: verify that skill detection produces expected IDs
  * for the repos in this workspace.
  *
- * Usage: pnpm --filter @srcmap/engine exec tsx src/cli/verify-skills.ts
+ * Usage: pnpm --filter @codeprism/engine exec tsx src/cli/verify-skills.ts
  */
 import { detectStackProfile } from "../indexer/stack-profiler.js";
 import { resolveSkills } from "../skills/index.js";
@@ -12,7 +12,7 @@ import { loadWorkspace } from "../utils/workspace.js";
 const workspace = loadWorkspace(import.meta.url);
 const repoDirs = workspace.repos;
 
-console.log(`\n=== srcmap skill detection smoke test ===\n`);
+console.log(`\n=== codeprism skill detection smoke test ===\n`);
 
 let allGood = true;
 for (const repo of repoDirs) {

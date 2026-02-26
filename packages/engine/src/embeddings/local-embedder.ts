@@ -22,7 +22,7 @@ export type EmbedTaskType = "query" | "document";
 /**
  * Generates embeddings locally using nomic-embed-text-v1.5 (768-d) via
  * HuggingFace Transformers.js. The model (~300 MB) is downloaded and cached
- * under `~/.cache/srcmap/models/` on first use.
+ * under `~/.cache/codeprism/models/` on first use.
  *
  * Pass `taskType` to inject the Matryoshka prefix:
  *   - `"query"`:    prefixes with `"search_query: "`
@@ -34,7 +34,7 @@ export class LocalEmbedder {
   private ready: Promise<void>;
 
   constructor() {
-    env.cacheDir = join(homedir(), ".cache", "srcmap", "models");
+    env.cacheDir = join(homedir(), ".cache", "codeprism", "models");
     this.ready = this.init();
   }
 

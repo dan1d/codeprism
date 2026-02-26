@@ -1,6 +1,6 @@
-# .srcmapignore — gitignore-style patterns for srcmap file exclusion
+# .codeprismignore — gitignore-style patterns for codeprism file exclusion
 #
-# Copy this file to `.srcmapignore` at your workspace root and customize.
+# Copy this file to `.codeprismignore` at your workspace root and customize.
 # Patterns use the same syntax as .gitignore:
 #   - Blank lines and lines starting with # are ignored
 #   - Standard glob patterns work (*, ?, [abc])

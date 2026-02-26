@@ -1,6 +1,6 @@
 # Next.js Best Practices
 
-> Curated conventions used by srcmap to seed code_style and rules documentation.
+> Curated conventions used by codeprism to seed code_style and rules documentation.
 > Project-specific patterns discovered during indexing extend or override these baselines.
 
 ## Architecture

@@ -12,7 +12,7 @@ const config: Config = {
     current: "currentColor",
     extend: {
       colors: {
-        // Surfaces — srcmap dark palette
+        // Surfaces — codeprism dark palette
         background: "#0f1117",
         surface: "#161b22",
         surface2: "#1c2333",

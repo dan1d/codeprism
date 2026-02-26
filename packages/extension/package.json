@@ -1,14 +1,17 @@
 {
-  "name": "srcmap",
-  "displayName": "srcmap – Code Context Engine",
-  "description": "Watches local git changes and syncs them to the srcmap engine for knowledge card invalidation.",
+  "name": "codeprism",
+  "type": "module",
+  "displayName": "codeprism – Code Context Engine",
+  "description": "Watches local git changes and syncs them to the codeprism engine for knowledge card invalidation. Works with Cursor, Windsurf, VS Code and any editor that supports VS Code extensions.",
   "version": "0.1.0",
-  "publisher": "biobridge",
-  "license": "AGPL-3.0",
+  "publisher": "codeprism",
+  "license": "MIT",
   "engines": {
     "vscode": "^1.85.0"
   },
-  "categories": ["Other"],
+  "categories": [
+    "Other"
+  ],
   "activationEvents": [
     "workspaceContains:.git"
   ],
@@ -16,32 +19,32 @@
   "contributes": {
     "commands": [
       {
-        "command": "srcmap.syncNow",
-        "title": "srcmap: Sync Current Changes"
+        "command": "codeprism.syncNow",
+        "title": "codeprism: Sync Current Changes"
       },
       {
-        "command": "srcmap.showStatus",
-        "title": "srcmap: Show Connection Status"
+        "command": "codeprism.showStatus",
+        "title": "codeprism: Show Connection Status"
       },
       {
-        "command": "srcmap.reindex",
-        "title": "srcmap: Trigger Full Re-index"
+        "command": "codeprism.reindex",
+        "title": "codeprism: Trigger Full Re-index"
       }
     ],
     "configuration": {
-      "title": "srcmap",
+      "title": "codeprism",
       "properties": {
-        "srcmap.engineUrl": {
+        "codeprism.engineUrl": {
           "type": "string",
           "default": "http://localhost:4000",
-          "description": "URL of the srcmap engine server."
+          "description": "URL of the codeprism engine server."
         },
-        "srcmap.autoSync": {
+        "codeprism.autoSync": {
           "type": "boolean",
           "default": true,
           "description": "Automatically sync git changes on file save."
         },
-        "srcmap.syncDebounceMs": {
+        "codeprism.syncDebounceMs": {
           "type": "number",
           "default": 2000,
           "description": "Debounce interval (ms) before sending sync after a save."
@@ -52,11 +55,15 @@
   "scripts": {
     "build": "esbuild src/extension.ts --bundle --outdir=dist --platform=node --external:vscode --format=cjs",
     "watch": "esbuild src/extension.ts --bundle --outdir=dist --platform=node --external:vscode --format=cjs --watch",
-    "package": "npx @vscode/vsce package --no-dependencies"
+    "package": "npx @vscode/vsce package --no-dependencies",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
     "@types/vscode": "^1.85.0",
+    "@vitest/coverage-v8": "^4.0.18",
     "esbuild": "^0.24.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vitest": "^4.0.18"
   }
 }

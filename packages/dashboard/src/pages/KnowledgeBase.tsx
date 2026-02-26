@@ -30,7 +30,7 @@ interface AddKnowledgeModalProps {
 
 const PLACEHOLDER_MD = `# MyFramework Best Practices
 
-> Curated conventions used by srcmap to seed code_style and rules documentation.
+> Curated conventions used by codeprism to seed code_style and rules documentation.
 
 ## Architecture
 - ...
@@ -112,8 +112,8 @@ function AddKnowledgeModal({ onClose }: AddKnowledgeModalProps) {
               </div>
             </div>
             <p className="text-xs text-[#484f58]">
-              The file was written to <code className="text-[#8b949e]">.srcmap/knowledge/{skillId}.md</code>.
-              It will be picked up automatically on the next <code className="text-[#8b949e]">srcmap index</code> run.
+              The file was written to <code className="text-[#8b949e]">.codeprism/knowledge/{skillId}.md</code>.
+              It will be picked up automatically on the next <code className="text-[#8b949e]">codeprism index</code> run.
             </p>
             <button
               onClick={onClose}
@@ -153,7 +153,7 @@ function AddKnowledgeModal({ onClose }: AddKnowledgeModalProps) {
               </div>
 
               <p className="text-[10px] text-[#484f58] -mt-2">
-                The file will be saved as <code className="text-[#8b949e]">.srcmap/knowledge/{"{"}skillId{"}"}.md</code> in the workspace root.
+                The file will be saved as <code className="text-[#8b949e]">.codeprism/knowledge/{"{"}skillId{"}"}.md</code> in the workspace root.
                 It overrides the built-in skill for that ID. Built-in IDs: rails, react, vue, nextjs, go, python, django, nestjs, laravel, gin, angular, spring, fastapi.
               </p>
 

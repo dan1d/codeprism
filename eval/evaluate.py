@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-srcmap Ragas Evaluation Harness
+codeprism Ragas Evaluation Harness
 ================================
-Evaluates srcmap search quality using two complementary approaches:
+Evaluates codeprism search quality using two complementary approaches:
 
   1. Deterministic metrics (no LLM, always free):
        - Flow Hit Rate   : fraction of expected flows found in results
@@ -24,7 +24,7 @@ Usage:
     python evaluate.py --id eng755-cpt-icd
 
     # Point at a non-local server:
-    python evaluate.py --server http://my-srcmap:4000
+    python evaluate.py --server http://my-codeprism:4000
 
 Output:
     Prints a table to stdout and writes eval_results.json to the same directory.
@@ -40,7 +40,7 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
-SRCMAP_DEFAULT = "http://localhost:4000"
+CODEPRISM_DEFAULT = "http://localhost:4000"
 DATASET_PATH = Path(__file__).parent / "golden_dataset.json"
 RESULTS_PATH = Path(__file__).parent / "eval_results.json"
 SEARCH_LIMIT = 10
@@ -56,8 +56,8 @@ def search(server: str, query: str, limit: int = SEARCH_LIMIT) -> List[dict]:
         resp.raise_for_status()
         return resp.json().get("results", [])
     except requests.exceptions.ConnectionError:
-        print(f"\n[ERROR] Cannot reach srcmap at {server}.")
-        print("        Make sure the server is running: cd srcmap && pnpm dev")
+        print(f"\n[ERROR] Cannot reach codeprism at {server}.")
+        print("        Make sure the server is running: cd codeprism && pnpm dev")
         sys.exit(1)
     except requests.exceptions.HTTPError as e:
         print(f"\n[ERROR] HTTP {e.response.status_code} from /api/search: {e.response.text}")
@@ -361,8 +361,8 @@ def print_summary(all_det: List[dict], ragas_agg: Optional[dict] = None) -> None
 # ─── Main ──────────────────────────────────────────────────────────────────────
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Evaluate srcmap search quality.")
-    parser.add_argument("--server", default=SRCMAP_DEFAULT, help="srcmap base URL")
+    parser = argparse.ArgumentParser(description="Evaluate codeprism search quality.")
+    parser.add_argument("--server", default=CODEPRISM_DEFAULT, help="codeprism base URL")
     parser.add_argument("--ragas", action="store_true", help="Run Ragas LLM metrics (needs API key)")
     parser.add_argument("--id", dest="case_id", default=None, help="Run a single test case by id")
     parser.add_argument("--limit", type=int, default=SEARCH_LIMIT, help="Number of results to fetch per query")
@@ -383,9 +383,9 @@ def main() -> None:
     # Health check
     health = check_health(args.server)
     if health:
-        print(f"[srcmap] {health.get('cards', '?')} cards  |  {health.get('flows', '?')} flows  |  {args.server}")
+        print(f"[codeprism] {health.get('cards', '?')} cards  |  {health.get('flows', '?')} flows  |  {args.server}")
     else:
-        print(f"[srcmap] server at {args.server} (health check failed – proceeding anyway)")
+        print(f"[codeprism] server at {args.server} (health check failed – proceeding anyway)")
 
     print(f"\nRunning {len(test_cases)} test case(s)…\n")
     print("=" * 60)

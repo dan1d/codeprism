@@ -12,7 +12,7 @@ export interface RepoEntry {
   name?: string;
 }
 
-/** Schema for `srcmap.config.json` placed at the workspace root. */
+/** Schema for `codeprism.config.json` placed at the workspace root. */
 export interface WorkspaceConfig {
   /** Explicit list of repos to index */
   repos?: RepoEntry[];
@@ -37,7 +37,7 @@ export interface LoadedWorkspaceConfig {
   source: "file" | "auto";
 }
 
-const CONFIG_FILENAME = "srcmap.config.json";
+const CONFIG_FILENAME = "codeprism.config.json";
 
 // Markers that indicate a directory is a repository root.
 const REPO_MARKERS = [
@@ -56,15 +56,12 @@ const REPO_MARKERS = [
 /**
  * Load workspace configuration.
  *
- * 1. If `srcmap.config.json` exists at `workspaceRoot`, parse and validate it.
+ * 1. If `codeprism.config.json` exists at `workspaceRoot`, parse and validate it.
  * 2. Otherwise fall back to auto-discovery (scan sibling directories for repos).
  */
 export function loadWorkspaceConfig(workspaceRoot: string): LoadedWorkspaceConfig {
   const configPath = join(workspaceRoot, CONFIG_FILENAME);
-
-  if (existsSync(configPath)) {
-    return loadFromFile(configPath, workspaceRoot);
-  }
+  if (existsSync(configPath)) return loadFromFile(configPath, workspaceRoot);
 
   return autoDiscover(workspaceRoot);
 }
@@ -105,9 +102,8 @@ function resolveWorkspaceRoot(
   fallback: string,
 ): string {
   if (!("workspaceRoot" in cfg)) return fallback;
-  if (typeof cfg.workspaceRoot !== "string") {
-    throw new Error(`srcmap.config.json: "workspaceRoot" must be a string`);
-  }
+  if (typeof cfg.workspaceRoot !== "string")
+    throw new Error(`codeprism.config.json: "workspaceRoot" must be a string`);
   return resolve(configDir, cfg.workspaceRoot);
 }
 
@@ -117,19 +113,19 @@ function resolveRepos(
 ): ResolvedRepo[] {
   if (!("repos" in cfg)) return [];
   if (!Array.isArray(cfg.repos)) {
-    throw new Error(`srcmap.config.json: "repos" must be an array`);
+    throw new Error(`codeprism.config.json: "repos" must be an array`);
   }
 
   return cfg.repos.map((entry: unknown, i: number) => {
     if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
-      throw new Error(`srcmap.config.json: repos[${i}] must be an object`);
+      throw new Error(`codeprism.config.json: repos[${i}] must be an object`);
     }
     const obj = entry as Record<string, unknown>;
     if (typeof obj.path !== "string" || obj.path.length === 0) {
-      throw new Error(`srcmap.config.json: repos[${i}].path must be a non-empty string`);
+      throw new Error(`codeprism.config.json: repos[${i}].path must be a non-empty string`);
     }
     if (obj.name !== undefined && typeof obj.name !== "string") {
-      throw new Error(`srcmap.config.json: repos[${i}].name must be a string`);
+      throw new Error(`codeprism.config.json: repos[${i}].name must be a string`);
     }
 
     const absPath = resolve(configDir, obj.path);
@@ -141,11 +137,11 @@ function resolveRepos(
 function resolveExclude(cfg: Record<string, unknown>): string[] {
   if (!("exclude" in cfg)) return [];
   if (!Array.isArray(cfg.exclude)) {
-    throw new Error(`srcmap.config.json: "exclude" must be an array`);
+    throw new Error(`codeprism.config.json: "exclude" must be an array`);
   }
   for (let i = 0; i < cfg.exclude.length; i++) {
     if (typeof cfg.exclude[i] !== "string") {
-      throw new Error(`srcmap.config.json: exclude[${i}] must be a string`);
+      throw new Error(`codeprism.config.json: exclude[${i}] must be a string`);
     }
   }
   return cfg.exclude as string[];
@@ -157,12 +153,12 @@ function resolveExclude(cfg: Record<string, unknown>): string[] {
 
 /**
  * Scans `workspaceRoot` for sibling directories that look like repos.
- * Skips hidden directories and the `srcmap` directory itself.
+ * Skips hidden directories and the `codeprism` directory itself.
  */
 function autoDiscover(workspaceRoot: string): LoadedWorkspaceConfig {
   const entries = readdirSync(workspaceRoot, { withFileTypes: true });
   const repos: ResolvedRepo[] = entries
-    .filter((e) => e.isDirectory() && !e.name.startsWith(".") && e.name !== "srcmap")
+    .filter((e) => e.isDirectory() && !e.name.startsWith(".") && e.name !== "codeprism")
     .map((e) => ({ name: e.name, path: join(workspaceRoot, e.name) }))
     .filter((r) => REPO_MARKERS.some((marker) => existsSync(join(r.path, marker))));
 

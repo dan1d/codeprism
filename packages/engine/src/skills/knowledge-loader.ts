@@ -5,11 +5,11 @@
  *
  * Resolution order (first hit wins for each skill):
  *   1. CODEPRISM_KNOWLEDGE_DIR/<skill-id>.md   — user / team override
- *   2. <workspace>/.srcmap/knowledge/<id>.md — workspace-local contribution
- *   3. src/skills/knowledge/<id>.md          — built-in (shipped with srcmap)
+ *   2. <workspace>/.codeprism/knowledge/<id>.md — workspace-local contribution
+ *   3. src/skills/knowledge/<id>.md             — built-in (shipped with codeprism)
  *
  * This makes the knowledge base community-extensible: anyone can drop a
- * `myframework.md` file in CODEPRISM_KNOWLEDGE_DIR and srcmap picks it up on
+ * `myframework.md` file in CODEPRISM_KNOWLEDGE_DIR and codeprism picks it up on
  * next index — no TypeScript skill registration required.
  *
  * ## Community contribution format
@@ -128,9 +128,9 @@ function candidatePaths(skillId: string, workspaceRoot: string): string[] {
   if (envDir) candidates.push(join(envDir, `${skillId}.md`));
 
   // 2. Workspace-local contribution directory
-  candidates.push(join(workspaceRoot, ".srcmap", "knowledge", `${skillId}.md`));
+  candidates.push(join(workspaceRoot, ".codeprism", "knowledge", `${skillId}.md`));
 
-  // 3. Built-in (shipped with srcmap engine package)
+  // 3. Built-in (shipped with codeprism engine package)
   candidates.push(join(BUILTIN_KNOWLEDGE_DIR, `${skillId}.md`));
 
   return candidates;
@@ -177,7 +177,7 @@ export async function loadAllKnowledge(
  * that have no corresponding TypeScript Skill definition.
  *
  * Community frameworks: any `.md` file in CODEPRISM_KNOWLEDGE_DIR or
- * <workspace>/.srcmap/knowledge/ whose stem doesn't match a built-in skill.
+ * <workspace>/.codeprism/knowledge/ whose stem doesn't match a built-in skill.
  */
 export async function discoverCommunitySkillIds(
   builtinIds: Set<string>,
@@ -188,7 +188,7 @@ export async function discoverCommunitySkillIds(
 
   const envDir = process.env["CODEPRISM_KNOWLEDGE_DIR"];
   if (envDir) dirs.push(envDir);
-  dirs.push(join(workspaceRoot, ".srcmap", "knowledge"));
+  dirs.push(join(workspaceRoot, ".codeprism", "knowledge"));
 
   const communityIds: string[] = [];
   for (const dir of dirs) {

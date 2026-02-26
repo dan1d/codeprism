@@ -12,7 +12,7 @@
       "dbPath": "benchmarks/pallets-flask.db",
       "stats": {
         "queries_tested": 4,
-        "avg_tokens_with_srcmap": 97,
+        "avg_tokens_with_codeprism": 97,
         "avg_tokens_without": 2000,
         "token_reduction_pct": 95.2,
         "avg_latency_ms": 0,
@@ -27,7 +27,7 @@
       "cases": [
         {
           "query": "How does the remove_ctx work?",
-          "srcmap_tokens": 97,
+          "codeprism_tokens": 97,
           "naive_tokens": 2000,
           "latency_ms": 0,
           "cache_hit": false,
@@ -38,7 +38,7 @@
         },
         {
           "query": "remove_ctx implementation and data model",
-          "srcmap_tokens": 97,
+          "codeprism_tokens": 97,
           "naive_tokens": 2000,
           "latency_ms": 1,
           "cache_hit": false,
@@ -49,7 +49,7 @@
         },
         {
           "query": "How does the scaffold work?",
-          "srcmap_tokens": 97,
+          "codeprism_tokens": 97,
           "naive_tokens": 2000,
           "latency_ms": 0,
           "cache_hit": false,
@@ -60,7 +60,7 @@
         },
         {
           "query": "scaffold implementation and data model",
-          "srcmap_tokens": 97,
+          "codeprism_tokens": 97,
           "naive_tokens": 2000,
           "latency_ms": 0,
           "cache_hit": false,
@@ -82,7 +82,7 @@
       "dbPath": "benchmarks/expressjs-express.db",
       "stats": {
         "queries_tested": 12,
-        "avg_tokens_with_srcmap": 304,
+        "avg_tokens_with_codeprism": 304,
         "avg_tokens_without": 3500,
         "token_reduction_pct": 91.3,
         "avg_latency_ms": 0,
@@ -97,7 +97,7 @@
       "cases": [
         {
           "query": "How does the api_v1 work?",
-          "srcmap_tokens": 533,
+          "codeprism_tokens": 533,
           "naive_tokens": 6000,
           "latency_ms": 0,
           "cache_hit": false,
@@ -108,7 +108,7 @@
         },
         {
           "query": "api_v1 implementation and data model",
-          "srcmap_tokens": 533,
+          "codeprism_tokens": 533,
           "naive_tokens": 6000,
           "latency_ms": 0,
           "cache_hit": false,
@@ -119,7 +119,7 @@
         },
         {
           "query": "How does the createApplication work?",
-          "srcmap_tokens": 155,
+          "codeprism_tokens": 155,
           "naive_tokens": 1000,
           "latency_ms": 0,
           "cache_hit": false,
@@ -130,7 +130,7 @@
         },
         {
           "query": "createApplication implementation and data model",
-          "srcmap_tokens": 155,
+          "codeprism_tokens": 155,
           "naive_tokens": 1000,
           "latency_ms": 0,
           "cache_hit": false,
@@ -141,7 +141,7 @@
         },
         {
           "query": "How does the format work?",
-          "srcmap_tokens": 36,
+          "codeprism_tokens": 36,
           "naive_tokens": 1000,
           "latency_ms": 0,
           "cache_hit": false,
@@ -152,7 +152,7 @@
         },
         {
           "query": "format implementation and data model",
-          "srcmap_tokens": 36,
+          "codeprism_tokens": 36,
           "naive_tokens": 1000,
           "latency_ms": 0,
           "cache_hit": false,
@@ -163,7 +163,7 @@
         },
         {
           "query": "How does the index work?",
-          "srcmap_tokens": 392,
+          "codeprism_tokens": 392,
           "naive_tokens": 5000,
           "latency_ms": 0,
           "cache_hit": false,
@@ -174,7 +174,7 @@
         },
         {
           "query": "index implementation and data model",
-          "srcmap_tokens": 392,
+          "codeprism_tokens": 392,
           "naive_tokens": 5000,
           "latency_ms": 0,
           "cache_hit": false,
@@ -185,7 +185,7 @@
         },
         {
           "query": "How does the sendfile work?",
-          "srcmap_tokens": 177,
+          "codeprism_tokens": 177,
           "naive_tokens": 2000,
           "latency_ms": 0,
           "cache_hit": false,
@@ -196,7 +196,7 @@
         },
         {
           "query": "sendfile implementation and data model",
-          "srcmap_tokens": 177,
+          "codeprism_tokens": 177,
           "naive_tokens": 2000,
           "latency_ms": 0,
           "cache_hit": false,
@@ -207,7 +207,7 @@
         },
         {
           "query": "How does the user_pet work?",
-          "srcmap_tokens": 533,
+          "codeprism_tokens": 533,
           "naive_tokens": 6000,
           "latency_ms": 0,
           "cache_hit": false,
@@ -218,7 +218,7 @@
         },
         {
           "query": "user_pet implementation and data model",
-          "srcmap_tokens": 533,
+          "codeprism_tokens": 533,
           "naive_tokens": 6000,
           "latency_ms": 0,
           "cache_hit": false,
@@ -240,7 +240,7 @@
       "dbPath": "benchmarks/gin-gonic-gin.db",
       "stats": {
         "queries_tested": 4,
-        "avg_tokens_with_srcmap": 104,
+        "avg_tokens_with_codeprism": 104,
         "avg_tokens_without": 4500,
         "token_reduction_pct": 97.7,
         "avg_latency_ms": 0,
@@ -255,7 +255,7 @@
       "cases": [
         {
           "query": "How does the Error.SetType work?",
-          "srcmap_tokens": 104,
+          "codeprism_tokens": 104,
           "naive_tokens": 4500,
           "latency_ms": 0,
           "cache_hit": false,
@@ -266,7 +266,7 @@
         },
         {
           "query": "Error.SetType implementation and data model",
-          "srcmap_tokens": 104,
+          "codeprism_tokens": 104,
           "naive_tokens": 4500,
           "latency_ms": 0,
           "cache_hit": false,
@@ -277,7 +277,7 @@
         },
         {
           "query": "How does the HandlersChain.Last work?",
-          "srcmap_tokens": 104,
+          "codeprism_tokens": 104,
           "naive_tokens": 4500,
           "latency_ms": 0,
           "cache_hit": false,
@@ -288,7 +288,7 @@
         },
         {
           "query": "HandlersChain.Last implementation and data model",
-          "srcmap_tokens": 104,
+          "codeprism_tokens": 104,
           "naive_tokens": 4500,
           "latency_ms": 0,
           "cache_hit": false,
@@ -310,7 +310,7 @@
       "dbPath": "benchmarks/preactjs-preact.db",
       "stats": {
         "queries_tested": 14,
-        "avg_tokens_with_srcmap": 276,
+        "avg_tokens_with_codeprism": 276,
         "avg_tokens_without": 7500,
         "token_reduction_pct": 96.3,
         "avg_latency_ms": 0,
@@ -325,7 +325,7 @@
       "cases": [
         {
           "query": "How does the EmptyFragment work?",
-          "srcmap_tokens": 166,
+          "codeprism_tokens": 166,
           "naive_tokens": 9500,
           "latency_ms": 0,
           "cache_hit": false,
@@ -336,7 +336,7 @@
         },
         {
           "query": "EmptyFragment implementation and data model",
-          "srcmap_tokens": 166,
+          "codeprism_tokens": 166,
           "naive_tokens": 9500,
           "latency_ms": 0,
           "cache_hit": false,
@@ -347,7 +347,7 @@
         },
         {
           "query": "How does the Loading work?",
-          "srcmap_tokens": 53,
+          "codeprism_tokens": 53,
           "naive_tokens": 1500,
           "latency_ms": 0,
           "cache_hit": false,
@@ -358,7 +358,7 @@
         },
         {
           "query": "Loading implementation and data model",
-          "srcmap_tokens": 53,
+          "codeprism_tokens": 53,
           "naive_tokens": 1500,
           "latency_ms": 0,
           "cache_hit": false,
@@ -369,7 +369,7 @@
         },
         {
           "query": "How does the detachedClone work?",
-          "srcmap_tokens": 179,
+          "codeprism_tokens": 179,
           "naive_tokens": 6000,
           "latency_ms": 0,
           "cache_hit": false,
@@ -380,7 +380,7 @@
         },
         {
           "query": "detachedClone implementation and data model",
-          "srcmap_tokens": 179,
+          "codeprism_tokens": 179,
           "naive_tokens": 6000,
           "latency_ms": 0,
           "cache_hit": false,
@@ -391,7 +391,7 @@
         },
         {
           "query": "How does the getDomChildren work?",
-          "srcmap_tokens": 92,
+          "codeprism_tokens": 92,
           "naive_tokens": 3000,
           "latency_ms": 0,
           "cache_hit": false,
@@ -402,7 +402,7 @@
         },
         {
           "query": "getDomChildren implementation and data model",
-          "srcmap_tokens": 92,
+          "codeprism_tokens": 92,
           "naive_tokens": 3000,
           "latency_ms": 0,
           "cache_hit": false,
@@ -413,7 +413,7 @@
         },
         {
           "query": "How does the jsx.d work?",
-          "srcmap_tokens": 942,
+          "codeprism_tokens": 942,
           "naive_tokens": 26000,
           "latency_ms": 0,
           "cache_hit": false,
@@ -424,7 +424,7 @@
         },
         {
           "query": "jsx.d implementation and data model",
-          "srcmap_tokens": 942,
+          "codeprism_tokens": 942,
           "naive_tokens": 26000,
           "latency_ms": 0,
           "cache_hit": false,
@@ -435,7 +435,7 @@
         },
         {
           "query": "How does the removeNode work?",
-          "srcmap_tokens": 401,
+          "codeprism_tokens": 401,
           "naive_tokens": 5500,
           "latency_ms": 0,
           "cache_hit": false,
@@ -446,7 +446,7 @@
         },
         {
           "query": "removeNode implementation and data model",
-          "srcmap_tokens": 401,
+          "codeprism_tokens": 401,
           "naive_tokens": 5500,
           "latency_ms": 0,
           "cache_hit": false,
@@ -457,7 +457,7 @@
         },
         {
           "query": "How does the useRouter work?",
-          "srcmap_tokens": 100,
+          "codeprism_tokens": 100,
           "naive_tokens": 1000,
           "latency_ms": 0,
           "cache_hit": false,
@@ -468,7 +468,7 @@
         },
         {
           "query": "useRouter implementation and data model",
-          "srcmap_tokens": 100,
+          "codeprism_tokens": 100,
           "naive_tokens": 1000,
           "latency_ms": 0,
           "cache_hit": false,
@@ -490,7 +490,7 @@
       "dbPath": "benchmarks/dan1d-clover_sandbox_simulator.db",
       "stats": {
         "queries_tested": 10,
-        "avg_tokens_with_srcmap": 591,
+        "avg_tokens_with_codeprism": 591,
         "avg_tokens_without": 2500,
         "token_reduction_pct": 76.4,
         "avg_latency_ms": 0,
@@ -505,7 +505,7 @@
       "cases": [
         {
           "query": "How does the BusinessType work?",
-          "srcmap_tokens": 675,
+          "codeprism_tokens": 675,
           "naive_tokens": 2500,
           "latency_ms": 0,
           "cache_hit": false,
@@ -516,7 +516,7 @@
         },
         {
           "query": "BusinessType implementation and data model",
-          "srcmap_tokens": 675,
+          "codeprism_tokens": 675,
           "naive_tokens": 2500,
           "latency_ms": 0,
           "cache_hit": false,
@@ -527,7 +527,7 @@
         },
         {
           "query": "How does the Category work?",
-          "srcmap_tokens": 556,
+          "codeprism_tokens": 556,
           "naive_tokens": 2500,
           "latency_ms": 0,
           "cache_hit": false,
@@ -538,7 +538,7 @@
         },
         {
           "query": "Category implementation and data model",
-          "srcmap_tokens": 556,
+          "codeprism_tokens": 556,
           "naive_tokens": 2500,
           "latency_ms": 0,
           "cache_hit": false,
@@ -549,7 +549,7 @@
         },
         {
           "query": "How does the SimulatedOrder work?",
-          "srcmap_tokens": 491,
+          "codeprism_tokens": 491,
           "naive_tokens": 2500,
           "latency_ms": 0,
           "cache_hit": false,
@@ -560,7 +560,7 @@
         },
         {
           "query": "SimulatedOrder implementation and data model",
-          "srcmap_tokens": 491,
+          "codeprism_tokens": 491,
           "naive_tokens": 2500,
           "latency_ms": 0,
           "cache_hit": false,
@@ -571,7 +571,7 @@
         },
         {
           "query": "How does the business_type work?",
-          "srcmap_tokens": 675,
+          "codeprism_tokens": 675,
           "naive_tokens": 2500,
           "latency_ms": 0,
           "cache_hit": false,
@@ -582,7 +582,7 @@
         },
         {
           "query": "business_type implementation and data model",
-          "srcmap_tokens": 675,
+          "codeprism_tokens": 675,
           "naive_tokens": 2500,
           "latency_ms": 0,
           "cache_hit": false,
@@ -593,7 +593,7 @@
         },
         {
           "query": "How does the category work?",
-          "srcmap_tokens": 556,
+          "codeprism_tokens": 556,
           "naive_tokens": 2500,
           "latency_ms": 0,
           "cache_hit": false,
@@ -604,7 +604,7 @@
         },
         {
           "query": "category implementation and data model",
-          "srcmap_tokens": 556,
+          "codeprism_tokens": 556,
           "naive_tokens": 2500,
           "latency_ms": 0,
           "cache_hit": false,
@@ -626,7 +626,7 @@
       "dbPath": "benchmarks/koajs-koa.db",
       "stats": {
         "queries_tested": 4,
-        "avg_tokens_with_srcmap": 131,
+        "avg_tokens_with_codeprism": 131,
         "avg_tokens_without": 1750,
         "token_reduction_pct": 92.5,
         "avg_latency_ms": 0,
@@ -641,7 +641,7 @@
       "cases": [
         {
           "query": "How does the respond work?",
-          "srcmap_tokens": 140,
+          "codeprism_tokens": 140,
           "naive_tokens": 2000,
           "latency_ms": 0,
           "cache_hit": false,
@@ -652,7 +652,7 @@
         },
         {
           "query": "respond implementation and data model",
-          "srcmap_tokens": 140,
+          "codeprism_tokens": 140,
           "naive_tokens": 2000,
           "latency_ms": 0,
           "cache_hit": false,
@@ -663,7 +663,7 @@
         },
         {
           "query": "How does the splitCommaSeparatedValues work?",
-          "srcmap_tokens": 121,
+          "codeprism_tokens": 121,
           "naive_tokens": 1500,
           "latency_ms": 0,
           "cache_hit": false,
@@ -674,7 +674,7 @@
         },
         {
           "query": "splitCommaSeparatedValues implementation and data model",
-          "srcmap_tokens": 121,
+          "codeprism_tokens": 121,
           "naive_tokens": 1500,
           "latency_ms": 0,
           "cache_hit": false,
@@ -696,7 +696,7 @@
       "dbPath": "benchmarks/sinatra-sinatra.db",
       "stats": {
         "queries_tested": 8,
-        "avg_tokens_with_srcmap": 287,
+        "avg_tokens_with_codeprism": 287,
         "avg_tokens_without": 11500,
         "token_reduction_pct": 97.5,
         "avg_latency_ms": 0,
@@ -711,7 +711,7 @@
       "cases": [
         {
           "query": "How does the accept work?",
-          "srcmap_tokens": 228,
+          "codeprism_tokens": 228,
           "naive_tokens": 9000,
           "latency_ms": 1,
           "cache_hit": false,
@@ -722,7 +722,7 @@
         },
         {
           "query": "accept implementation and data model",
-          "srcmap_tokens": 228,
+          "codeprism_tokens": 228,
           "naive_tokens": 9000,
           "latency_ms": 0,
           "cache_hit": false,
@@ -733,7 +733,7 @@
         },
         {
           "query": "How does the call work?",
-          "srcmap_tokens": 245,
+          "codeprism_tokens": 245,
           "naive_tokens": 11000,
           "latency_ms": 0,
           "cache_hit": false,
@@ -744,7 +744,7 @@
         },
         {
           "query": "call implementation and data model",
-          "srcmap_tokens": 245,
+          "codeprism_tokens": 245,
           "naive_tokens": 11000,
           "latency_ms": 0,
           "cache_hit": false,
@@ -755,7 +755,7 @@
         },
         {
           "query": "How does the contrib work?",
-          "srcmap_tokens": 54,
+          "codeprism_tokens": 54,
           "naive_tokens": 2000,
           "latency_ms": 0,
           "cache_hit": false,
@@ -766,7 +766,7 @@
         },
         {
           "query": "contrib implementation and data model",
-          "srcmap_tokens": 54,
+          "codeprism_tokens": 54,
           "naive_tokens": 2000,
           "latency_ms": 0,
           "cache_hit": false,
@@ -777,7 +777,7 @@
         },
         {
           "query": "How does the haml_helpers work?",
-          "srcmap_tokens": 619,
+          "codeprism_tokens": 619,
           "naive_tokens": 24000,
           "latency_ms": 0,
           "cache_hit": false,
@@ -788,7 +788,7 @@
         },
         {
           "query": "haml_helpers implementation and data model",
-          "srcmap_tokens": 619,
+          "codeprism_tokens": 619,
           "naive_tokens": 24000,
           "latency_ms": 0,
           "cache_hit": false,

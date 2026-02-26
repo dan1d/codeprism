@@ -172,7 +172,7 @@ describe("classifyFileRole — ambiguous helpers directory", () => {
   });
 });
 
-describe("classifyFileRole — srcmap.json config overrides", () => {
+describe("classifyFileRole — codeprism.json config overrides", () => {
   it("respects testDirs override", () => {
     const repoConfig = { testDirs: ["integration"] };
     expect(

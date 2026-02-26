@@ -1,11 +1,11 @@
 # Conversation Intelligence
 
-srcmap can extract team knowledge from your AI coding assistant conversations. This turns ephemeral chat corrections and decisions into persistent, searchable knowledge cards.
+codeprism can extract team knowledge from your AI coding assistant conversations. This turns ephemeral chat corrections and decisions into persistent, searchable knowledge cards.
 
 ## How it works
 
 ```
-Transcript files       srcmap pipeline           Knowledge base
+Transcript files       codeprism pipeline        Knowledge base
 ───────────────        ────────────────           ──────────────
 
 .cursor/agent-        ┌──────────┐
@@ -44,7 +44,7 @@ markdown transcripts            │  (LLM pass 1)│   corrections?"
 ## Usage
 
 ```bash
-pnpm srcmap import-transcripts
+pnpm codeprism import-transcripts
 ```
 
 | Flag | Description |
@@ -119,7 +119,7 @@ codeprism_promote_insight({
 This:
 1. Sets trust score to 0.95 (human confirmed)
 2. Integrates the insight into the `code_style` or `rules` doc
-3. The doc is regenerated on next `pnpm srcmap index --force-docs`
+3. The doc is regenerated on next `pnpm codeprism index --force-docs`
 
 Rejected insights are marked as "aspirational" (trust 0.2) and won't be surfaced.
 

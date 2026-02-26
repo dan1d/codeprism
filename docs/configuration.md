@@ -1,8 +1,8 @@
 # Configuration
 
-srcmap works with zero configuration. Everything below is optional.
+codeprism works with zero configuration. Everything below is optional.
 
-## `srcmap.config.json`
+## `codeprism.config.json`
 
 Place at your workspace root to explicitly configure which repos to index.
 
@@ -21,22 +21,22 @@ Place at your workspace root to explicitly configure which repos to index.
 | Field | Type | Description |
 |-------|------|-------------|
 | `repos` | `Array<{ path, name? }>` | Explicit repo paths (absolute or relative to config file). `name` defaults to directory basename. |
-| `exclude` | `string[]` | Glob patterns to exclude from indexing (additive with `.srcmapignore`). |
+| `exclude` | `string[]` | Glob patterns to exclude from indexing (additive with `.codeprismignore`). |
 | `workspaceRoot` | `string` | Override the workspace root directory (resolved relative to config file). |
 
-Without this file, srcmap auto-discovers repos by scanning sibling directories for `package.json`, `Gemfile`, `go.mod`, `pyproject.toml`, `Cargo.toml`, or `.git`.
+Without this file, codeprism auto-discovers repos by scanning sibling directories for `package.json`, `Gemfile`, `go.mod`, `pyproject.toml`, `Cargo.toml`, or `.git`.
 
-## `.srcmapignore`
+## `.codeprismignore`
 
 Gitignore-style file placed at the workspace root. Uses the same syntax as `.gitignore`.
 
-Copy `.srcmapignore.example` as a starting point:
+Copy `.codeprismignore.example` as a starting point:
 
 ```bash
-cp .srcmapignore.example .srcmapignore
+cp .codeprismignore.example .codeprismignore
 ```
 
-Built-in defaults always apply (even without a `.srcmapignore` file):
+Built-in defaults always apply (even without a `.codeprismignore` file):
 - `node_modules`, `vendor`, `.git`, `dist`, `build`, `.next`, `tmp`, `venv`, `.venv`
 
 Your patterns are additive on top of these defaults.
@@ -55,7 +55,7 @@ Your patterns are additive on top of these defaults.
 
 ### LLM providers
 
-srcmap supports three LLM providers for card enrichment and doc generation. Set one:
+codeprism supports three LLM providers for card enrichment and doc generation. Set one:
 
 | Variable | Description |
 |----------|-------------|
@@ -76,7 +76,7 @@ To use the smaller model: `CODEPRISM_EMBEDDING_MODEL=Xenova/all-MiniLM-L6-v2` an
 
 ## CLI options
 
-### `pnpm srcmap index`
+### `pnpm codeprism index`
 
 | Flag | Description |
 |------|-------------|
@@ -89,14 +89,14 @@ To use the smaller model: `CODEPRISM_EMBEDDING_MODEL=Xenova/all-MiniLM-L6-v2` an
 | `--force-docs` | Force regeneration of all docs even if they exist |
 | `--fetch-remote` | Run `git fetch --all` before branch signal collection |
 
-### `pnpm srcmap import-transcripts`
+### `pnpm codeprism import-transcripts`
 
 | Flag | Description |
 |------|-------------|
 | `--dry-run` | Parse and extract but don't write to DB |
 | `--force` | Re-extract from already-imported transcripts |
 
-### `pnpm srcmap generate-skills`
+### `pnpm codeprism generate-skills`
 
 | Flag | Description |
 |------|-------------|
@@ -119,7 +119,7 @@ codeprism_configure({ action: "set", key: "max_hub_cards", value: "3" })
 
 ## Project docs
 
-srcmap generates structured documentation for each repo before card generation. These docs provide LLM prompts with high-level business context:
+codeprism generates structured documentation for each repo before card generation. These docs provide LLM prompts with high-level business context:
 
 | Doc type | Content |
 |----------|---------|

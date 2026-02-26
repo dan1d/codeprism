@@ -92,7 +92,7 @@ export interface ProjectDoc {
   /** SHA-1 of the frameworkBaseline string used during generation.
    *  TODO: populate in upsertDoc once baseline-staleness detection is implemented (migration v17). */
   applied_baseline_hash?: string | null;
-  /** Filesystem path where this doc was last written under /ai-srcmap/. Migration v18. */
+  /** Filesystem path where this doc was last written under /ai-codeprism/. Migration v18. */
   file_path?: string | null;
   created_at: string;
   updated_at: string;

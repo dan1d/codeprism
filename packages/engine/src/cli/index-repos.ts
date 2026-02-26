@@ -121,7 +121,7 @@ export async function indexRepos(repos: RepoConfig[], workspaceRoot: string, opt
     console.log(`     Tip: set CODEPRISM_LLM_PROVIDER=deepseek and CODEPRISM_LLM_API_KEY for richer cards`);
   }
 
-  console.log(`\n=== srcmap indexer ===\n`);
+  console.log(`\n=== codeprism indexer ===\n`);
   console.log(`Repos to index: ${repos.map((r) => r.name).join(", ")}\n`);
 
   const allParsed: ParsedFile[] = [];
@@ -592,9 +592,9 @@ export async function indexRepos(repos: RepoConfig[], workspaceRoot: string, opt
   });
   fileInsertTx();
 
-  // Phase 7 — Write /ai-srcmap/ filesystem files (idempotent, hash-skip)
+  // Phase 7 — Write /ai-codeprism/ filesystem files (idempotent, hash-skip)
   if (!skipDocs) {
-    console.log(`\nWriting /ai-srcmap/ docs to filesystem...`);
+    console.log(`\nWriting /ai-codeprism/ docs to filesystem...`);
     const docsToWrite: DocToWrite[] = [];
     const allDocTypes = db
       .prepare(`SELECT repo, doc_type, content FROM project_docs WHERE stale = 0`)
@@ -637,11 +637,11 @@ export async function indexRepos(repos: RepoConfig[], workspaceRoot: string, opt
 }
 
 // Legacy direct-invocation support: `tsx src/cli/index-repos.ts [workspace-root] [flags]`
-// Prefer `srcmap index` (srcmap.ts) for new usage — this block remains for
+// Prefer `codeprism index` (codeprism.ts) for new usage — this block remains for
 // backward-compatibility with existing scripts.
 //
 // Guard: only run when this file is the process entry point, not when imported
-// as a module by `srcmap index`. Without the guard, importing index-repos.js
+// as a module by `codeprism index`. Without the guard, importing index-repos.js
 // triggers a second concurrent indexRepos() call that crashes when the first
 // run calls closeDb() before the second run finishes.
 if (import.meta.url === new URL(`file://${process.argv[1]}`).href) {

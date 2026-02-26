@@ -1,9 +1,9 @@
 /**
- * srcmap sync — git-aware post-merge knowledge base updater.
+ * codeprism sync — git-aware post-merge knowledge base updater.
  *
  * Called automatically by git hooks (post-merge, post-checkout, post-rewrite)
  * or manually. Detects what changed since the last git operation, classifies
- * the current branch, and tells the running srcmap server to invalidate
+ * the current branch, and tells the running codeprism server to invalidate
  * affected cards.
  *
  * Branch classification drives the level of invalidation:
@@ -13,8 +13,8 @@
  *   feature/* / fix/* / hotfix/* / bugfix/*     → lightweight — per-card staleness only
  *   anything else                               → lightweight (safe default)
  *
- * If the srcmap server is not reachable the command exits 0 silently — git
- * workflows must never be blocked by srcmap.
+ * If the codeprism server is not reachable the command exits 0 silently — git
+ * workflows must never be blocked by codeprism.
  */
 
 import { execSync } from "node:child_process";
@@ -326,14 +326,14 @@ export async function runSync(cwd: string, opts: SyncOptions = {}): Promise<void
     ].filter(Boolean).join(" ");
 
     if (ctx.syncLevel === "skip") {
-      console.log(`[srcmap sync] Branch "${branch}" is demo/experimental → context not stored.`);
+    console.log(`[codeprism sync] Branch "${branch}" is demo/experimental → context not stored.`);
       return;
     }
 
-    console.log(`[srcmap sync] Checkout ${repoName}@${branch} — context: ${label}`);
+    console.log(`[codeprism sync] Checkout ${repoName}@${branch} — context: ${label}`);
 
     if (opts.dryRun) {
-      console.log("[srcmap sync] dry-run — context would be stored:", ctx);
+      console.log("[codeprism sync] dry-run — context would be stored:", ctx);
       return;
     }
 
@@ -344,9 +344,9 @@ export async function runSync(cwd: string, opts: SyncOptions = {}): Promise<void
         contextHint: ctx.contextHint,
         epicBranch: ctx.epicBranch,
       } satisfies CheckoutContextPayload);
-      console.log("[srcmap sync] Context stored — MCP queries are now scoped automatically.");
+      console.log("[codeprism sync] Context stored — MCP queries are now scoped automatically.");
     } catch {
-      console.log("[srcmap sync] Server not reachable — context will be inferred on next query.");
+      console.log("[codeprism sync] Server not reachable — context will be inferred on next query.");
     }
     return;
   }
@@ -356,13 +356,13 @@ export async function runSync(cwd: string, opts: SyncOptions = {}): Promise<void
   const level = ctx.syncLevel;
 
   if (level === "skip") {
-    console.log(`[srcmap sync] Branch "${branch}" is a demo/experimental branch — skipping KB update.`);
+    console.log(`[codeprism sync] Branch "${branch}" is a demo/experimental branch — skipping KB update.`);
     return;
   }
 
   const changedFiles = getChangedFiles(cwd);
   if (changedFiles.length === 0) {
-    console.log(`[srcmap sync] No changed files detected for ${repoName}@${branch}.`);
+    console.log(`[codeprism sync] No changed files detected for ${repoName}@${branch}.`);
     return;
   }
 
@@ -388,11 +388,11 @@ export async function runSync(cwd: string, opts: SyncOptions = {}): Promise<void
   });
 
   console.log(
-    `[srcmap sync] ${repoName}@${branch} (${level}) — ${changedFiles.length} file(s) changed, eventType=${eventType}`,
+    `[codeprism sync] ${repoName}@${branch} (${level}) — ${changedFiles.length} file(s) changed, eventType=${eventType}`,
   );
 
   if (opts.dryRun) {
-    console.log("[srcmap sync] dry-run — not sending to server.");
+    console.log("[codeprism sync] dry-run — not sending to server.");
     for (const f of changedFiles) console.log(`  ${f.status.padEnd(8)} ${f.path}`);
     return;
   }
@@ -402,9 +402,9 @@ export async function runSync(cwd: string, opts: SyncOptions = {}): Promise<void
       repo: repoName, branch, commitSha, eventType, changedFiles: filesWithContent,
     });
     console.log(
-      `[srcmap sync] Done — ${result.indexed} file(s) indexed, ${result.invalidated} card(s) marked stale.`,
+      `[codeprism sync] Done — ${result.indexed} file(s) indexed, ${result.invalidated} card(s) marked stale.`,
     );
   } catch {
-    console.log("[srcmap sync] Server not reachable — cards will be refreshed on next manual index.");
+    console.log("[codeprism sync] Server not reachable — cards will be refreshed on next manual index.");
   }
 }

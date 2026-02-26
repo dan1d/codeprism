@@ -3,11 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "description": "Shared context layer for AI coding tools. Parses your codebase, builds a knowledge graph, and serves context to Cursor, Claude Code, and Windsurf via MCP.",
-  "license": "AGPL-3.0",
+  "license": "BUSL-1.1",
   "homepage": "https://codeprism.dev",
   "repository": {
     "type": "git",
-    "url": "https://github.com/srcmap/srcmap.git"
+    "url": "https://github.com/codeprism/codeprism.git"
   },
   "keywords": [
     "mcp",
@@ -22,18 +22,18 @@
     "developer-tools"
   ],
   "scripts": {
-    "dev": "pnpm --filter @srcmap/engine dev",
-    "dev:dashboard": "pnpm --filter @srcmap/dashboard dev",
-    "build": "pnpm --filter @srcmap/dashboard build && pnpm --filter @srcmap/engine build",
-    "build:engine": "pnpm --filter @srcmap/engine build",
-    "build:dashboard": "pnpm --filter @srcmap/dashboard build",
-    "start": "pnpm --filter @srcmap/engine start",
-    "codeprism": "pnpm --filter @srcmap/engine srcmap",
-    "index": "pnpm --filter @srcmap/engine index",
-    "index-repos": "pnpm --filter @srcmap/engine index",
+    "dev": "pnpm --filter @codeprism/engine dev",
+    "dev:dashboard": "pnpm --filter @codeprism/dashboard dev",
+    "build": "pnpm --filter @codeprism/dashboard build && pnpm --filter @codeprism/engine build",
+    "build:engine": "pnpm --filter @codeprism/engine build",
+    "build:dashboard": "pnpm --filter @codeprism/dashboard build",
+    "start": "pnpm --filter @codeprism/engine start",
+    "codeprism": "pnpm --filter @codeprism/engine codeprism",
+    "index": "pnpm --filter @codeprism/engine index",
+    "index-repos": "pnpm --filter @codeprism/engine index",
     "eval": "cd eval && source .venv/bin/activate && python evaluate.py --ragas",
     "lint": "pnpm -r lint",
-    "test": "pnpm --filter @srcmap/engine test",
+    "test": "pnpm --filter @codeprism/engine test",
     "ci": "pnpm build && pnpm test"
   },
   "pnpm": {

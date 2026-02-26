@@ -1,5 +1,5 @@
 /**
- * srcmap automatic watcher — zero-CLI knowledge base maintenance.
+ * codeprism automatic watcher — zero-CLI knowledge base maintenance.
  *
  * Started at server boot. Watches every registered repo for:
  *

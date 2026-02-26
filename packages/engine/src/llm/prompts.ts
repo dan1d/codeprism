@@ -16,7 +16,7 @@ const COMMON_PATH_PREFIXES = [
   /^\/opt\/[^/]+\//,
 ];
 
-export const SYSTEM_PROMPT = `You are srcmap, a code context engine. Generate concise, accurate knowledge cards about a codebase.
+export const SYSTEM_PROMPT = `You are codeprism, a code context engine. Generate concise, accurate knowledge cards about a codebase.
 
 You are given both structural metadata AND real source code snippets. Use the source code to understand actual business logic, not just structure.
 

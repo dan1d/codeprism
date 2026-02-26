@@ -1,5 +1,5 @@
 /**
- * Git-based signals for the srcmap indexer.
+ * Git-based signals for the codeprism indexer.
  *
  * A single `git log` pass extracts two signals used throughout the pipeline:
  *   - thermalMap   — normalized commit frequency per file (0.0 cold → 1.0 hot)

@@ -1,6 +1,6 @@
 # Evaluation
 
-srcmap includes an evaluation suite that measures search quality against a golden dataset.
+codeprism includes an evaluation suite that measures search quality against a golden dataset.
 
 ## Two evaluation modes
 
@@ -42,11 +42,11 @@ The default `golden_dataset.json` is project-specific. Two ways to evaluate your
 python generate_dataset.py
 ```
 
-This connects to your running srcmap instance, discovers indexed flows and cards, and generates a golden dataset. Options:
+This connects to your running codeprism instance, discovers indexed flows and cards, and generates a golden dataset. Options:
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--server URL` | `http://localhost:4000` | srcmap base URL |
+| `--server URL` | `http://localhost:4000` | codeprism base URL |
 | `--sample N` | `10` | Number of test cases to generate |
 | `--output PATH` | `golden_dataset.json` | Output file |
 | `--seed N` | (random) | Reproducible sampling |
@@ -60,7 +60,7 @@ Copy `example_golden_dataset.json` and edit to match your codebase. It contains 
 ```
 python evaluate.py [options]
 
-  --server URL     srcmap base URL (default: http://localhost:4000)
+  --server URL     codeprism base URL (default: http://localhost:4000)
   --ragas          Enable Ragas LLM metrics
   --id CASE_ID     Run a single test case
   --limit N        Search results to fetch per query (default: 10)
@@ -71,7 +71,7 @@ python evaluate.py [options]
 
 ### Deterministic (always run)
 
-- **Flow Hit Rate** -- fraction of expected flows that appear in returned cards. A flow hit means srcmap found the relevant area of the codebase.
+- **Flow Hit Rate** -- fraction of expected flows that appear in returned cards. A flow hit means codeprism found the relevant area of the codebase.
 - **File Hit Rate** -- fraction of expected file name fragments that appear in `source_files` across returned cards.
 - **Precision@K** -- fraction of returned cards that belong to an expected flow (signal-to-noise ratio).
 

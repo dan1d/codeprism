@@ -12,7 +12,7 @@ export class StatusBar implements vscode.Disposable {
       vscode.StatusBarAlignment.Right,
       50,
     );
-    this.item.command = "srcmap.showStatus";
+    this.item.command = "codeprism.showStatus";
     this.render();
     this.item.show();
   }
@@ -36,18 +36,18 @@ export class StatusBar implements vscode.Disposable {
   private render(): void {
     switch (this.state) {
       case "connected":
-        this.item.text = `$(database) srcmap: ${this.cardCount} cards`;
-        this.item.tooltip = "srcmap connected – click for status";
+        this.item.text = `$(database) codeprism: ${this.cardCount} cards`;
+        this.item.tooltip = "codeprism connected – click for status";
         this.item.backgroundColor = undefined;
         break;
       case "syncing":
-        this.item.text = "$(sync~spin) srcmap: syncing...";
-        this.item.tooltip = "Syncing changes to srcmap engine";
+        this.item.text = "$(sync~spin) codeprism: syncing...";
+        this.item.tooltip = "Syncing changes to codeprism engine";
         this.item.backgroundColor = undefined;
         break;
       case "disconnected":
-        this.item.text = "$(warning) srcmap: offline";
-        this.item.tooltip = "Cannot reach srcmap engine – click to retry";
+        this.item.text = "$(warning) codeprism: offline";
+        this.item.tooltip = "Cannot reach codeprism engine – click to retry";
         this.item.backgroundColor = new vscode.ThemeColor(
           "statusBarItem.warningBackground",
         );

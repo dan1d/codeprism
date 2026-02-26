@@ -1,5 +1,5 @@
 /**
- * srcmap rules — CLI helpers for managing team rules from the terminal.
+ * codeprism rules — CLI helpers for managing team rules from the terminal.
  */
 
 import { randomUUID } from "node:crypto";
@@ -23,7 +23,7 @@ export async function listRules(): Promise<void> {
   closeDb();
 
   if (rules.length === 0) {
-    console.log("\nNo team rules defined yet. Add one with:\n  srcmap rules add --name '...' --desc '...'\n");
+    console.log("\nNo team rules defined yet. Add one with:\n  codeprism rules add --name '...' --desc '...'\n");
     return;
   }
 
@@ -49,7 +49,7 @@ export async function addRule(opts: {
 }): Promise<void> {
   if (!opts.name?.trim() || !opts.desc?.trim()) {
     console.error("Error: --name and --desc are required.\n");
-    console.error("  Example: srcmap rules add --name 'No one-line methods' --desc 'Methods must use a do/end block and span multiple lines' --severity warning --by leo\n");
+    console.error("  Example: codeprism rules add --name 'No one-line methods' --desc 'Methods must use a do/end block and span multiple lines' --severity warning --by leo\n");
     process.exit(1);
   }
 
@@ -66,14 +66,14 @@ export async function addRule(opts: {
 
   const col = SEVERITY_COLOR[severity] ?? "";
   console.log(`\n${col}✓${RESET} Rule added: ${BOLD}${opts.name}${RESET} ${DIM}(${id})${RESET}\n`);
-  console.log(`  It will be checked on the next "srcmap check" or pre-push hook run.\n`);
+  console.log(`  It will be checked on the next "codeprism check" run.\n`);
 }
 
 export async function deleteRule(id: string): Promise<void> {
   const db = getDb();
   const rule = db.prepare("SELECT * FROM team_rules WHERE id = ?").get(id) as TeamRule | undefined;
   if (!rule) {
-    console.error(`\nRule not found: ${id}\nRun "srcmap rules list" to see available IDs.\n`);
+    console.error(`\nRule not found: ${id}\nRun "codeprism rules list" to see available IDs.\n`);
     closeDb();
     process.exit(1);
   }

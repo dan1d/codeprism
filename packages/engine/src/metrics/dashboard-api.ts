@@ -162,7 +162,7 @@ export async function registerDashboardRoutes(app: FastifyInstance): Promise<voi
       const result = await saveKnowledgeFile(body.skillId, body.content);
       return reply.status(201).send({
         ...result,
-        message: "Knowledge file written. It will be loaded on next srcmap index run.",
+        message: "Knowledge file written. It will be loaded on next codeprism index run.",
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

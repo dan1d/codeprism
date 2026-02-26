@@ -1,3 +1,3 @@
-{$SRCMAP_DOMAIN:localhost} {
-    reverse_proxy srcmap:4000
+{$CODEPRISM_DOMAIN:localhost} {
+    reverse_proxy codeprism:4000
 }

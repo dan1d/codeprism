@@ -1,5 +1,5 @@
 /**
- * Backward-compatible entry point for the srcmap indexer.
+ * Entry point for the codeprism indexer.
  *
  * Re-exports all types from types.ts and exposes parseFile / parseDirectory
  * via the ParserRegistry, with all built-in parsers and extractors registered.
@@ -45,6 +45,7 @@ registry.registerExtractor(djangoExtractor);
 registry.registerExtractor(expressExtractor);
 
 export const parseFile = registry.parseFile.bind(registry);
+export const parseVirtualFile = registry.parseVirtualFile.bind(registry);
 export const parseDirectory = registry.parseDirectory.bind(registry);
 export const getSupportedExtensions = registry.getSupportedExtensions.bind(registry);
 export { registry };

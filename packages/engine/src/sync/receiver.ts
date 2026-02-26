@@ -1,5 +1,5 @@
 import { getDb } from "../db/connection.js";
-import { parseFile } from "../indexer/tree-sitter.js";
+import { parseVirtualFile } from "../indexer/tree-sitter.js";
 import { invalidateCards, invalidateProjectDocs, propagateCrossRepoStaleness } from "./invalidator.js";
 
 export interface SyncPayload {
@@ -38,7 +38,7 @@ export async function handleSync(
 
     let data = "{}";
     try {
-      const result = await parseFile(file.path, payload.repo);
+      const result = await parseVirtualFile(file.path, payload.repo, file.content ?? "");
       data = JSON.stringify(result);
     } catch {
       data = JSON.stringify({ path: file.path, repo: payload.repo });

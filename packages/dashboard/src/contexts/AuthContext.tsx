@@ -45,7 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
-  const login = useCallback((sessionToken: string, tenantSlug: string) => {
+  const login = useCallback((sessionToken: string, _tenantSlug: string) => {
     localStorage.setItem("codeprism_session", sessionToken);
     api.me()
       .then((data) => setUser(data))

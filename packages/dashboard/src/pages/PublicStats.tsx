@@ -65,7 +65,7 @@ export function PublicStats() {
       <div className="mx-auto max-w-3xl px-6 py-16">
         <header className="mb-12 text-center">
           <h1 className="font-mono-nums text-3xl font-bold text-[#e1e4e8]">
-            srcmap
+            codeprism
           </h1>
           <p className="mt-2 text-[#8b949e]">
             Open Source Code Context Engine
@@ -116,14 +116,14 @@ export function PublicStats() {
 
         <footer className="mt-16 flex items-center justify-center gap-4 text-sm text-[#8b949e]">
           <a
-            href="https://github.com/srcmap/srcmap"
+            href="https://github.com/codeprism/codeprism"
             className="hover:text-accent transition-colors"
           >
-            Self-host srcmap
+            Self-host codeprism
           </a>
           <span className="text-[#30363d]">|</span>
           <a
-            href="https://github.com/srcmap/srcmap"
+            href="https://github.com/codeprism/codeprism"
             className="hover:text-accent transition-colors"
           >
             View on GitHub

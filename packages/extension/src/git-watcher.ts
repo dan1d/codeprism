@@ -1,7 +1,8 @@
 import * as vscode from "vscode";
 import * as cp from "node:child_process";
 import * as path from "node:path";
-import type { FileDiff, SyncPayload } from "./sync-client";
+import { readFileSync } from "node:fs";
+import type { ChangedFile, SyncPayload } from "./sync-client";
 
 export class GitWatcher implements vscode.Disposable {
   private disposables: vscode.Disposable[] = [];
@@ -62,45 +63,56 @@ export class GitWatcher implements vscode.Disposable {
     const branch = await this.getCurrentBranch();
     const repoName = path.basename(this.workspaceRoot);
 
-    const diffs = await this.getFileDiffs(files);
+    const changedFiles = await this.getChangedFiles(files);
 
     const payload: SyncPayload = {
       repo: repoName,
       branch,
-      files: diffs,
-      timestamp: new Date().toISOString(),
+      eventType: "save",
+      changedFiles,
     };
 
     this.onSyncReady?.(payload);
   }
 
-  private getFileDiffs(absolutePaths: string[]): Promise<FileDiff[]> {
+  private getChangedFiles(absolutePaths: string[]): Promise<ChangedFile[]> {
     return new Promise((resolve) => {
-      const diffs: FileDiff[] = [];
+      const changed: ChangedFile[] = [];
 
       for (const abs of absolutePaths) {
         const rel = path.relative(this.workspaceRoot, abs);
         try {
-          const result = cp.execSync(
-            `git diff --no-color -- "${rel}" 2>/dev/null || echo ""`,
-            { cwd: this.workspaceRoot, encoding: "utf-8", timeout: 5000 },
-          );
           const status = cp.execSync(
             `git status --porcelain -- "${rel}" 2>/dev/null`,
             { cwd: this.workspaceRoot, encoding: "utf-8", timeout: 5000 },
           ).trim();
 
-          let action: FileDiff["action"] = "modify";
-          if (status.startsWith("?") || status.startsWith("A")) action = "add";
-          else if (status.startsWith("D")) action = "delete";
+          let fileStatus: ChangedFile["status"] = "modified";
+          if (status.startsWith("?") || status.startsWith("A")) fileStatus = "added";
+          else if (status.startsWith("D")) fileStatus = "deleted";
 
-          diffs.push({ path: rel, action, diff: result.trim() || undefined });
+          let content = "";
+          if (fileStatus !== "deleted") {
+            try {
+              content = readFileSync(abs, "utf-8");
+            } catch {
+              content = "";
+            }
+          }
+
+          changed.push({ path: rel, status: fileStatus, content });
         } catch {
-          diffs.push({ path: rel, action: "modify" });
+          let content = "";
+          try {
+            content = readFileSync(abs, "utf-8");
+          } catch {
+            content = "";
+          }
+          changed.push({ path: rel, status: "modified", content });
         }
       }
 
-      resolve(diffs);
+      resolve(changed);
     });
   }
 

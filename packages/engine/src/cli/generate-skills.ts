@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * srcmap generate-skills — LLM generation of skill knowledge/*.md files.
+ * codeprism generate-skills — LLM generation of skill knowledge/*.md files.
  *
  * Generates or regenerates the curated best-practice knowledge base used as
  * the framework baseline in code_style and rules prompts.
@@ -10,16 +10,16 @@
  * and team-specific knowledge live outside the engine package.
  *
  * Usage:
- *   pnpm srcmap generate-skills                        # all built-in skills → skills/knowledge/
- *   pnpm srcmap generate-skills --skill rails          # single skill
- *   pnpm srcmap generate-skills --force                # overwrite existing files
- *   pnpm srcmap generate-skills --output-dir ./knowledge  # custom output dir
- *   pnpm srcmap generate-skills --skill myrails --output-dir ~/.srcmap/knowledge  # community skill
+ *   pnpm codeprism generate-skills                        # all built-in skills → skills/knowledge/
+ *   pnpm codeprism generate-skills --skill rails          # single skill
+ *   pnpm codeprism generate-skills --force                # overwrite existing files
+ *   pnpm codeprism generate-skills --output-dir ./knowledge  # custom output dir
+ *   pnpm codeprism generate-skills --skill myrails --output-dir ~/.codeprism/knowledge  # community skill
  *
  * Community contributions:
- *   Place <framework>.md files in CODEPRISM_KNOWLEDGE_DIR or <workspace>/.srcmap/knowledge/.
- *   srcmap picks them up automatically on next index — no TypeScript required.
- *   See: https://github.com/your-org/srcmap#community-knowledge
+ *   Place <framework>.md files in CODEPRISM_KNOWLEDGE_DIR or <workspace>/.codeprism/knowledge/.
+ *   codeprism picks them up automatically on next index — no TypeScript required.
+ *   See: https://github.com/codeprism/codeprism#community-knowledge
  */
 
 import { writeFile, readFile, mkdir } from "node:fs/promises";
@@ -90,7 +90,7 @@ const SKILL_SOURCES: Record<string, string[]> = {
 async function fetchSource(url: string, maxChars = 6000): Promise<string | null> {
   try {
     const res = await fetch(url, {
-      headers: { "User-Agent": "srcmap-generate-skills/1.0" },
+      headers: { "User-Agent": "codeprism-generate-skills/1.0" },
       signal: AbortSignal.timeout(10_000),
     });
     if (!res.ok) return null;
@@ -129,9 +129,9 @@ export interface GenerateSkillsOptions {
   force?: boolean;
   /**
    * Custom output directory.
-   * Default: src/skills/knowledge/ (built-in, shipped with srcmap).
+   * Default: src/skills/knowledge/ (built-in, shipped with codeprism).
    * Set this to write community / team knowledge outside the engine package,
-   * e.g. ~/.srcmap/knowledge/ or <workspace>/.srcmap/knowledge/.
+   * e.g. ~/.codeprism/knowledge/ or <workspace>/.codeprism/knowledge/.
    */
   outputDir?: string;
 }
@@ -140,7 +140,7 @@ const SKILL_GENERATION_PROMPT = (skill: { id: string; label: string }, sourceCon
 You are generating curated best-practice documentation for the "${skill.label}" framework.
 
 This document seeds the framework baseline injected into code_style and rules prompts
-by the srcmap indexer. It must be:
+by the codeprism indexer. It must be:
 - Authoritative (grounded in the official/community sources provided below when available)
 - Opinionated (clear "prefer X over Y" statements, not "you can use either")
 - Concise (7-10 bullets per section, no prose paragraphs)
@@ -157,7 +157,7 @@ Write a Markdown document with EXACTLY these sections:
 
 # ${skill.label} Best Practices
 
-> Curated conventions used by srcmap to seed code_style and rules documentation.
+> Curated conventions used by codeprism to seed code_style and rules documentation.
 > Project-specific patterns discovered during indexing extend or override these baselines.
 
 ## Architecture
@@ -218,12 +218,12 @@ export async function generateSkillKnowledge(opts: GenerateSkillsOptions = {}): 
   // Ensure output directory exists
   await mkdir(outputDir, { recursive: true });
 
-  console.log(`\n=== srcmap generate-skills ===`);
+  console.log(`\n=== codeprism generate-skills ===`);
   console.log(`LLM: ${llm.model}`);
   console.log(`Skills: ${skills.map((s) => s.id).join(", ")}`);
   console.log(`Output: ${outputDir}`);
   if (isCommunityDir) {
-    console.log(`Mode: community/custom (srcmap will load these via CODEPRISM_KNOWLEDGE_DIR or .srcmap/knowledge/)`);
+    console.log(`Mode: community/custom (codeprism will load these via CODEPRISM_KNOWLEDGE_DIR or .codeprism/knowledge/)`);
   }
   console.log();
 
@@ -269,7 +269,7 @@ export async function generateSkillKnowledge(opts: GenerateSkillsOptions = {}): 
   console.log(`\n=== Done: ${written} generated, ${skipped} skipped ===`);
   if (isCommunityDir) {
     console.log(`\nTo activate: set CODEPRISM_KNOWLEDGE_DIR=${outputDir}`);
-    console.log(`  or place files in <workspace>/.srcmap/knowledge/`);
+    console.log(`  or place files in <workspace>/.codeprism/knowledge/`);
   } else {
     console.log(`\nIMPORTANT: Review generated files before committing!`);
     console.log(`  cd ${outputDir} && ls -la`);

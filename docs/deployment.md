@@ -12,12 +12,12 @@ The `docker-compose.yml` starts a single container exposing port 4000 with a per
 
 ```yaml
 services:
-  srcmap:
+  codeprism:
     build: .
     ports:
       - "${CODEPRISM_PORT:-4000}:4000"
     volumes:
-      - srcmap-data:/data
+      - codeprism-data:/data
     environment:
       - CODEPRISM_PORT=4000
       - CODEPRISM_DB_PATH=/data/codeprism.db
@@ -25,7 +25,7 @@ services:
     restart: unless-stopped
 
 volumes:
-  srcmap-data:
+  codeprism-data:
 ```
 
 ### Docker build details
@@ -45,19 +45,19 @@ The final image runs `node packages/engine/dist/index.js` which:
 
 ### Persistent storage
 
-The database (`codeprism.db`) must persist across container restarts. The Docker volume `srcmap-data` is mounted at `/data`.
+The database (`codeprism.db`) must persist across container restarts. The Docker volume `codeprism-data` is mounted at `/data`.
 
-Embedding models (~300 MB) are cached inside the container at `~/.cache/srcmap/models/`. To persist across rebuilds, add a second volume:
+Embedding models (~300 MB) are cached inside the container at `~/.cache/codeprism/models/`. To persist across rebuilds, add a second volume:
 
 ```yaml
 volumes:
-  - srcmap-data:/data
-  - srcmap-models:/root/.cache/srcmap/models
+  - codeprism-data:/data
+  - codeprism-models:/root/.cache/codeprism/models
 ```
 
 ## Render
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/yourusername/srcmap)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/codeprism/codeprism)
 
 The `render.yaml` configures:
 - Web service with Docker runtime
@@ -72,7 +72,7 @@ Update your MCP config to point at the Render URL:
 {
   "mcpServers": {
     "codeprism": {
-      "url": "https://your-srcmap.onrender.com/mcp"
+      "url": "https://your-codeprism.onrender.com/mcp"
     }
   }
 }
@@ -91,7 +91,7 @@ pnpm dev
 pnpm dev:dashboard
 
 # Index your repos
-pnpm srcmap index
+pnpm codeprism index
 ```
 
 ### Build from source
@@ -107,16 +107,16 @@ After the server is running, index your code:
 
 ```bash
 # Auto-discover repos in sibling directories
-pnpm srcmap index
+pnpm codeprism index
 
 # Or index a specific repo
-pnpm srcmap index --repo my-backend
+pnpm codeprism index --repo my-backend
 
 # Force full reindex (ignores git change detection)
-pnpm srcmap index --force
+pnpm codeprism index --force
 
 # Skip doc generation for faster indexing
-pnpm srcmap index --skip-docs
+pnpm codeprism index --skip-docs
 ```
 
 The first index downloads the embedding model (~300 MB) and reranker model. Subsequent runs are incremental (only changed files).
@@ -177,4 +177,4 @@ Add to your MCP configuration following Windsurf's documentation, pointing at `h
 
 ### Any MCP-compatible tool
 
-srcmap uses the standard MCP SSE transport. Any tool that supports `GET /mcp/sse` + `POST /mcp/messages` will work.
+codeprism uses the standard MCP SSE transport. Any tool that supports `GET /mcp/sse` + `POST /mcp/messages` will work.

@@ -1,4 +1,8 @@
-const BASE = typeof window !== "undefined" ? window.location.origin : "http://localhost:4000";
+// When deployed standalone (e.g. Vercel dashboard + separate engine on Render/Hetzner),
+// set VITE_ENGINE_URL to the engine's public URL. Otherwise co-located origin is used.
+const BASE =
+  (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_ENGINE_URL ||
+  (typeof window !== "undefined" ? window.location.origin : "http://localhost:4000");
 
 function getSessionToken(): string | null {
   return localStorage.getItem("codeprism_session");
@@ -354,7 +358,7 @@ export interface InviteResponse {
 export interface BenchmarkCase {
   query: string;
   ticket?: string | null;
-  srcmap_tokens: number;
+  codeprism_tokens: number;
   naive_tokens: number;
   latency_ms: number;
   cache_hit: boolean;
@@ -372,7 +376,7 @@ export interface BenchmarkProject {
   framework: string;
   stats: {
     queries_tested: number;
-    avg_tokens_with_srcmap: number;
+    avg_tokens_with_codeprism: number;
     avg_tokens_without: number;
     token_reduction_pct: number;
     avg_latency_ms: number;
@@ -383,6 +387,7 @@ export interface BenchmarkProject {
     flow_hit_rate: number;
     file_hit_rate: number;
     precision_at_5: number;
+    avg_quality_score?: number;
   };
   live?: boolean;
   llmEnhanced?: boolean;
@@ -453,7 +458,7 @@ export interface SandboxResponse {
   formattedContext: string;
   latencyMs: number;
   cacheHit: boolean;
-  srcmapTokens: number;
+  codeprismTokens: number;
   naiveFiles: number;
   naiveTokens: number;
   tokenReduction: number;

@@ -112,6 +112,44 @@ export class ParserRegistry {
   }
 
   /**
+   * Parse a "virtual" file where the caller provides the file contents.
+   * Used for remote sync (VPS engine) where the engine cannot read from a local
+   * checkout path.
+   */
+  async parseVirtualFile(
+    filePath: string,
+    repo: string,
+    source: string,
+    repoConfig?: RepoConfig,
+  ): Promise<ParsedFile> {
+    const ext = extname(filePath);
+    const parser = this.extensionMap.get(ext);
+
+    if (!parser) {
+      const pf = emptyParsedFile(filePath, repo, languageFromExt(ext));
+      pf.fileRole = classifyFileRole(filePath, pf, repoConfig);
+      return pf;
+    }
+
+    const partial = parser.parse(source, filePath);
+    let result: ParsedFile = {
+      ...emptyParsedFile(filePath, repo, parser.id as ParsedFile["language"]),
+      ...partial,
+      path: filePath,
+      repo,
+    };
+
+    for (const extractor of this.activeExtractors) {
+      if (extractor.languages.includes(parser.id)) {
+        result = extractor.enhance(result);
+      }
+    }
+
+    result.fileRole = classifyFileRole(filePath, result, repoConfig);
+    return result;
+  }
+
+  /**
    * Recursively parse every supported file under `dirPath`.
    * Skips `node_modules`, `vendor`, `dist`, and `.git`. Files are
    * processed in batches of {@link BATCH_SIZE} for backpressure control.

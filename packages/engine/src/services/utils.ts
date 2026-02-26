@@ -5,7 +5,7 @@ import { dirname } from "node:path";
 const _servicesDir = dirname(fileURLToPath(import.meta.url));
 
 /**
- * Resolves the srcmap workspace root (monorepo root).
+ * Resolves the codeprism workspace root (monorepo root).
  * Centralized here so path depth is defined in one place.
  */
 export function getWorkspaceRoot(): string {

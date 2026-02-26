@@ -1,9 +1,10 @@
 {
-  "name": "@srcmap/dashboard",
+  "name": "@codeprism/dashboard",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "srcmap dashboard: team analytics, knowledge base, and workspace management",
+  "description": "codeprism dashboard: team analytics, knowledge base, and workspace management",
+  "license": "MIT",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
