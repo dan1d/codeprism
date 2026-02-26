@@ -1,0 +1,32 @@
+kind: pipeline
+type: docker
+name: deploy
+
+trigger:
+  branch:
+    - main
+  event:
+    - push
+
+steps:
+  # Temporary: print the runner's external IP so you can whitelist it in iptables.
+  # Remove this step once the IP is confirmed and added to the server's firewall.
+  - name: debug-runner-ip
+    image: alpine
+    commands:
+      - wget -qO- https://ifconfig.me && echo ""
+
+  - name: deploy
+    image: appleboy/drone-ssh
+    settings:
+      host:
+        from_secret: ssh_host
+      username:
+        from_secret: ssh_user
+      key:
+        from_secret: ssh_key
+      port: 22
+      script:
+        - cd /opt/codeprism
+        - git pull origin main
+        - ./deploy/update.sh --build

@@ -41,7 +41,7 @@ export class AnthropicProvider implements LLMProvider {
 
   constructor(apiKey: string, model?: string) {
     this.client = new Anthropic({ apiKey });
-    this.model = model ?? "claude-haiku-4-5-20241022";
+    this.model = model ?? "claude-3-5-haiku-20241022";
   }
 
   async generate(prompt: string, options?: GenerateOptions): Promise<string> {
