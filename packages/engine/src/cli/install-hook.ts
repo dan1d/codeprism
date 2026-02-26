@@ -70,7 +70,7 @@ set -e
 
 echo "[srcmap] Checking team rules before push…"
 
-_srcmap_run() {
+_codeprism_run() {
   if command -v srcmap > /dev/null 2>&1; then
     srcmap "$@"
   elif command -v pnpm > /dev/null 2>&1; then
@@ -81,7 +81,7 @@ _srcmap_run() {
   fi
 }
 
-_srcmap_run check --base ${opts.base}${strictFlag} --triggered-by pre-push
+_codeprism_run check --base ${opts.base}${strictFlag} --triggered-by pre-push
 `;
 }
 
@@ -92,7 +92,7 @@ function postMergeScript(): string {
 # Demo and experimental branches are silently skipped.
 # Non-blocking: always exits 0.
 
-_srcmap_run() {
+_codeprism_run() {
   if command -v srcmap > /dev/null 2>&1; then
     srcmap "$@"
   elif command -v pnpm > /dev/null 2>&1; then
@@ -102,7 +102,7 @@ _srcmap_run() {
   fi
 }
 
-_srcmap_run sync --event-type merge || true
+_codeprism_run sync --event-type merge || true
 `;
 }
 
@@ -121,7 +121,7 @@ function postCheckoutScript(): string {
 # Only act on branch switches, not file checkouts
 [ "$3" = "1" ] || exit 0
 
-_srcmap_run() {
+_codeprism_run() {
   if command -v srcmap > /dev/null 2>&1; then
     srcmap "$@"
   elif command -v pnpm > /dev/null 2>&1; then
@@ -131,7 +131,7 @@ _srcmap_run() {
   fi
 }
 
-_srcmap_run sync --event-type checkout --prev-head "$1" || true
+_codeprism_run sync --event-type checkout --prev-head "$1" || true
 `;
 }
 
@@ -141,7 +141,7 @@ function postRewriteScript(): string {
 # Runs \`srcmap sync\` after git rebase to invalidate stale cards.
 # Non-blocking: always exits 0.
 
-_srcmap_run() {
+_codeprism_run() {
   if command -v srcmap > /dev/null 2>&1; then
     srcmap "$@"
   elif command -v pnpm > /dev/null 2>&1; then
@@ -151,7 +151,7 @@ _srcmap_run() {
   fi
 }
 
-_srcmap_run sync --event-type rebase || true
+_codeprism_run sync --event-type rebase || true
 `;
 }
 

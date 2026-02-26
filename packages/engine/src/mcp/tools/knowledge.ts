@@ -5,7 +5,7 @@ import { listProjectDocs } from "../../services/docs.js";
 
 export function registerKnowledgeTools(server: McpServer): void {
   server.registerTool(
-    "srcmap_save_insight",
+    "codeprism_save_insight",
     {
       description:
         "Save a knowledge card capturing an architectural insight, design " +
@@ -31,7 +31,7 @@ export function registerKnowledgeTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "srcmap_verify_card",
+    "codeprism_verify_card",
     {
       description:
         "Mark a card as verified — confirming its content is still accurate after " +
@@ -55,7 +55,7 @@ export function registerKnowledgeTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "srcmap_list_flows",
+    "codeprism_list_flows",
     {
       description:
         "List all flows in the knowledge base with card counts, repos, and file counts.",
@@ -83,7 +83,7 @@ export function registerKnowledgeTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "srcmap_project_docs",
+    "codeprism_project_docs",
     {
       description:
         "Retrieve AI-generated project documentation for one or more repositories.",
@@ -151,7 +151,7 @@ export function registerKnowledgeTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "srcmap_promote_insight",
+    "codeprism_promote_insight",
     {
       description:
         "Promote a conversation-extracted insight to the rules or code_style doc after human review",

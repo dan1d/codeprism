@@ -105,7 +105,7 @@ To use the smaller model: `CODEPRISM_EMBEDDING_MODEL=Xenova/all-MiniLM-L6-v2` an
 
 ## Search config tuning
 
-Search scoring parameters can be tuned at runtime via the `srcmap_configure` MCP tool or directly in the `search_config` SQLite table:
+Search scoring parameters can be tuned at runtime via the `codeprism_configure` MCP tool or directly in the `search_config` SQLite table:
 
 | Key | Default | Description |
 |-----|---------|-------------|
@@ -114,7 +114,7 @@ Search scoring parameters can be tuned at runtime via the `srcmap_configure` MCP
 
 Example via MCP:
 ```
-srcmap_configure({ action: "set", key: "max_hub_cards", value: "3" })
+codeprism_configure({ action: "set", key: "max_hub_cards", value: "3" })
 ```
 
 ## Project docs

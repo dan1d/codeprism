@@ -8,7 +8,7 @@
  *
  * Outcomes:
  *   score >= 0.8  → auto-promote (trust = 0.95, verification_basis = 'code_confirmed')
- *   0.4–0.8      → human gate (conv_insight card, srcmap_promote_insight MCP tool)
+ *   0.4–0.8      → human gate (conv_insight card, codeprism_promote_insight MCP tool)
  *   < 0.4        → aspirational (trust = 0.2, aspirational = true, no promotion)
  */
 

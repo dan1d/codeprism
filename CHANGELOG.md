@@ -24,7 +24,7 @@ Initial release.
 
 ### MCP integration
 
-- 12 MCP tools: srcmap_context, srcmap_search, srcmap_ticket_files, srcmap_list_flows, srcmap_save_insight, srcmap_verify_card, srcmap_project_docs, srcmap_workspace_status, srcmap_recent_queries, srcmap_configure, srcmap_reindex, srcmap_promote_insight
+- 12 MCP tools: codeprism_context, codeprism_search, codeprism_ticket_files, codeprism_list_flows, codeprism_save_insight, codeprism_verify_card, codeprism_project_docs, codeprism_workspace_status, codeprism_recent_queries, codeprism_configure, codeprism_reindex, codeprism_promote_insight
 - SSE transport for streaming connections
 - Proactive usage instructions in server manifest
 

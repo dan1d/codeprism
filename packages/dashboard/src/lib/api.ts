@@ -1,7 +1,7 @@
 const BASE = typeof window !== "undefined" ? window.location.origin : "http://localhost:4000";
 
 function getSessionToken(): string | null {
-  return localStorage.getItem("srcmap_session");
+  return localStorage.getItem("codeprism_session");
 }
 
 async function fetchJSON<T>(path: string, options?: RequestInit): Promise<T> {

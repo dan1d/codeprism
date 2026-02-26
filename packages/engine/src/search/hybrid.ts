@@ -126,7 +126,7 @@ function detectTextRepoAffinity(query: string): Map<string, number> {
  *
  * @param semanticQuery - optional override for the query used in semantic
  *   search only (BM25 always uses the original query). Used for prefix-
- *   boosted embeddings in srcmap_context.
+ *   boosted embeddings in codeprism_context.
  */
 export async function hybridSearch(
   query: string,

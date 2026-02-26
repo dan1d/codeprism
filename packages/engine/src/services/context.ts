@@ -99,7 +99,7 @@ export function getActiveContext(): ActiveContext | null {
 
 /**
  * Builds a search query string from the active context.
- * Used by MCP srcmap_context when no explicit description is provided.
+ * Used by MCP codeprism_context when no explicit description is provided.
  *
  * Combines ticket ID + epic + context hint in priority order so the
  * search captures the most relevant cards without duplication.

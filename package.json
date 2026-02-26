@@ -1,5 +1,5 @@
 {
-  "name": "srcmap",
+  "name": "codeprism",
   "version": "0.1.0",
   "private": true,
   "description": "Shared context layer for AI coding tools. Parses your codebase, builds a knowledge graph, and serves context to Cursor, Claude Code, and Windsurf via MCP.",
@@ -28,7 +28,7 @@
     "build:engine": "pnpm --filter @srcmap/engine build",
     "build:dashboard": "pnpm --filter @srcmap/dashboard build",
     "start": "pnpm --filter @srcmap/engine start",
-    "srcmap": "pnpm --filter @srcmap/engine srcmap",
+    "codeprism": "pnpm --filter @srcmap/engine srcmap",
     "index": "pnpm --filter @srcmap/engine index",
     "index-repos": "pnpm --filter @srcmap/engine index",
     "eval": "cd eval && source .venv/bin/activate && python evaluate.py --ragas",

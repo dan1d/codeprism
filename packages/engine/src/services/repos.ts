@@ -145,7 +145,7 @@ export function unregisterRepo(name: string): void {
 }
 
 // ---------------------------------------------------------------------------
-// Workspace status (used by MCP srcmap_workspace_status)
+// Workspace status (used by MCP codeprism_workspace_status)
 // ---------------------------------------------------------------------------
 
 export interface WorkspaceRepoStatus {

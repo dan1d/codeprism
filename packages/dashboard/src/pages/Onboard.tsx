@@ -3,7 +3,7 @@ import { Copy, Check, ArrowRight, ArrowLeft, Users, Sparkles, SkipForward } from
 import { api, type TenantInfo, type FoundingStatus } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-const SUPPORT_EMAIL = "danielfromarg@gmail.com";
+const SUPPORT_EMAIL = "support@codeprism.dev";
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);

@@ -4,7 +4,7 @@ srcmap exposes 12 tools and 1 resource via MCP. Your AI calls these automaticall
 
 ## Tools
 
-### `srcmap_context`
+### `codeprism_context`
 
 Get full codebase context for a ticket or task. **Call this first when starting work on any ticket.**
 
@@ -19,7 +19,7 @@ Runs a HyDE-enhanced semantic search on the full description, then supplements w
 
 ---
 
-### `srcmap_search`
+### `codeprism_search`
 
 Search knowledge cards by query. Uses hybrid FTS + semantic vector search with cross-encoder reranking.
 
@@ -33,9 +33,9 @@ Search knowledge cards by query. Uses hybrid FTS + semantic vector search with c
 
 ---
 
-### `srcmap_ticket_files`
+### `codeprism_ticket_files`
 
-Returns the files most likely to need edits for a given task. Use after `srcmap_context` to narrow down to specific files.
+Returns the files most likely to need edits for a given task. Use after `codeprism_context` to narrow down to specific files.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -45,7 +45,7 @@ Returns the files most likely to need edits for a given task. Use after `srcmap_
 
 ---
 
-### `srcmap_save_insight`
+### `codeprism_save_insight`
 
 Save an architectural insight, design decision, or important context discovered during development. Creates a `dev_insight` card that appears in future search results.
 
@@ -58,7 +58,7 @@ Save an architectural insight, design decision, or important context discovered 
 
 **Example:**
 ```
-srcmap_save_insight({
+codeprism_save_insight({
   flow: "billing",
   title: "Billing uses a saga pattern across 3 services",
   content: "The billing flow spans backend (BillingOrder), Cuba (charge processing), and frontend (status polling). Failures trigger compensating transactions via Sidekiq retry.",
@@ -70,7 +70,7 @@ Every 10 dev insights, srcmap automatically patches the team memory doc.
 
 ---
 
-### `srcmap_list_flows`
+### `codeprism_list_flows`
 
 List all flows in the knowledge base with card counts, repos, file counts, and heat scores.
 
@@ -80,7 +80,7 @@ No parameters.
 
 ---
 
-### `srcmap_verify_card`
+### `codeprism_verify_card`
 
 Mark a card as verified after confirming its content matches the actual codebase. Builds confidence scores over time.
 
@@ -92,7 +92,7 @@ Cards show confidence indicators in search results: "likely valid", "verified (N
 
 ---
 
-### `srcmap_recent_queries`
+### `codeprism_recent_queries`
 
 Returns recent search queries and which cards they matched. Use to avoid re-asking the same questions.
 
@@ -102,7 +102,7 @@ Returns recent search queries and which cards they matched. Use to avoid re-aski
 
 ---
 
-### `srcmap_configure`
+### `codeprism_configure`
 
 View or modify search configuration at runtime.
 
@@ -114,7 +114,7 @@ View or modify search configuration at runtime.
 
 ---
 
-### `srcmap_workspace_status`
+### `codeprism_workspace_status`
 
 Real-time knowledge base health overview: stale cards, stack profiles, cross-repo API edges, and stale project docs per repo.
 
@@ -122,7 +122,7 @@ No parameters.
 
 ---
 
-### `srcmap_reindex`
+### `codeprism_reindex`
 
 Triggers incremental reindex of stale cards only. Faster than a full reindex.
 
@@ -134,7 +134,7 @@ Returns the `curl` commands for the async reindex REST API.
 
 ---
 
-### `srcmap_project_docs`
+### `codeprism_project_docs`
 
 Retrieve AI-generated project documentation. Call without `repo` to list all available docs.
 
@@ -145,7 +145,7 @@ Retrieve AI-generated project documentation. Call without `repo` to list all ava
 
 ---
 
-### `srcmap_promote_insight`
+### `codeprism_promote_insight`
 
 Promote a conversation-extracted insight to the rules or code_style doc after human review.
 

@@ -43,7 +43,7 @@ In srcmap Cloud, developers are identified by the `X-Dev-Email` header in their 
 ```json
 {
   "mcpServers": {
-    "srcmap": {
+    "codeprism": {
       "url": "https://codeprism.dev/acme-corp/mcp/sse",
       "headers": {
         "Authorization": "Bearer sk_...",

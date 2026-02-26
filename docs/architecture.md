@@ -63,7 +63,7 @@ Each flow becomes one or more knowledge cards. Card quality is tiered by git the
 - `model` -- describes a domain model with associations and business rules
 - `cross_service` -- maps a flow that spans multiple repos
 - `hub` -- describes a shared/utility file that many flows depend on
-- `dev_insight` -- manually saved by developers via `srcmap_save_insight`
+- `dev_insight` -- manually saved by developers via `codeprism_save_insight`
 - `conv_insight` -- extracted from conversation transcripts
 
 LLM prompts include:
@@ -76,7 +76,7 @@ Rate limiting is built in (~14 RPM) to stay within Gemini free tier.
 
 ## 4. Search pipeline
 
-When your AI calls `srcmap_search("billing flow")`, the query goes through:
+When your AI calls `codeprism_search("billing flow")`, the query goes through:
 
 ```
 Query

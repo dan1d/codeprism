@@ -31,7 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem("srcmap_session");
+    const token = localStorage.getItem("codeprism_session");
     if (!token) {
       setLoading(false);
       return;
@@ -40,13 +40,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     api.me()
       .then((data) => setUser(data))
       .catch(() => {
-        localStorage.removeItem("srcmap_session");
+        localStorage.removeItem("codeprism_session");
       })
       .finally(() => setLoading(false));
   }, []);
 
   const login = useCallback((sessionToken: string, tenantSlug: string) => {
-    localStorage.setItem("srcmap_session", sessionToken);
+    localStorage.setItem("codeprism_session", sessionToken);
     api.me()
       .then((data) => setUser(data))
       .catch(() => {});
@@ -54,7 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     await api.logout().catch(() => {});
-    localStorage.removeItem("srcmap_session");
+    localStorage.removeItem("codeprism_session");
     setUser(null);
   }, []);
 

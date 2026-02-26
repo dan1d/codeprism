@@ -19,7 +19,7 @@ import { getDevEmail } from "../dev-context.js";
 
 export function registerSearchTools(server: McpServer): void {
   server.registerTool(
-    "srcmap_search",
+    "codeprism_search",
     {
       description:
         "Search srcmap knowledge cards by query. Returns matching cards with " +
@@ -68,7 +68,7 @@ export function registerSearchTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "srcmap_context",
+    "codeprism_context",
     {
       description:
         "Get codebase context for a ticket or task. Runs a primary semantic " +
@@ -166,11 +166,11 @@ export function registerSearchTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "srcmap_ticket_files",
+    "codeprism_ticket_files",
     {
       description:
         "Returns the files most likely to need edits for a given task. " +
-        "Use after srcmap_context to narrow down to specific files.",
+        "Use after codeprism_context to narrow down to specific files.",
       inputSchema: {
         description: z.string().describe("Brief summary of what needs to change"),
       },

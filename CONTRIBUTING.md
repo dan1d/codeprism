@@ -6,7 +6,7 @@ Thanks for considering contributing to srcmap. This guide covers the development
 
 ```bash
 # Clone and install
-git clone https://github.com/srcmap/srcmap.git
+git clone https://github.com/dan1d/codeprism.git
 cd srcmap
 pnpm install
 
@@ -111,4 +111,4 @@ Be respectful, constructive, and helpful. We're building tools that make develop
 
 ## Questions?
 
-Open a GitHub issue or email danielfromarg@gmail.com.
+Open a GitHub issue or email support@codeprism.dev.

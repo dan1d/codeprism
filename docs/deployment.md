@@ -71,7 +71,7 @@ Update your MCP config to point at the Render URL:
 ```json
 {
   "mcpServers": {
-    "srcmap": {
+    "codeprism": {
       "url": "https://your-srcmap.onrender.com/mcp"
     }
   }
@@ -151,7 +151,7 @@ Add to `.cursor/mcp.json`:
 ```json
 {
   "mcpServers": {
-    "srcmap": {
+    "codeprism": {
       "url": "http://localhost:4000/mcp"
     }
   }
@@ -164,7 +164,7 @@ Add to `claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "srcmap": {
+    "codeprism": {
       "url": "http://localhost:4000/mcp"
     }
   }

@@ -1180,7 +1180,7 @@ export async function generateCrossRepoDoc(
 }
 
 // ---------------------------------------------------------------------------
-// Living Memory — heartbeat function (called every 10 srcmap_save_insight)
+// Living Memory — heartbeat function (called every 10 codeprism_save_insight)
 // ---------------------------------------------------------------------------
 
 /**

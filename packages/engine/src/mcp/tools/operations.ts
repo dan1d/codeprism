@@ -12,7 +12,7 @@ import { getStaleCardCount } from "../../services/reindex.js";
 
 export function registerOperationsTools(server: McpServer): void {
   server.registerTool(
-    "srcmap_recent_queries",
+    "codeprism_recent_queries",
     {
       description:
         "Returns recent search queries and which cards they matched.",
@@ -46,7 +46,7 @@ export function registerOperationsTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "srcmap_configure",
+    "codeprism_configure",
     {
       description: "View or modify srcmap search configuration.",
       inputSchema: {
@@ -92,7 +92,7 @@ export function registerOperationsTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "srcmap_workspace_status",
+    "codeprism_workspace_status",
     {
       description:
         "Returns a real-time status of the srcmap knowledge base.",
@@ -118,7 +118,7 @@ export function registerOperationsTools(server: McpServer): void {
         }
 
         lines.push(`**Total stale cards:** ${status.totalStale}`);
-        if (status.totalStale > 0) lines.push("\n> Run `srcmap_reindex` or `POST /api/reindex-stale` to refresh stale cards.");
+        if (status.totalStale > 0) lines.push("\n> Run `codeprism_reindex` or `POST /api/reindex-stale` to refresh stale cards.");
 
         return { content: [{ type: "text" as const, text: lines.join("\n") }] };
       } catch (err) {
@@ -129,7 +129,7 @@ export function registerOperationsTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "srcmap_reindex",
+    "codeprism_reindex",
     {
       description: "Triggers incremental reindex of stale cards only.",
       inputSchema: {

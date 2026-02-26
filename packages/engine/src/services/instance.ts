@@ -103,7 +103,7 @@ export function getLLMFromDb(): ReturnType<typeof createLLMProvider> {
 }
 
 // ---------------------------------------------------------------------------
-// Search config CRUD — used by MCP srcmap_configure tool
+// Search config CRUD — used by MCP codeprism_configure tool
 // ---------------------------------------------------------------------------
 
 export interface SearchConfigEntry {

@@ -26,8 +26,8 @@ export interface SprintTicket {
   id: string;
   title: string;
   area: "FE-only" | "BE-only" | "FE+BE" | "FE+BE+export";
-  /** Exact string to pass to srcmap_search / keywordSearch */
-  srcmap_query: string;
+  /** Exact string to pass to codeprism_search / keywordSearch */
+  codeprism_query: string;
   /** Substrings that must appear in at least one card's source_files JSON */
   expected_file_fragments: string[];
   /** Substrings that must appear in at least one search-result card's content or title */
@@ -41,7 +41,7 @@ export const SPRINT_JANUARY_1: SprintTicket[] = [
     id: "T1",
     title: "Add Notes to Add Authorization Modal (Remote Authorizations)",
     area: "FE+BE",
-    srcmap_query: "insurance authorization modal notes field pre-authorization",
+    codeprism_query: "insurance authorization modal notes field pre-authorization",
     expected_file_fragments: [
       "InsuranceAuthorizationModal",
       "insurance_authorizations_controller",
@@ -54,7 +54,7 @@ export const SPRINT_JANUARY_1: SprintTicket[] = [
     id: "T2",
     title: "Billed/Not Billed Filter in Remote Billing Orders",
     area: "FE+BE",
-    srcmap_query: "billed filter remote billing orders Filters component",
+    codeprism_query: "billed filter remote billing orders Filters component",
     expected_file_fragments: [
       "PracticeBillingOrders",
       "billing_orders_controller",
@@ -67,7 +67,7 @@ export const SPRINT_JANUARY_1: SprintTicket[] = [
     id: "T3",
     title: "Remove Pro DOS Column from Remote Authorizations tab (keep in Excel export)",
     area: "FE-only",
-    srcmap_query: "Pro DOS column remote authorizations table Excel export",
+    codeprism_query: "Pro DOS column remote authorizations table Excel export",
     expected_file_fragments: [
       "BillingOrders",
       "exporter/pre_authorizations",
@@ -80,7 +80,7 @@ export const SPRINT_JANUARY_1: SprintTicket[] = [
     id: "T4",
     title: "Standardize CPT Codes Summary Sort Order in Remote Billing Orders",
     area: "FE+BE",
-    srcmap_query: "CPT codes summary sort order billing orders remote",
+    codeprism_query: "CPT codes summary sort order billing orders remote",
     expected_file_fragments: [
       "billing-orders",
       "remote_cpt_codes_summary",
@@ -92,7 +92,7 @@ export const SPRINT_JANUARY_1: SprintTicket[] = [
     id: "T5",
     title: "Excel Export Respects Active Filters (Authorizations + Billing Orders)",
     area: "FE+BE+export",
-    srcmap_query: "export Excel filters applied pre-authorizations billing orders xlsx",
+    codeprism_query: "export Excel filters applied pre-authorizations billing orders xlsx",
     expected_file_fragments: [
       "PreAuthorizations",
       "billing_orders_controller",
@@ -105,7 +105,7 @@ export const SPRINT_JANUARY_1: SprintTicket[] = [
     id: "T6",
     title: "Office Check Biotronik PDF Upload Support",
     area: "FE+BE",
-    srcmap_query: "Biotronik office check upload XML PDF file validation",
+    codeprism_query: "Biotronik office check upload XML PDF file validation",
     expected_file_fragments: [
       "processors/biotronik",
       "process_device_report",
@@ -117,7 +117,7 @@ export const SPRINT_JANUARY_1: SprintTicket[] = [
     id: "T7",
     title: "Add Export to Excel to Remote Reports List",
     area: "FE+BE+export",
-    srcmap_query: "remote reports list export Excel xlsx button",
+    codeprism_query: "remote reports list export Excel xlsx button",
     expected_file_fragments: [
       "PracticeReports",
       "reports_controller",
@@ -130,7 +130,7 @@ export const SPRINT_JANUARY_1: SprintTicket[] = [
     id: "T8",
     title: "Office Check CPT/ICD-10 Footer in PDF (post-signature only)",
     area: "BE-only",
-    srcmap_query: "office check PDF footer CPT ICD-10 codes billing order sign",
+    codeprism_query: "office check PDF footer CPT ICD-10 codes billing order sign",
     expected_file_fragments: [
       "office_checks/partials/footer",
       "create_pdf_service",
@@ -229,15 +229,15 @@ describe("Sprint January 1 — per-ticket knowledge validation", () => {
     });
 
     it("keyword search returns at least one result", () => {
-      const results = keywordSearch(ticket.srcmap_query, 5);
+      const results = keywordSearch(ticket.codeprism_query, 5);
       expect(
         results.length,
-        `No FTS5 results for query: "${ticket.srcmap_query}"`,
+        `No FTS5 results for query: "${ticket.codeprism_query}"`,
       ).toBeGreaterThan(0);
     });
 
     it("search results surface expected content fragments", () => {
-      const results = keywordSearch(ticket.srcmap_query, 10);
+      const results = keywordSearch(ticket.codeprism_query, 10);
       // Map cardId results back to card content via DB
       const allText = results.flatMap((r) => {
         const row = testDb

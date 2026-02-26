@@ -226,7 +226,7 @@ export async function importTranscripts(opts: ImportOptions = {}): Promise<void>
         `**Scope**: ${insight.scope}`,
         verification.auto_promote
           ? `**Verified**: code confirms this pattern (score: ${verification.code_consistency_score.toFixed(2)})`
-          : `**Status**: needs human review via srcmap_promote_insight`,
+          : `**Status**: needs human review via codeprism_promote_insight`,
       ].join("\n");
 
       db.prepare(`
@@ -272,6 +272,6 @@ export async function importTranscripts(opts: ImportOptions = {}): Promise<void>
   console.log(`  Insights extracted: ${totalInsights}`);
   console.log(`  Auto-promoted to cards: ${totalPromoted}`);
   if (totalInsights - totalPromoted > 0) {
-    console.log(`  Awaiting human review (srcmap_promote_insight): ${totalInsights - totalPromoted}`);
+    console.log(`  Awaiting human review (codeprism_promote_insight): ${totalInsights - totalPromoted}`);
   }
 }

@@ -109,7 +109,7 @@ Insights start with a trust score based on extraction confidence:
 Medium-confidence insights can be promoted to project documentation after human review:
 
 ```
-srcmap_promote_insight({
+codeprism_promote_insight({
   insight_id: "abc123",
   approve: true,
   target_doc: "code_style"
