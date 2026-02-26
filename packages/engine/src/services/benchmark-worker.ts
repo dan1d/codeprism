@@ -59,6 +59,8 @@ interface QueueEntry {
   stage: BenchmarkStage;
   submittedAt: string;
   error?: string;
+  /** Human-readable progress detail for the current indexing stage. */
+  indexProgress?: string;
 }
 
 interface BenchmarkCase {
@@ -108,7 +110,7 @@ export function getBenchmarkSlots(): { used: number; total: number } {
 }
 
 export function getQueueStatus(): {
-  queue: Array<{ repo: string; status: string; stage: BenchmarkStage; position: number; error?: string }>;
+  queue: Array<{ repo: string; status: string; stage: BenchmarkStage; position: number; error?: string; indexProgress?: string }>;
   slotsUsed: number;
   slotsTotal: number;
 } {
@@ -120,6 +122,7 @@ export function getQueueStatus(): {
       stage: e.stage,
       position: i + 1,
       error: e.error,
+      indexProgress: e.indexProgress,
     })),
     slotsUsed: slots.used,
     slotsTotal: slots.total,
@@ -288,8 +291,12 @@ async function runBenchmarkJob(job: QueueEntry & { llmConfig?: LLMConfig; tmpDir
   // Stage 3: Index (into per-repo DB)
   // CODEPRISM_WORKSPACE = tmpDir so autoDiscover finds the cloned repo subdirectory
   job.stage = "indexing";
+  job.indexProgress = "starting…";
   console.log(`[benchmark] Indexing ${job.repo} (${language}/${framework}) -> ${benchDbPath}`);
-  await runIndex(tmpDir, repoShortName, benchDbPath, job.llmConfig);
+  await runIndex(tmpDir, repoShortName, benchDbPath, job.llmConfig, (msg) => {
+    job.indexProgress = msg;
+  });
+  job.indexProgress = undefined;
 
   // Stage 4: Benchmark queries (against per-repo DB)
   job.stage = "benchmarking";
@@ -432,11 +439,48 @@ export function detectLanguageAndFramework(dir: string): { language: string; fra
   return { language: "Unknown", framework: "Unknown" };
 }
 
+/**
+ * Parse a single line of indexer stdout into a human-readable progress string.
+ * Returns the updated string, or `current` unchanged if the line isn't recognised.
+ */
+function parseIndexerProgress(line: string, current: string): string {
+  const s = line.trim();
+  // "Total files parsed: 1247"
+  const totalFiles = s.match(/^Total files parsed:\s*(\d+)/);
+  if (totalFiles) return `${Number(totalFiles[1]).toLocaleString()} files parsed`;
+  // "  -> 247 files parsed (controller: 23, ...)"
+  const repoFiles = s.match(/^->\s*(\d+) files parsed/);
+  if (repoFiles) return `${Number(repoFiles[1]).toLocaleString()} files parsed`;
+  // "  -> 38 cards generated"
+  const cards = s.match(/^->\s*(\d+) cards generated/);
+  if (cards) return `${Number(cards[1]).toLocaleString()} cards generated`;
+  // "  -> 8 flows detected:"
+  const flows = s.match(/^->\s*(\d+) flows detected/);
+  if (flows) return `${Number(flows[1]).toLocaleString()} flows detected`;
+  // "  -> 4120 edges found"
+  const edges = s.match(/^->\s*(\d+) edges found/);
+  if (edges) return `${Number(edges[1]).toLocaleString()} edges found`;
+  // Embedding dots: "........." (progress.stdout.write(".") per card)
+  if (/^\.+$/.test(s)) {
+    const prev = parseInt(current.match(/(\d+) embeddings/)?.[1] ?? "0");
+    return `${(prev + s.length).toLocaleString()} embeddings generated`;
+  }
+  // Named phases
+  if (s.startsWith("Building dependency graph")) return "building graph…";
+  if (s.startsWith("Detecting flows")) return "detecting flows…";
+  if (s.startsWith("Generating cards")) return "generating cards…";
+  if (s.startsWith("Generating embeddings")) return "generating embeddings…";
+  if (s.startsWith("Computing specificity")) return "scoring cards…";
+  if (s.startsWith("=== Indexing complete")) return "done";
+  return current;
+}
+
 async function runIndex(
   repoPath: string,
   repoName: string,
   benchDbPath: string,
   llmConfig?: LLMConfig,
+  onProgress?: (msg: string) => void,
 ): Promise<void> {
   const skipDocs = !llmConfig;
   const engineRoot = join(__dirname, "../..");
@@ -478,11 +522,19 @@ async function runIndex(
     });
 
     const logs: string[] = [];
+    let progressMsg = "starting…";
     child.stdout?.on("data", (chunk: Buffer) => {
       const lines = String(chunk).split("\n").filter(Boolean);
       lines.forEach((l) => {
         logs.push(l);
         console.log(`[indexer:${repoName}] ${l}`);
+        if (onProgress) {
+          const next = parseIndexerProgress(l, progressMsg);
+          if (next !== progressMsg) {
+            progressMsg = next;
+            onProgress(progressMsg);
+          }
+        }
       });
     });
     child.stderr?.on("data", (chunk: Buffer) => {

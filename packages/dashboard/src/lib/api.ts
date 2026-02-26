@@ -461,7 +461,7 @@ export interface BenchmarkSubmitResponse {
 export type BenchmarkStage = "queued" | "cloning" | "analyzing" | "indexing" | "benchmarking" | "saving";
 
 export interface BenchmarkQueueResponse {
-  queue: Array<{ repo: string; status: "pending" | "running" | "done" | "error"; stage: BenchmarkStage; position: number; error?: string }>;
+  queue: Array<{ repo: string; status: "pending" | "running" | "done" | "error"; stage: BenchmarkStage; position: number; error?: string; indexProgress?: string }>;
   slotsUsed: number;
   slotsTotal: number;
 }

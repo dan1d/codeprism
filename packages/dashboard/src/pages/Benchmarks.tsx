@@ -1036,12 +1036,15 @@ function StageIcon({ state }: { state: "done" | "active" | "pending" }) {
   return <Circle className="h-4 w-4 text-[#30363d]" />;
 }
 
-function BenchmarkStepper({ currentStage }: { currentStage: BenchmarkStage }) {
+function BenchmarkStepper({ currentStage, indexProgress }: { currentStage: BenchmarkStage; indexProgress?: string }) {
   const currentIdx = BENCHMARK_STAGES.findIndex((s) => s.key === currentStage);
   return (
     <div className="space-y-2 py-2">
       {BENCHMARK_STAGES.map((stage, i) => {
         const state = i < currentIdx ? "done" : i === currentIdx ? "active" : "pending";
+        const description = state === "active" && stage.key === "indexing" && indexProgress
+          ? indexProgress
+          : stage.description;
         return (
           <div key={stage.key} className="flex items-center gap-3">
             <StageIcon state={state} />
@@ -1056,7 +1059,7 @@ function BenchmarkStepper({ currentStage }: { currentStage: BenchmarkStage }) {
                 "text-xs ml-2",
                 state === "active" ? "text-[#8b949e]" : "text-[#484f58]"
               )}>
-                {stage.description}
+                {description}
               </span>
             </div>
           </div>
@@ -1078,6 +1081,7 @@ function SubmitForm({ onSubmitted }: { onSubmitted: () => void }) {
   const [requiresKey, setRequiresKey] = useState(false);
   const [queuePosition, setQueuePosition] = useState<number | null>(null);
   const [currentStage, setCurrentStage] = useState<BenchmarkStage>("queued");
+  const [indexProgress, setIndexProgress] = useState<string | undefined>(undefined);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const busyRef = useRef(false);
   const submittedRepoRef = useRef<string | null>(null);
@@ -1125,6 +1129,7 @@ function SubmitForm({ onSubmitted }: { onSubmitted: () => void }) {
         } else {
           setQueuePosition(active.position);
           if (active.stage) setCurrentStage(active.stage);
+          setIndexProgress(active.indexProgress);
         }
       } catch { /* ignore */ }
     }, 3000);
@@ -1214,7 +1219,7 @@ function SubmitForm({ onSubmitted }: { onSubmitted: () => void }) {
       </p>
 
       {queuePosition ? (
-        <BenchmarkStepper currentStage={currentStage} />
+        <BenchmarkStepper currentStage={currentStage} indexProgress={indexProgress} />
       ) : (
         <>
           <div className="flex gap-2 mb-3">
