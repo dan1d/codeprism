@@ -654,6 +654,9 @@ function LanguageBadge({ language }: { language: string }) {
     Go: "text-cyan-400 bg-cyan-900/30 border-cyan-800/50",
     TypeScript: "text-blue-400 bg-blue-900/30 border-blue-800/50",
     JavaScript: "text-amber-400 bg-amber-900/30 border-amber-800/50",
+    PHP: "text-purple-400 bg-purple-900/30 border-purple-800/50",
+    Rust: "text-orange-400 bg-orange-900/30 border-orange-800/50",
+    Java: "text-pink-400 bg-pink-900/30 border-pink-800/50",
   };
   return (
     <span
@@ -766,6 +769,76 @@ const CATALOG: CatalogProject[] = [
       "How does the asset allocation and rebalancing analysis work?",
     ],
   },
+  // ── JavaScript / Node.js ──────────────────────────────────────────
+  {
+    repo: "expressjs/express",
+    name: "Express",
+    language: "JavaScript",
+    description: "Fast, minimalist web framework for Node.js — the most popular JS server",
+    prompts: [
+      "How does Express route matching and middleware chaining work?",
+      "How does Express handle error middleware and error propagation?",
+      "How does the request and response object get extended?",
+    ],
+  },
+  {
+    repo: "fastify/fastify",
+    name: "Fastify",
+    language: "JavaScript",
+    description: "High-performance web framework for Node.js — plugin-based architecture",
+    prompts: [
+      "How does the Fastify plugin system and encapsulation work?",
+      "How does Fastify validate request/response schemas with JSON Schema?",
+      "How does the Fastify hook lifecycle work?",
+    ],
+  },
+  {
+    repo: "socketio/socket.io",
+    name: "Socket.IO",
+    language: "TypeScript",
+    description: "Bidirectional event-based communication for Node.js",
+    prompts: [
+      "How does Socket.IO handle room-based broadcasting?",
+      "How does Socket.IO manage reconnection and connection state?",
+      "How does the namespace isolation system work?",
+    ],
+  },
+  // ── PHP / Laravel ─────────────────────────────────────────────────
+  {
+    repo: "monicahq/monica",
+    name: "Monica",
+    language: "PHP",
+    description: "Personal CRM — manage relationships, reminders, notes",
+    prompts: [
+      "How does Monica track contact activities and relationship data?",
+      "How does the reminder and notification system work?",
+      "How does Monica manage journal entries and life events?",
+    ],
+  },
+  {
+    repo: "BookStackApp/BookStack",
+    name: "BookStack",
+    language: "PHP",
+    description: "Open source wiki and documentation platform — Laravel-powered",
+    prompts: [
+      "How does BookStack organize books, chapters, and pages?",
+      "How does the WYSIWYG editor integrate with the backend?",
+      "How does BookStack handle permissions and role-based access?",
+    ],
+    requiresKey: true,
+  },
+  // ── Svelte / Vue ──────────────────────────────────────────────────
+  {
+    repo: "sveltejs/svelte",
+    name: "Svelte",
+    language: "TypeScript",
+    description: "Cybernetically enhanced web apps — compile-time framework",
+    prompts: [
+      "How does Svelte's compiler transform components to vanilla JS?",
+      "How does Svelte's reactive statement system work?",
+      "How does the Svelte store contract and subscription model work?",
+    ],
+  },
   // ── Requires API key (> 2 000 files) ──────────────────────────────
   {
     repo: "mastodon/mastodon",
@@ -788,6 +861,18 @@ const CATALOG: CatalogProject[] = [
       "How does the omnichannel inbox route messages from different platforms?",
       "How does the real-time agent assignment and notification work?",
       "How does Chatwoot integrate with WhatsApp and Slack?",
+    ],
+    requiresKey: true,
+  },
+  {
+    repo: "pixelfed/pixelfed",
+    name: "Pixelfed",
+    language: "PHP",
+    description: "Federated image sharing — ActivityPub Instagram alternative",
+    prompts: [
+      "How does Pixelfed federate posts and interactions via ActivityPub?",
+      "How does media storage and processing work?",
+      "How does the timeline aggregation and federation discovery work?",
     ],
     requiresKey: true,
   },
@@ -909,6 +994,29 @@ const PROVIDERS: Array<{ id: BenchmarkProvider; label: string; hint: string }> =
   { id: "anthropic", label: "Anthropic", hint: "Claude models" },
 ];
 
+const PROVIDER_MODELS: Record<BenchmarkProvider, Array<{ id: string; label: string }>> = {
+  anthropic: [
+    { id: "claude-opus-4-5", label: "Claude Opus 4.5" },
+    { id: "claude-sonnet-4-5", label: "Claude Sonnet 4.5" },
+    { id: "claude-haiku-3-5", label: "Claude Haiku 3.5" },
+  ],
+  openai: [
+    { id: "gpt-4o", label: "GPT-4o" },
+    { id: "gpt-4o-mini", label: "GPT-4o mini" },
+    { id: "gpt-4.1", label: "GPT-4.1" },
+    { id: "o3-mini", label: "o3-mini" },
+  ],
+  gemini: [
+    { id: "gemini-2.0-flash-exp", label: "Gemini 2.0 Flash" },
+    { id: "gemini-1.5-pro-latest", label: "Gemini 1.5 Pro" },
+    { id: "gemini-1.5-flash-latest", label: "Gemini 1.5 Flash" },
+  ],
+  deepseek: [
+    { id: "deepseek-chat", label: "DeepSeek V3" },
+    { id: "deepseek-reasoner", label: "DeepSeek R1" },
+  ],
+};
+
 const BENCHMARK_STAGES: Array<{ key: BenchmarkStage; label: string; description: string }> = [
   { key: "queued", label: "Queued", description: "Waiting in line" },
   { key: "cloning", label: "Cloning", description: "Downloading repository" },
@@ -966,6 +1074,7 @@ function SubmitForm({
   const navigate = useNavigate();
   const [url, setUrl] = useState("");
   const [provider, setProvider] = useState<BenchmarkProvider>("gemini");
+  const [model, setModel] = useState<string>(PROVIDER_MODELS.gemini[0].id);
   const [apiKey, setApiKey] = useState("");
   const [showKeyInput, setShowKeyInput] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -976,6 +1085,7 @@ function SubmitForm({
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const busyRef = useRef(false);
   const submittedRepoRef = useRef<string | null>(null);
+  const submittedLlmLabelRef = useRef<string | null>(null);
 
   const isFull = slotsUsed >= slotsTotal;
   const busy = submitting || queuePosition !== null;
@@ -1006,8 +1116,11 @@ function SubmitForm({
           busyRef.current = false;
           onSubmitted();
           if (myRepo) {
+            const myLabel = submittedLlmLabelRef.current;
             submittedRepoRef.current = null;
-            navigate(`/benchmarks/${slugify(myRepo)}`);
+            submittedLlmLabelRef.current = null;
+            const resultSlug = myLabel ? `${slugify(myRepo)}-${myLabel}` : slugify(myRepo);
+            navigate(`/benchmarks/${resultSlug}`);
           }
         } else if (active.status === "error") {
           stopPolling();
@@ -1030,9 +1143,12 @@ function SubmitForm({
     setCurrentStage("queued");
     try {
       const req: Parameters<typeof api.submitBenchmark>[0] = { url };
+      let llmLabel: string | undefined;
       if (showKeyInput && apiKey.trim()) {
         req.provider = provider;
         req.apiKey = apiKey.trim();
+        req.model = model;
+        llmLabel = `${provider}-${model}`;
       }
 
       const res = await api.submitBenchmark(req);
@@ -1044,18 +1160,21 @@ function SubmitForm({
       } else if (res.queued) {
         const match = url.match(/github\.com\/([^/]+\/[^/]+)/);
         submittedRepoRef.current = match?.[1]?.replace(/\.git$/, "") ?? null;
+        submittedLlmLabelRef.current = llmLabel ?? null;
         setQueuePosition(res.position ?? 1);
         startPolling();
       } else if (res.error?.includes("already in the queue")) {
         const match = url.match(/github\.com\/([^/]+\/[^/]+)/);
         submittedRepoRef.current = match?.[1]?.replace(/\.git$/, "") ?? null;
+        submittedLlmLabelRef.current = llmLabel ?? null;
         setQueuePosition(1);
         startPolling();
       } else if (res.error?.includes("already been benchmarked")) {
         const match = url.match(/github\.com\/([^/]+\/[^/]+)/);
         if (match) {
           const repoSlug = match[1].replace(/\.git$/, "");
-          navigate(`/benchmarks/${slugify(repoSlug)}`);
+          const resultSlug = llmLabel ? `${slugify(repoSlug)}-${llmLabel}` : slugify(repoSlug);
+          navigate(`/benchmarks/${resultSlug}`);
         } else {
           setError(res.error);
         }
@@ -1166,31 +1285,43 @@ function SubmitForm({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <select
                   value={provider}
-                  onChange={(e) => setProvider(e.target.value as BenchmarkProvider)}
+                  onChange={(e) => {
+                    const p = e.target.value as BenchmarkProvider;
+                    setProvider(p);
+                    setModel(PROVIDER_MODELS[p][0].id);
+                  }}
                   disabled={busy}
                   className="rounded border border-[#30363d] bg-[#161b22] px-3 py-2 text-sm text-[#e1e4e8] focus:border-accent focus:outline-none disabled:opacity-50"
                 >
                   {PROVIDERS.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.label}
-                    </option>
+                    <option key={p.id} value={p.id}>{p.label}</option>
                   ))}
                 </select>
-                <input
-                  type="password"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="Paste your API key"
+                <select
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
                   disabled={busy}
-                  className="sm:col-span-2 rounded border border-[#30363d] bg-[#161b22] px-3 py-2 text-sm text-[#e1e4e8] placeholder-[#484f58] focus:border-accent focus:outline-none disabled:opacity-50"
-                />
+                  className="rounded border border-[#30363d] bg-[#161b22] px-3 py-2 text-sm text-[#e1e4e8] focus:border-accent focus:outline-none disabled:opacity-50"
+                >
+                  {PROVIDER_MODELS[provider].map((m) => (
+                    <option key={m.id} value={m.id}>{m.label}</option>
+                  ))}
+                </select>
               </div>
+              <input
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder="Paste your API key"
+                disabled={busy}
+                className="rounded border border-[#30363d] bg-[#161b22] px-3 py-2 text-sm text-[#e1e4e8] placeholder-[#484f58] focus:border-accent focus:outline-none disabled:opacity-50 w-full"
+              />
 
               <p className="text-[10px] text-[#484f58]">
-                {PROVIDERS.find((p) => p.id === provider)?.hint}
+                {PROVIDERS.find((p) => p.id === provider)?.hint} · Results tagged as <span className="font-mono">{provider}-{model}</span>
               </p>
 
               <div className="flex gap-2">
@@ -1391,10 +1522,14 @@ export function Benchmarks() {
                       )}
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                      {visibleProjects.map((p) => (
+                      {visibleProjects.map((p) => {
+                        const resultSlug = p.llmLabel
+                          ? `${slugify(p.repo)}-${p.llmLabel}`
+                          : slugify(p.repo);
+                        return (
                         <Link
-                          key={p.name}
-                          to={`/benchmarks/${slugify(p.repo)}`}
+                          key={`${p.repo}-${p.llmLabel ?? "structural"}`}
+                          to={`/benchmarks/${resultSlug}`}
                           className="rounded bg-[#0d1117] border border-[#21262d] p-3 text-left hover:border-accent/50 hover:bg-[#0d1117]/80 transition-colors group block"
                         >
                           <div className="flex items-center gap-2 mb-2">
@@ -1404,11 +1539,11 @@ export function Benchmarks() {
                             </span>
                             <span className={cn(
                               "ml-auto text-[10px] px-1.5 py-0.5 rounded-full border whitespace-nowrap",
-                              p.llmEnhanced
+                              p.llmLabel
                                 ? "text-[#d2a8ff] border-[#d2a8ff]/30 bg-[#d2a8ff]/10"
                                 : "text-[#8b949e] border-[#30363d] bg-[#21262d]"
                             )}>
-                              {p.llmEnhanced ? "LLM" : "Structural"}
+                              {p.llmLabel ?? "Structural"}
                             </span>
                           </div>
                           <div className="space-y-1.5 text-xs">
@@ -1440,7 +1575,8 @@ export function Benchmarks() {
                             )}
                           </div>
                         </Link>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
 

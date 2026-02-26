@@ -16,11 +16,11 @@ const __dirname = dirname(__filename);
 
 /** Benchmark submission, queue status, sandbox search, and results routes. */
 export async function registerBenchmarkRoutes(app: FastifyInstance): Promise<void> {
-  app.post<{ Body: { url: string; provider?: string; apiKey?: string } }>(
+  app.post<{ Body: { url: string; provider?: string; apiKey?: string; model?: string } }>(
     "/api/benchmarks/submit",
     { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } },
     async (request, reply) => {
-      const { url, provider, apiKey } = request.body ?? {};
+      const { url, provider, apiKey, model } = request.body ?? {};
       if (!url || typeof url !== "string") {
         return reply.code(400).send({ queued: false, error: "url is required" });
       }
@@ -39,7 +39,11 @@ export async function registerBenchmarkRoutes(app: FastifyInstance): Promise<voi
             error: `Invalid provider. Must be one of: ${validProviders.join(", ")}`,
           });
         }
-        llmConfig = { provider: provider as LLMConfig["provider"], apiKey };
+        llmConfig = {
+          provider: provider as LLMConfig["provider"],
+          apiKey,
+          model: typeof model === "string" && model.trim() ? model.trim() : undefined,
+        };
       }
 
       const result = await submitBenchmarkJob(url, llmConfig);

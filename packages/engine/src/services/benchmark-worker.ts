@@ -26,9 +26,18 @@ function slugify(repo: string): string {
   return repo.replace(/\//g, "-");
 }
 
-function getBenchDbPath(repo: string): string {
-  return join(getBenchDbDir(), `${slugify(repo)}.db`);
+function getBenchDbPath(repo: string, llmLabel?: string): string {
+  const base = slugify(repo);
+  const suffix = llmLabel ? `-${llmLabel}` : "";
+  return join(getBenchDbDir(), `${base}${suffix}.db`);
 }
+
+/** Extended PATH so git/node are found in Docker and minimal server environments. */
+const EXTENDED_PATH = [
+  "/usr/local/sbin", "/usr/local/bin", "/usr/sbin", "/usr/bin", "/sbin", "/bin",
+  "/opt/homebrew/bin", "/snap/bin", "/root/.local/bin",
+  process.env.PATH ?? "",
+].filter(Boolean).join(":");
 
 // ---------------------------------------------------------------------------
 // Types
@@ -39,6 +48,7 @@ export type BenchmarkStage = "queued" | "cloning" | "analyzing" | "indexing" | "
 export interface LLMConfig {
   provider: "gemini" | "openai" | "deepseek" | "anthropic";
   apiKey: string;
+  model?: string;
 }
 
 interface QueueEntry {
@@ -71,6 +81,7 @@ interface BenchmarkProject {
   framework: string;
   live?: boolean;
   llmEnhanced?: boolean;
+  llmLabel?: string;
   dbPath?: string;
   cardCount?: number;
   stats: Record<string, number>;
@@ -122,8 +133,18 @@ export function getFileCountCap(): number {
 export function getBenchmarkProject(slug: string): BenchmarkProject | null {
   const file = readBenchmarkFileSync();
   if (!file) return null;
-  const repo = slug.replace(/-/, "/");
-  return file.projects.find((p) => p.repo === repo || slugify(p.repo) === slug) ?? null;
+  // Exact DB-slug match first (includes llmLabel suffix), then fallback to repo match
+  return (
+    file.projects.find((p) => {
+      const projectSlug = p.llmLabel
+        ? `${slugify(p.repo)}-${p.llmLabel}`
+        : slugify(p.repo);
+      return projectSlug === slug;
+    }) ??
+    // Fallback: match by repo slug alone (returns the structural / most-recent result)
+    file.projects.find((p) => slugify(p.repo) === slug) ??
+    null
+  );
 }
 
 /** Opens the per-repo benchmark DB (read-only for sandbox queries). */
@@ -146,22 +167,25 @@ export async function submitBenchmark(
   if (!match) return { queued: false, error: "Invalid GitHub URL" };
 
   const repoSlug = match[1].replace(/\.git$/, "");
+  // Build the llmLabel the same way runBenchmarkJob does, so dedup is consistent
+  const llmLabel = llmConfig
+    ? `${llmConfig.provider}${llmConfig.model ? `-${llmConfig.model}` : ""}`
+    : undefined;
 
   const file = readBenchmarkFileSync();
+  // Count unique (repo, llmLabel) pairs toward the slot cap
   const existingCount = file?.projects?.length ?? 0;
 
   if (existingCount >= MAX_PROJECTS) {
     return { queued: false, error: `Benchmark cap reached (${MAX_PROJECTS} projects). No more slots available.` };
   }
 
-  const existingProject = file?.projects?.find((p: BenchmarkProject) => p.repo === repoSlug);
+  // Check for exact duplicate: same repo AND same llmLabel
+  const existingProject = file?.projects?.find(
+    (p: BenchmarkProject) => p.repo === repoSlug && (p.llmLabel ?? undefined) === llmLabel,
+  );
   if (existingProject) {
-    const canUpgrade = llmConfig && !existingProject.llmEnhanced;
-    if (!canUpgrade) {
-      return { queued: false, error: `${repoSlug} has already been benchmarked` };
-    }
-    file!.projects = file!.projects.filter((p: BenchmarkProject) => p.repo !== repoSlug);
-    await writeFile(BENCHMARKS_PATH, JSON.stringify(file, null, 2));
+    return { queued: false, error: `${repoSlug}${llmLabel ? ` (${llmLabel})` : ""} has already been benchmarked` };
   }
 
   if (memoryQueue.some((e) => e.repo === repoSlug && e.status !== "error")) {
@@ -235,7 +259,11 @@ async function runBenchmarkJob(job: QueueEntry & { llmConfig?: LLMConfig; tmpDir
   // Clone into a named subdirectory so autoDiscover finds it as a repo
   const repoShortName = job.repo.split("/").pop() ?? "repo";
   const clonePath = join(tmpDir, repoShortName);
-  const benchDbPath = getBenchDbPath(job.repo);
+  // Build a unique label for this LLM config so results from different models coexist
+  const llmLabel = job.llmConfig
+    ? `${job.llmConfig.provider}${job.llmConfig.model ? `-${job.llmConfig.model}` : ""}`
+    : undefined;
+  const benchDbPath = getBenchDbPath(job.repo, llmLabel);
 
   // Stage 1: Clone
   job.stage = "cloning";
@@ -243,6 +271,7 @@ async function runBenchmarkJob(job: QueueEntry & { llmConfig?: LLMConfig; tmpDir
   execSync(`git clone --depth 1 ${job.repoUrl} ${clonePath}`, {
     stdio: ["ignore", "pipe", "pipe"],
     timeout: 120_000,
+    env: { ...(process.env as Record<string, string>), PATH: EXTENDED_PATH },
   });
 
   // Stage 2: Analyze
@@ -300,7 +329,7 @@ async function runBenchmarkJob(job: QueueEntry & { llmConfig?: LLMConfig; tmpDir
 
   // Stage 5: Save results
   job.stage = "saving";
-  const project = buildProjectResult(job.repo, language, framework, cases, !!job.llmConfig, cardCount);
+  const project = buildProjectResult(job.repo, language, framework, cases, !!job.llmConfig, cardCount, llmLabel);
 
   await appendProjectToBenchmarks(project);
 
@@ -314,7 +343,7 @@ async function runBenchmarkJob(job: QueueEntry & { llmConfig?: LLMConfig; tmpDir
 function countSourceFiles(dir: string): number {
   try {
     const output = execSync(
-      `find . -type f \\( -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx" -o -name "*.py" -o -name "*.rb" -o -name "*.go" -o -name "*.rs" -o -name "*.java" -o -name "*.kt" -o -name "*.swift" -o -name "*.vue" -o -name "*.svelte" \\) | grep -v node_modules | grep -v vendor | grep -v ".git/" | wc -l`,
+      `find . -type f \\( -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx" -o -name "*.py" -o -name "*.rb" -o -name "*.go" -o -name "*.rs" -o -name "*.java" -o -name "*.kt" -o -name "*.swift" -o -name "*.vue" -o -name "*.svelte" -o -name "*.php" \\) | grep -v node_modules | grep -v vendor | grep -v ".git/" | wc -l`,
       { cwd: dir, stdio: ["ignore", "pipe", "pipe"] },
     );
     return parseInt(output.toString().trim(), 10) || 0;
@@ -326,6 +355,7 @@ function countSourceFiles(dir: string): number {
 function detectLanguageAndFramework(dir: string): { language: string; framework: string } {
   const markers: Array<{ file: string; lang: string; fw: string }> = [
     { file: "Gemfile", lang: "Ruby", fw: "Ruby" },
+    { file: "composer.json", lang: "PHP", fw: "PHP" },
     { file: "requirements.txt", lang: "Python", fw: "Python" },
     { file: "pyproject.toml", lang: "Python", fw: "Python" },
     { file: "go.mod", lang: "Go", fw: "Go" },
@@ -382,6 +412,17 @@ function detectLanguageAndFramework(dir: string): { language: string; framework:
           if (content.includes("django")) return { language: "Python", framework: "Django" };
           if (content.includes("flask")) return { language: "Python", framework: "Flask" };
         } catch { /* fall through */ }
+      }
+      if (m.file === "composer.json") {
+        try {
+          const composer = JSON.parse(execSync(`cat ${join(dir, m.file)}`, { encoding: "utf-8" }));
+          const require = { ...composer.require, ...composer["require-dev"] };
+          if (require["laravel/framework"] || require["laravel/laravel"]) return { language: "PHP", framework: "Laravel" };
+          if (require["symfony/symfony"] || require["symfony/framework-bundle"]) return { language: "PHP", framework: "Symfony" };
+          if (require["slim/slim"]) return { language: "PHP", framework: "Slim" };
+          if (require["cakephp/cakephp"]) return { language: "PHP", framework: "CakePHP" };
+        } catch { /* fall through */ }
+        return { language: "PHP", framework: "PHP" };
       }
       return { language: m.lang, framework: m.fw };
     } catch { /* file doesn't exist */ }
@@ -720,6 +761,7 @@ function buildProjectResult(
   cases: BenchmarkCase[],
   llmEnhanced: boolean,
   cardCount = 0,
+  llmLabel?: string,
 ): BenchmarkProject {
   const name = repoSlug.split("/")[1] ?? repoSlug;
   const queriesTested = cases.length;
@@ -757,8 +799,11 @@ function buildProjectResult(
     framework,
     live: true,
     llmEnhanced,
+    llmLabel,
     cardCount,
-    dbPath: `benchmarks/${slugify(repoSlug)}.db`,
+    dbPath: llmLabel
+      ? `benchmarks/${slugify(repoSlug)}-${llmLabel}.db`
+      : `benchmarks/${slugify(repoSlug)}.db`,
     stats: {
       queries_tested: queriesTested,
       avg_tokens_with_codeprism: avgCodeprism,

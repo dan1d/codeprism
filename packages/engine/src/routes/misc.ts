@@ -4,6 +4,7 @@ import { receiveTelemetry } from "../telemetry/receiver.js";
 import { getAggregateStats } from "../telemetry/receiver.js";
 import { handleSync } from "../sync/receiver.js";
 import type { SyncPayload } from "../sync/receiver.js";
+import { validateSession } from "../services/auth.js";
 
 /** Sync, health, telemetry, and public-stats routes. */
 export async function registerMiscRoutes(app: FastifyInstance): Promise<void> {
@@ -49,5 +50,28 @@ export async function registerMiscRoutes(app: FastifyInstance): Promise<void> {
         totalQueries: 0, totalCards: 0, avgCacheHitRate: 0,
       });
     }
+  });
+
+  app.delete("/api/knowledge-base", async (request, reply) => {
+    const sessionToken = (request.headers["x-session-token"] as string) ?? "";
+    const session = sessionToken ? validateSession(sessionToken) : null;
+    if (!session) return reply.code(401).send({ error: "Not authenticated" });
+    if (session.role !== "admin") return reply.code(403).send({ error: "Admin only" });
+
+    const db = getDb();
+    db.exec(`
+      DELETE FROM cards;
+      DELETE FROM file_index;
+      DELETE FROM graph_edges;
+      DELETE FROM metrics;
+      DELETE FROM card_interactions;
+      DELETE FROM project_docs;
+      DELETE FROM extracted_insights;
+      DELETE FROM cards_fts;
+    `);
+    try {
+      db.exec(`DELETE FROM card_embeddings; DELETE FROM card_title_embeddings;`);
+    } catch { /* vector tables may not be present in all environments */ }
+    return reply.send({ ok: true, message: "Knowledge base cleared" });
   });
 }

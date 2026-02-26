@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Check, Eye, EyeOff, AlertTriangle } from "lucide-react";
+import { toast } from "sonner";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { api, type InstanceInfo } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -106,6 +107,21 @@ export function SettingsPage({ instanceInfo, onUpdate }: SettingsPageProps) {
 
   // Danger zone
   const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [clearing, setClearing] = useState(false);
+
+  const handleClearKnowledgeBase = async () => {
+    if (deleteConfirm !== "DELETE") return;
+    setClearing(true);
+    try {
+      await api.clearKnowledgeBase();
+      toast.success("Knowledge base cleared. Re-index your repositories to rebuild.");
+      setDeleteConfirm("");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to clear knowledge base");
+    } finally {
+      setClearing(false);
+    }
+  };
 
   useEffect(() => {
     if (instanceInfo) setCompanyName(instanceInfo.companyName);
@@ -313,10 +329,11 @@ export function SettingsPage({ instanceInfo, onUpdate }: SettingsPageProps) {
                 className="w-32 px-3 py-2 rounded-md border border-danger/30 bg-[#0f1117] text-xs text-[#c9d1d9] placeholder:text-[#484f58] focus:outline-none focus:border-danger/50 transition-colors font-mono"
               />
               <button
-                disabled={deleteConfirm !== "DELETE"}
+                onClick={() => void handleClearKnowledgeBase()}
+                disabled={deleteConfirm !== "DELETE" || clearing}
                 className="px-4 py-2 rounded-md border border-danger/50 text-xs text-danger hover:bg-danger/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
               >
-                Clear knowledge base
+                {clearing ? "Clearing..." : "Clear knowledge base"}
               </button>
             </div>
           </div>

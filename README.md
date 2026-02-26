@@ -18,7 +18,7 @@ codeprism fixes this. One shared knowledge graph. Every AI tool on your team ben
 
 ```
 Without codeprism   AI reads 15 files ≈ 4,500 tokens  💸
-With codeprism      AI reads 1 card   ≈   200 tokens  ✅
+With codeprism      AI reads 1 card   ≈   350 tokens  ✅
 ```
 
 ---
@@ -176,7 +176,7 @@ Once running, every team member points their AI tool to the **same server URL**:
 ## Key features
 
 ### Token savings
-Cards are pre-structured summaries of your codebase flows. Instead of an AI reading 15 files (~4,500 tokens), it reads one card (~200 tokens). Across a team of 5 doing 50 queries/day, that's **$300–$400/month saved** depending on your LLM.
+Cards are pre-structured summaries of your codebase flows. Instead of an AI reading 15 files (~4,500 tokens), it reads one card (~350 tokens). Across a team of 5 doing 50 queries/day, that's **$300–$400/month saved** depending on your LLM.
 
 → [Calculate your savings at codeprism.dev](https://codeprism.dev#calculator)
 

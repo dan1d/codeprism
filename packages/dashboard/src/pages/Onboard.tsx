@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Copy, Check, ArrowRight, ArrowLeft, Users, Sparkles, SkipForward, Terminal } from "lucide-react";
+import { Copy, Check, ArrowRight, ArrowLeft, Users, Sparkles, Terminal } from "lucide-react";
 import { api, type TenantInfo, type FoundingStatus } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -50,9 +50,6 @@ export function Onboard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<TenantInfo | null>(null);
-  const [inviteEmails, setInviteEmails] = useState("");
-  const [inviting, setInviting] = useState(false);
-  const [inviteResult, setInviteResult] = useState<{ invited: number; skipped: number } | null>(null);
   const [founding, setFounding] = useState<FoundingStatus | null>(null);
 
   useEffect(() => {
@@ -73,27 +70,6 @@ export function Onboard() {
       setError(err instanceof Error ? err.message : "Failed to create workspace");
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleInvite = async () => {
-    if (!result) return;
-    const emails = inviteEmails
-      .split(/[,\n]+/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-    if (emails.length === 0) return;
-
-    setInviting(true);
-    try {
-      // We need to auth first to call invite — use magic link flow
-      // For now, send invites via the admin API key from the tenant creation
-      const res = await api.inviteMembers(emails);
-      setInviteResult({ invited: res.invited, skipped: res.skipped });
-    } catch {
-      setInviteResult({ invited: 0, skipped: 0 });
-    } finally {
-      setInviting(false);
     }
   };
 
@@ -287,58 +263,39 @@ export function Onboard() {
           </>
         )}
 
-        {/* Step 2: Invite team */}
-        {step === 2 && (
+        {/* Step 2: Share with team */}
+        {step === 2 && result && (
           <>
             <h2 className="mb-2 text-lg font-semibold text-[#e1e4e8] flex items-center gap-2">
               <Users size={18} /> Invite your team
             </h2>
             <p className="mb-6 text-sm text-[#8b949e]">
-              Invite developers to join your workspace. They'll receive an email with setup instructions.
+              Share your workspace URL with teammates. Once logged in, you can invite them from the Team page.
             </p>
 
-            <textarea
-              value={inviteEmails}
-              onChange={(e) => setInviteEmails(e.target.value)}
-              placeholder={"alice@company.com\nbob@company.com\ncharlie@company.com"}
-              rows={5}
-              className={cn(
-                "w-full rounded-lg border border-[#30363d] bg-[#0f1117] px-4 py-3 mb-4",
-                "text-sm text-[#e1e4e8] placeholder:text-[#484f58] resize-none",
-                "focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-              )}
-            />
-
-            {inviteResult && (
-              <div className="rounded-lg border border-[#3fb950]/30 bg-[#3fb950]/5 p-3 mb-4">
-                <p className="text-sm text-[#3fb950]">
-                  {inviteResult.invited} invitation(s) sent{inviteResult.skipped > 0 ? `, ${inviteResult.skipped} already members` : ""}
-                </p>
+            <div className="rounded-lg border border-[#30363d] bg-[#0f1117] p-4 mb-4">
+              <p className="text-xs text-[#8b949e] mb-2">Workspace URL</p>
+              <div className="flex items-center justify-between gap-2">
+                <code className="text-sm text-[#e1e4e8] break-all">{result.dashboardUrl}</code>
+                <CopyButton text={result.dashboardUrl} />
               </div>
-            )}
-
-            <div className="flex gap-3">
-              <button
-                onClick={handleInvite}
-                disabled={inviting || !inviteEmails.trim()}
-                className={cn(
-                  "flex-1 flex items-center justify-center gap-2 rounded-lg bg-accent px-6 py-3",
-                  "text-sm font-semibold text-black transition-colors",
-                  "hover:bg-[#79b8ff] disabled:opacity-50 disabled:cursor-not-allowed"
-                )}
-              >
-                {inviting ? "Sending..." : "Send invitations"}
-              </button>
-              <button
-                onClick={() => setStep(3)}
-                className={cn(
-                  "flex items-center gap-1 rounded-lg border border-[#30363d] px-4 py-3",
-                  "text-sm text-[#8b949e] hover:text-[#e1e4e8] hover:border-[#8b949e] transition-colors"
-                )}
-              >
-                <SkipForward size={14} /> Skip
-              </button>
             </div>
+
+            <div className="rounded-lg border border-[#30363d] bg-[#0f1117] p-4 mb-6 text-xs text-[#8b949e] space-y-1">
+              <p>Each developer adds the MCP config to their own AI tool and points to your workspace URL.</p>
+              <p>You can send formal email invitations from <strong className="text-[#c9d1d9]">Team → Invite developers</strong> once you've logged in.</p>
+            </div>
+
+            <button
+              onClick={() => setStep(3)}
+              className={cn(
+                "flex w-full items-center justify-center gap-2 rounded-lg bg-accent px-6 py-3",
+                "text-sm font-semibold text-black transition-colors hover:bg-[#79b8ff]"
+              )}
+            >
+              Continue
+              <ArrowRight className="h-4 w-4" />
+            </button>
           </>
         )}
 

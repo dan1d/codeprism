@@ -559,6 +559,10 @@ export function Landing() {
                 a: "No. codeprism integrates as an MCP server — the same protocol Cursor, Claude Code, Windsurf, and Zed already support. Add a 10-line JSON snippet to your editor config and it's live.",
               },
               {
+                q: "Why not just standardize everyone on one AI tool?",
+                a: "Developers choose tools for different reasons — workflows, models, cost, personal preference — and forcing a single tool creates friction and slows adoption. More importantly, the next best AI tool launches every few weeks. codeprism doesn't care which tool your team uses; it gives every tool the same architectural context. You keep tool choice, your team keeps shared memory.",
+              },
+              {
                 q: "What if my team uses different AI tools?",
                 a: "That's the whole point. codeprism is tool-agnostic. Every MCP-compatible editor reads from the same knowledge graph — no matter who uses Cursor and who uses Claude Code.",
               },

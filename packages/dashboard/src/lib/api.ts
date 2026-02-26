@@ -282,6 +282,9 @@ export const api = {
   publicStats: () =>
     fetchJSON<PublicStats>("/api/public-stats"),
 
+  clearKnowledgeBase: () =>
+    fetchJSON<{ ok: boolean; message: string }>("/api/knowledge-base", { method: "DELETE" }),
+
   foundingStatus: () =>
     fetchJSON<FoundingStatus>("/api/founding-status"),
 
@@ -374,6 +377,7 @@ export interface BenchmarkProject {
   repo: string;
   language: string;
   framework: string;
+  llmLabel?: string;
   stats: {
     queries_tested: number;
     avg_tokens_with_codeprism: number;
@@ -425,6 +429,7 @@ export interface BenchmarkSubmitRequest {
   url: string;
   provider?: BenchmarkProvider;
   apiKey?: string;
+  model?: string;
 }
 
 export interface BenchmarkSubmitResponse {

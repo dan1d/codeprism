@@ -59,12 +59,18 @@ export function Team() {
     }
   };
 
-  const handleDeactivate = async (member: TeamMember) => {
-    if (!confirm(`Deactivate ${member.email}?`)) return;
-    try {
-      await api.deactivateMember(member.userId);
-      refresh();
-    } catch { /* ignore */ }
+  const handleDeactivate = (member: TeamMember) => {
+    toast(`Deactivate ${member.email}?`, {
+      action: {
+        label: "Deactivate",
+        onClick: () => {
+          api.deactivateMember(member.userId)
+            .then(refresh)
+            .catch(() => toast.error("Failed to deactivate member"));
+        },
+      },
+      cancel: { label: "Cancel", onClick: () => {} },
+    });
   };
 
   const isAdmin = user?.role === "admin";

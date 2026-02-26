@@ -28,7 +28,12 @@ const PUBLIC_ROUTES = new Set([
   "POST /api/auth/verify",
 ]);
 
+function normalizeMethod(method: string): string {
+  return method === "HEAD" ? "GET" : method;
+}
+
 function isPublicRoute(method: string, url: string): boolean {
+  method = normalizeMethod(method);
   const path = url.split("?")[0];
   if (PUBLIC_ROUTES.has(`${method} ${path}`)) return true;
   if (method === "GET" && /^\/api\/benchmarks\/[a-zA-Z0-9._-]+$/.test(path)) return true;
@@ -39,6 +44,7 @@ function isPublicRoute(method: string, url: string): boolean {
 }
 
 function isAdminRoute(method: string, url: string): boolean {
+  method = normalizeMethod(method);
   const path = url.split("?")[0];
   if (method === "GET" && path === "/api/tenants") return true;
   if (method === "DELETE" && /^\/api\/tenants\/[a-z0-9-]+$/.test(path)) return true;
