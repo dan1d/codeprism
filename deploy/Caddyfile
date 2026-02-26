@@ -1,10 +1,10 @@
 {$CODEPRISM_DOMAIN:localhost} {
-    reverse_proxy srcmap:4000
+    reverse_proxy codeprism:4000
 }
 
 *.{$CODEPRISM_DOMAIN:localhost} {
     tls {
         dns cloudflare {env.CF_API_TOKEN}
     }
-    reverse_proxy srcmap:4000
+    reverse_proxy codeprism:4000
 }

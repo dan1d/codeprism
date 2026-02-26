@@ -1,5 +1,8 @@
 services:
   codeprism:
+    # In CI: image is pre-built and pushed to ghcr.io, pulled here
+    # Locally: falls back to building from source
+    image: ${CODEPRISM_IMAGE:-ghcr.io/codeprism/codeprism:latest}
     build:
       context: ..
       dockerfile: Dockerfile
@@ -19,6 +22,9 @@ services:
       - CODEPRISM_TELEMETRY_URL=${CODEPRISM_TELEMETRY_URL:-}
       - CODEPRISM_ADMIN_KEY=${CODEPRISM_ADMIN_KEY:-}
       - CODEPRISM_DOMAIN=${CODEPRISM_DOMAIN:-localhost}
+      - CODEPRISM_RESEND_API_KEY=${CODEPRISM_RESEND_API_KEY:-}
+      - CODEPRISM_FROM_EMAIL=${CODEPRISM_FROM_EMAIL:-codeprism <noreply@codeprism.dev>}
+      - CODEPRISM_SUPPORT_EMAIL=${CODEPRISM_SUPPORT_EMAIL:-support@codeprism.dev}
 
   caddy:
     build:
