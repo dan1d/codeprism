@@ -36,7 +36,7 @@ Initial release.
 - Team member management: invite, auto-detect, deactivate
 - Seat tracking with configurable limits per plan
 - X-Dev-Email header for per-developer query attribution
-- Founding team program: first 100 teams get unlimited seats free
+- Founding team program: first 100 teams get 10 seats free
 
 ### Dashboard
 

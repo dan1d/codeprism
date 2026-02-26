@@ -15,7 +15,7 @@ The admin who creates the workspace is automatically registered as the first tea
 
 ### Founding teams
 
-The first 100 teams to create a workspace get the **founding** plan: unlimited developers, free forever. After 100 teams, new workspaces get the **free** plan with 3 active developer seats.
+The first 100 teams to create a workspace get the **founding** plan: up to 10 developers free. After 100 teams, new workspaces get the **free** plan with 3 active developer seats.
 
 ## Inviting developers
 
@@ -79,7 +79,7 @@ Seats are counted as the number of team members with status `active` or `detecte
 
 | Plan | Seat limit |
 |------|-----------|
-| Founding (first 100 teams) | Unlimited |
+| Founding (first 100 teams) | 10 |
 | Free | 3 active developers |
 | Paid (coming soon) | Billed per active developer |
 

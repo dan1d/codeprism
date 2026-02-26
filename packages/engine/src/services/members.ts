@@ -133,7 +133,7 @@ export function getActiveSeatCount(tenantSlug: string): number {
 /** Checks if adding one more active dev would exceed the seat limit. */
 export function wouldExceedSeatLimit(tenantSlug: string): boolean {
   const tenant = getTenantBySlug(tenantSlug);
-  if (!tenant || tenant.max_seats === null) return false; // unlimited
+  if (!tenant || tenant.max_seats === null) return false; // no limit set
   return getActiveSeatCount(tenantSlug) >= tenant.max_seats;
 }
 

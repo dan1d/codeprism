@@ -132,7 +132,7 @@ export function Onboard() {
             {founding?.founding && (
               <div className="mb-6 rounded-lg border border-[#3fb950]/30 bg-[#3fb950]/5 px-4 py-3">
                 <p className="text-sm text-[#3fb950] font-medium">
-                  Founding team offer — free with unlimited developers
+                  Founding team offer — up to 10 developers free
                 </p>
                 <p className="text-xs text-[#8b949e] mt-1">
                   {founding.remaining} of {founding.limit} free spots remaining. No credit card needed.
@@ -199,7 +199,7 @@ export function Onboard() {
             <div className="rounded-lg border border-[#3fb950]/30 bg-[#3fb950]/5 p-4 mb-6">
               <p className="text-sm font-medium text-[#3fb950]">Workspace created successfully</p>
               {founding?.founding && (
-                <p className="text-xs text-[#8b949e] mt-1">You're a founding team — unlimited developers, free forever.</p>
+                <p className="text-xs text-[#8b949e] mt-1">You're a founding team — up to 10 developers free forever.</p>
               )}
             </div>
 

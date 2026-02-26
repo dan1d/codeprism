@@ -31,7 +31,7 @@ With codeprism      AI reads 1 card   ≈   200 tokens  ✅
 
 No infrastructure. Get started in 60 seconds:
 
-→ **[codeprism.dev](https://codeprism.dev)** — first 100 teams free, unlimited developers
+→ **[codeprism.dev](https://codeprism.dev)** — first 100 teams get up to 10 developers free, no credit card
 
 ### Self-hosted
 
@@ -41,8 +41,18 @@ docker compose up -d
 
 # 2. Index your code
 pnpm codeprism index
+```
 
-# 3. Add to your AI tool (.cursor/mcp.json or claude_desktop_config.json)
+**3. Connect your AI tool** — add to your config file:
+
+| Tool | Config file |
+|------|------------|
+| Cursor | `.cursor/mcp.json` |
+| Claude Code | `claude_desktop_config.json` |
+| Windsurf | `~/.codeium/windsurf/mcp_config.json` |
+| Lovable | Project settings → MCP |
+
+```json
 {
   "mcpServers": {
     "codeprism": {
@@ -125,7 +135,7 @@ See [docs/mcp-tools.md](docs/mcp-tools.md) for full reference with parameters an
 | **Infrastructure** | We handle it | Your server |
 | **Data** | Hosted, tenant-isolated | Stays on your machine |
 | **Team features** | Invitations, analytics, seat tracking | Single user |
-| **Price** | First 100 teams free | Free forever (AGPL-3.0) |
+| **Price** | First 100 teams (up to 10 devs) | Free forever (AGPL-3.0) |
 | **Best for** | Teams of 2–20 | Solo devs, air-gapped envs |
 
 Both run the same engine. The Cloud version adds multi-tenancy, team management, and a hosted dashboard.

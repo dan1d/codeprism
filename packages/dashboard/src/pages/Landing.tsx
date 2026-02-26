@@ -30,7 +30,7 @@ const HOW_IT_WORKS = [
   {
     title: "Serve",
     description:
-      "Your AI calls codeprism_search() and gets a 200-token card instead of reading 15 files",
+      "Your AI calls codeprism_search() and gets a 200-token card instead of reading 15 files — works in Cursor, Claude Code, Windsurf, and Lovable",
     icon: Zap,
   },
 ];
@@ -243,7 +243,7 @@ export function Landing() {
         {/* Badge */}
         <div className="inline-flex items-center gap-2 rounded-full border border-[#30363d] bg-[#161b22] px-3 py-1 text-xs text-[#8b949e] mb-6">
           <span className="h-1.5 w-1.5 rounded-full bg-[#3fb950] animate-pulse" />
-          <span>Open source · Works with Cursor, Claude Code, Windsurf</span>
+          <span>Open source · Works with Cursor, Claude Code, Windsurf, Lovable</span>
         </div>
 
         <h1 className="mx-auto max-w-3xl text-4xl font-bold leading-tight text-[#e1e4e8] sm:text-5xl">
@@ -421,8 +421,8 @@ export function Landing() {
             Built for teams
           </h2>
           <p className="mb-12 text-center text-sm text-[#8b949e] max-w-2xl mx-auto">
-            5 developers, each paying for their own AI tool, all working on the same codebase.
-            Every new session re-learns what a teammate already asked about yesterday.
+            5 developers — some on Cursor, some on Claude Code, one on Windsurf — all working on the same codebase.
+            Every new session re-learns what a teammate already figured out yesterday.
             codeprism makes that stop.
           </p>
           <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
@@ -484,7 +484,7 @@ export function Landing() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="mt-0.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
-                  First 100 teams free — unlimited developers
+                  First 100 teams — up to 10 developers free
                 </li>
               </ul>
             </div>

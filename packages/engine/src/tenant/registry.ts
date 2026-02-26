@@ -173,7 +173,7 @@ export function getTenantCount(): number {
  * Creates a new tenant. Returns the public tenant record plus the raw API key.
  * The raw key is only available at creation time -- it is never stored.
  *
- * First 100 teams get "founding" plan with unlimited seats.
+ * First 100 teams get "founding" plan with 10 seats free.
  * After that, new teams get "free" plan with 3 seats.
  */
 export function createTenant(
@@ -189,7 +189,7 @@ export function createTenant(
   const currentCount = getTenantCount();
   const isFounding = currentCount < FOUNDING_TEAM_LIMIT;
   const plan = isFounding ? "founding" : "free";
-  const maxSeats = isFounding ? null : 3; // founding = unlimited, free = 3
+  const maxSeats = isFounding ? 10 : 3; // founding = 10 seats, free = 3 seats
 
   db.prepare(
     "INSERT INTO tenants (slug, name, api_key_hash, api_key_prefix, plan, owner_email, max_seats) VALUES (?, ?, ?, ?, ?, ?, ?)",
