@@ -352,7 +352,7 @@ function countSourceFiles(dir: string): number {
   }
 }
 
-function detectLanguageAndFramework(dir: string): { language: string; framework: string } {
+export function detectLanguageAndFramework(dir: string): { language: string; framework: string } {
   const markers: Array<{ file: string; lang: string; fw: string }> = [
     { file: "Gemfile", lang: "Ruby", fw: "Ruby" },
     { file: "composer.json", lang: "PHP", fw: "PHP" },
@@ -407,8 +407,9 @@ function detectLanguageAndFramework(dir: string): { language: string; framework:
       }
       if (m.file === "requirements.txt" || m.file === "pyproject.toml") {
         try {
-          const content = execSync(`cat ${join(dir, m.file)}`, { encoding: "utf-8" });
+          const content = execSync(`cat ${join(dir, m.file)}`, { encoding: "utf-8" }).toLowerCase();
           if (content.includes("fastapi")) return { language: "Python", framework: "FastAPI" };
+          if (content.includes("djangorestframework")) return { language: "Python", framework: "Django" };
           if (content.includes("django")) return { language: "Python", framework: "Django" };
           if (content.includes("flask")) return { language: "Python", framework: "Flask" };
         } catch { /* fall through */ }

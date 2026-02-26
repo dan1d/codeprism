@@ -8,17 +8,20 @@ import { api, type PublicStats, type FoundingStatus, type BenchmarkResponse } fr
 import { formatTokens, stackColor, cn } from "@/lib/utils";
 
 const SUPPORT_EMAIL = "support@codeprism.dev";
+const GITHUB_URL = "https://github.com/dan1d/codeprism";
+const DISCORD_URL = "https://discord.gg/nsWERSde";
 
 const FRAMEWORKS = [
   "Rails", "React", "Vue", "Next.js", "Django", "FastAPI",
   "Go", "Laravel", "NestJS", "Angular", "Svelte", "Spring", "Lambda",
+  "Express", "Fastify", "Sinatra",
 ];
 
 const HOW_IT_WORKS = [
   {
     title: "Parse",
     description:
-      "Your repos are parsed into a living knowledge graph — models, routes, flows, and dependencies — across Ruby, JS/TS, Python, Go, and more. No config required.",
+      "Your repos are parsed into a living knowledge graph — models, routes, flows, and dependencies — across Ruby, JS/TS, Python, Go, PHP, and more. No config required.",
     icon: FileText,
   },
   {
@@ -180,25 +183,25 @@ function SavingsCalculator() {
 
       {/* Results */}
       <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-[#21262d]">
-        <div className="px-5 py-5 text-center">
-          <p className="text-[10px] uppercase tracking-wider text-[#484f58] mb-1">Tokens saved / mo</p>
-          <p className="text-2xl font-bold text-accent">{formatTokens(tokensSaved)}</p>
-          <p className="text-[10px] text-[#8b949e] mt-0.5">{REDUCTION_PCT}% reduction</p>
+        <div className="px-6 py-8 text-center">
+          <p className="text-xs uppercase tracking-wider text-[#484f58] mb-2">Tokens saved / mo</p>
+          <p className="text-4xl font-bold text-accent">{formatTokens(tokensSaved)}</p>
+          <p className="text-xs text-[#8b949e] mt-1">{REDUCTION_PCT}% reduction</p>
         </div>
-        <div className="px-5 py-5 text-center">
-          <p className="text-[10px] uppercase tracking-wider text-[#484f58] mb-1">Cost saved / mo</p>
-          <p className="text-2xl font-bold text-[#3fb950]">{formatMoney(costSaved)}</p>
-          <p className="text-[10px] text-[#8b949e] mt-0.5">{formatMoney(costWith)} remaining</p>
+        <div className="px-6 py-8 text-center">
+          <p className="text-xs uppercase tracking-wider text-[#484f58] mb-2">Cost saved / mo</p>
+          <p className="text-4xl font-bold text-[#3fb950]">{formatMoney(costSaved)}</p>
+          <p className="text-xs text-[#8b949e] mt-1">{formatMoney(costWith)} remaining</p>
         </div>
-        <div className="px-5 py-5 text-center">
-          <p className="text-[10px] uppercase tracking-wider text-[#484f58] mb-1">Without codeprism</p>
-          <p className="text-2xl font-bold text-[#f85149]">{formatMoney(costWithout)}</p>
-          <p className="text-[10px] text-[#8b949e] mt-0.5">{formatTokens(tokensWithout)} tokens</p>
+        <div className="px-6 py-8 text-center">
+          <p className="text-xs uppercase tracking-wider text-[#484f58] mb-2">Without codeprism</p>
+          <p className="text-4xl font-bold text-[#f85149]">{formatMoney(costWithout)}</p>
+          <p className="text-xs text-[#8b949e] mt-1">{formatTokens(tokensWithout)} tokens</p>
         </div>
-        <div className="px-5 py-5 text-center">
-          <p className="text-[10px] uppercase tracking-wider text-[#484f58] mb-1">With codeprism</p>
-          <p className="text-2xl font-bold text-[#e1e4e8]">{formatMoney(costWith)}</p>
-          <p className="text-[10px] text-[#8b949e] mt-0.5">{formatTokens(tokensWith)} tokens</p>
+        <div className="px-6 py-8 text-center">
+          <p className="text-xs uppercase tracking-wider text-[#484f58] mb-2">With codeprism</p>
+          <p className="text-4xl font-bold text-[#e1e4e8]">{formatMoney(costWith)}</p>
+          <p className="text-xs text-[#8b949e] mt-1">{formatTokens(tokensWith)} tokens</p>
         </div>
       </div>
 
@@ -269,7 +272,9 @@ export function Landing() {
               Set up your team's shared memory
             </Link>
             <a
-              href="https://github.com/codeprism/codeprism"
+              href={GITHUB_URL}
+              target="_blank"
+              rel="noopener noreferrer"
               className={cn(
                 "rounded-lg border border-[#30363d] bg-[#161b22] px-6 py-3 text-sm font-semibold text-[#e1e4e8]",
                 "hover:border-[#8b949e] transition-colors"
@@ -354,38 +359,43 @@ export function Landing() {
       )}
 
       {/* Token Savings Calculator */}
-      <section className="mx-auto max-w-5xl px-6 py-20">
-        <h2 className="mb-3 text-center text-2xl font-bold text-[#e1e4e8]">
-          How much is your team spending on context?
+      <section className="mx-auto max-w-5xl px-6 py-24">
+        <h2 className="mb-3 text-center text-3xl font-bold text-[#e1e4e8]">
+          The efficiency case, by the numbers
         </h2>
-        <p className="mb-10 text-center text-sm text-[#8b949e] max-w-xl mx-auto">
-          Every AI query without codeprism dumps 4,500+ raw tokens. Plug in your numbers.
+        <p className="mb-2 text-center text-base text-[#8b949e] max-w-2xl mx-auto">
+          Token savings are the measurable side effect.
+        </p>
+        <p className="mb-10 text-center text-base text-[#8b949e] max-w-2xl mx-auto">
+          Plug in your team size to see what it looks like on your bill.
         </p>
         <SavingsCalculator />
       </section>
 
       {/* How it works */}
-      <section className="border-t border-[#30363d] mx-auto max-w-5xl px-6 py-20">
-        <h2 className="mb-3 text-center text-2xl font-bold text-[#e1e4e8]">
-          How it works
-        </h2>
-        <p className="mb-10 text-center text-sm text-[#8b949e] max-w-xl mx-auto">
-          One pnpm command indexes your repos. After that, every AI tool in your team reads from the same graph.
-        </p>
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-          {HOW_IT_WORKS.map((step, i) => (
-            <div
-              key={step.title}
-              className="rounded-lg border border-[#30363d] bg-[#161b22] p-6"
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <span className="text-xs font-mono text-[#484f58]">0{i + 1}</span>
-                <step.icon className="h-5 w-5 text-accent" />
+      <section className="border-t border-[#30363d] bg-[#0d1117]">
+        <div className="mx-auto max-w-5xl px-6 py-24">
+          <h2 className="mb-3 text-center text-3xl font-bold text-[#e1e4e8]">
+            How it works
+          </h2>
+          <p className="mb-12 text-center text-base text-[#8b949e] max-w-2xl mx-auto">
+            One command indexes your repos. After that, every AI tool reads from the same shared graph.
+          </p>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+            {HOW_IT_WORKS.map((step, i) => (
+              <div
+                key={step.title}
+                className="rounded-xl border border-[#30363d] bg-[#161b22] p-8"
+              >
+                <div className="flex items-center gap-3 mb-6">
+                  <span className="text-sm font-mono font-bold text-accent">0{i + 1}</span>
+                  <step.icon className="h-6 w-6 text-accent" />
+                </div>
+                <h3 className="mb-3 text-xl font-semibold text-[#e1e4e8]">{step.title}</h3>
+                <p className="text-sm leading-7 text-[#8b949e]">{step.description}</p>
               </div>
-              <h3 className="mb-2 text-lg font-semibold text-[#e1e4e8]">{step.title}</h3>
-              <p className="text-sm leading-relaxed text-[#8b949e]">{step.description}</p>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </section>
 
@@ -467,66 +477,100 @@ export function Landing() {
 
       {/* Self-host vs Hosted */}
       <section className="border-t border-[#30363d] bg-[#0d1117]">
-        <div className="mx-auto max-w-5xl px-6 py-20">
-          <h2 className="mb-10 text-center text-2xl font-bold text-[#e1e4e8]">
+        <div className="mx-auto max-w-5xl px-6 py-24">
+          <h2 className="mb-3 text-center text-3xl font-bold text-[#e1e4e8]">
             Deploy your way
           </h2>
+          <p className="mb-12 text-center text-base text-[#8b949e] max-w-xl mx-auto">
+            Open source and free to self-host. Pick what fits your team.
+          </p>
           <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
             {/* Local */}
-            <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-6">
-              <h3 className="mb-1 text-base font-semibold text-[#e1e4e8]">Local</h3>
-              <p className="text-xs text-[#484f58] mb-4">Solo devs</p>
-              <ul className="space-y-3 text-sm text-[#8b949e]">
-                <li className="flex items-start gap-2">
-                  <span className="mt-0.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-[#3fb950]" />
-                  <code className="text-[#e1e4e8]">docker compose up -d</code>
-                </li>
+            <div className="rounded-xl border border-[#30363d] bg-[#161b22] p-7 flex flex-col">
+              <h3 className="mb-1 text-lg font-semibold text-[#e1e4e8]">Local</h3>
+              <p className="text-xs text-[#484f58] mb-5">Solo devs</p>
+              <ul className="space-y-3 text-sm text-[#8b949e] flex-1">
                 <li className="flex items-start gap-2">
                   <span className="mt-0.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-[#3fb950]" />
                   Runs on your machine, zero config
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="mt-0.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-[#3fb950]" />
-                  Source-available engine (BUSL-1.1) · MIT clients
+                  Free forever · AGPL-3.0 open source
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="mt-0.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-[#3fb950]" />
+                  <div>
+                    <p className="mb-1.5">Quick install:</p>
+                    <code className="block rounded bg-[#0d1117] border border-[#30363d] px-3 py-2 text-[11px] text-[#e1e4e8] font-mono leading-relaxed">
+                      curl -fsSL https://codeprism.dev/install.sh | bash
+                    </code>
+                  </div>
                 </li>
               </ul>
+              <a
+                href={GITHUB_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-6 block rounded-lg border border-[#30363d] px-4 py-2.5 text-center text-sm font-medium text-[#e1e4e8] hover:border-[#8b949e] hover:bg-[#21262d] transition-colors"
+              >
+                View on GitHub →
+              </a>
             </div>
 
             {/* VPS */}
-            <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-6">
-              <h3 className="mb-1 text-base font-semibold text-[#e1e4e8]">Self-hosted VPS</h3>
-              <p className="text-xs text-[#484f58] mb-4">Teams who own their data</p>
-              <ul className="space-y-3 text-sm text-[#8b949e]">
-                <li className="flex items-start gap-2">
-                  <span className="mt-0.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-[#3fb950]" />
-                  Deploy to Hetzner, Render, or DigitalOcean
-                </li>
+            <div className="rounded-xl border border-[#30363d] bg-[#161b22] p-7 flex flex-col">
+              <h3 className="mb-1 text-lg font-semibold text-[#e1e4e8]">Self-hosted VPS</h3>
+              <p className="text-xs text-[#484f58] mb-5">Teams who own their data</p>
+              <ul className="space-y-3 text-sm text-[#8b949e] flex-1">
                 <li className="flex items-start gap-2">
                   <span className="mt-0.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-[#3fb950]" />
                   Whole team points to the same server URL
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="mt-0.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-[#3fb950]" />
-                  ~$10/mo · your LLM key · your rules
+                  ~$10/mo (Hetzner) · your LLM key · your rules
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="mt-0.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-[#3fb950]" />
+                  One-click deploy to Render or DigitalOcean
                 </li>
               </ul>
+              <div className="mt-6 flex flex-col gap-2">
+                <a
+                  href={`https://render.com/deploy?repo=${GITHUB_URL}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block rounded-lg border border-[#30363d] px-4 py-2.5 text-center text-sm font-medium text-[#e1e4e8] hover:border-[#8b949e] hover:bg-[#21262d] transition-colors"
+                >
+                  Deploy to Render →
+                </a>
+                <a
+                  href={`https://cloud.digitalocean.com/apps/new?repo=${GITHUB_URL}/tree/main`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block rounded-lg border border-[#30363d] px-4 py-2.5 text-center text-sm font-medium text-[#e1e4e8] hover:border-[#8b949e] hover:bg-[#21262d] transition-colors"
+                >
+                  Deploy to DigitalOcean →
+                </a>
+              </div>
             </div>
 
             {/* Cloud */}
-            <div className="rounded-lg border border-accent/50 bg-[#161b22] p-6">
+            <div className="rounded-xl border border-accent/50 bg-[#161b22] p-7 flex flex-col">
               <div className="flex items-center justify-between mb-1">
-                <h3 className="text-base font-semibold text-[#e1e4e8]">codeprism Cloud</h3>
+                <h3 className="text-lg font-semibold text-[#e1e4e8]">codeprism Cloud</h3>
                 {founding?.founding && (
                   <span className="rounded-full bg-[#3fb950]/10 border border-[#3fb950]/30 px-2 py-0.5 text-[10px] font-medium text-[#3fb950]">
                     {founding.remaining} spots left
                   </span>
                 )}
               </div>
-              <p className="text-xs text-[#484f58] mb-4">Teams who want zero infra</p>
-              <ul className="space-y-3 text-sm text-[#8b949e]">
+              <p className="text-xs text-[#484f58] mb-5">Teams who want zero infra</p>
+              <ul className="space-y-3 text-sm text-[#8b949e] flex-1">
                 <li className="flex items-start gap-2">
                   <span className="mt-0.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
-                  One-click setup — ready in under 2 minutes
+                  Ready in under 2 minutes — no server to manage
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="mt-0.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
@@ -534,9 +578,15 @@ export function Landing() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="mt-0.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
-                  Founding teams: up to 10 devs free · no credit card
+                  First 100 teams: up to 10 devs free · no credit card
                 </li>
               </ul>
+              <Link
+                to="/onboard"
+                className="mt-6 block rounded-lg bg-accent px-4 py-2.5 text-center text-sm font-semibold text-black hover:bg-[#79b8ff] transition-colors"
+              >
+                Get started free →
+              </Link>
             </div>
           </div>
         </div>
@@ -572,7 +622,7 @@ export function Landing() {
               },
               {
                 q: "What languages and frameworks are supported?",
-                a: "Ruby, JavaScript, TypeScript, Python, Go, Vue out of the box. Rails, React, Next.js, Django, FastAPI, Laravel, NestJS, Angular, Spring, and more are detected automatically from your stack.",
+                a: "Ruby, JavaScript, TypeScript, Python, Go, PHP, and Vue out of the box. Rails, Sinatra, React, Next.js, Vue, Django, FastAPI, Laravel, Symfony, NestJS, Angular, Svelte, Gin, Spring, Express, Fastify, and more are detected automatically from your stack.",
               },
             ].map(({ q, a }) => (
               <div key={q} className="border-b border-[#21262d] pb-6 last:border-0">
@@ -600,21 +650,32 @@ export function Landing() {
 
       {/* Footer */}
       <footer className="border-t border-[#30363d] px-6 py-6">
-        <div className="flex items-center justify-center gap-4 text-sm text-[#8b949e]">
-          <span>BUSL-1.1 / MIT</span>
+        <div className="flex flex-wrap items-center justify-center gap-4 text-sm text-[#8b949e]">
+          <span>AGPL-3.0 open source</span>
           <span className="text-[#30363d]">|</span>
           <a
-            href="https://github.com/codeprism/codeprism"
+            href={GITHUB_URL}
+            target="_blank"
+            rel="noopener noreferrer"
             className="hover:text-accent transition-colors"
           >
             GitHub
           </a>
           <span className="text-[#30363d]">|</span>
           <a
+            href={DISCORD_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-accent transition-colors"
+          >
+            Discord
+          </a>
+          <span className="text-[#30363d]">|</span>
+          <a
             href="https://docs.codeprism.dev"
             className="hover:text-accent transition-colors"
           >
-            Documentation
+            Docs
           </a>
           <span className="text-[#30363d]">|</span>
           <a

@@ -77,9 +77,9 @@ That's it. Your AI now has 12 MCP tools that serve codebase context on demand.
 Your repos           codeprism engine              Your AI
 ──────────           ────────────────              ───────
                      ┌─────────────┐
- *.rb *.ts *.vue     │ tree-sitter │  parse
- ───────────────────>│   parsers   │──────┐
-                     └─────────────┘      │
+ *.rb  *.ts  *.js    │ tree-sitter │  parse
+ *.py  *.go  *.php   │   parsers   │──────┐
+ *.vue *.svelte ───> └─────────────┘      │
                                           v
                      ┌─────────────┐  ┌──────────┐
                      │  Louvain    │  │ dep graph │
@@ -101,7 +101,7 @@ Your repos           codeprism engine              Your AI
                      └─────────────┘               ...9 more tools
 ```
 
-1. **Parse** — tree-sitter extracts classes, methods, routes, associations, and imports from Ruby, JS/TS, Vue, Python, and Go
+1. **Parse** — tree-sitter extracts classes, methods, routes, associations, and imports from Ruby, JS/TS, Vue, Python, Go, and PHP
 2. **Graph** — graphology builds a directed dependency graph; edges represent imports, API calls, and model associations
 3. **Detect flows** — Louvain community detection + PageRank finds natural feature clusters across repos
 4. **Generate cards** — each flow becomes a knowledge card (structural markdown or LLM-enriched prose)
@@ -205,9 +205,9 @@ pnpm codeprism import-transcripts
 A two-pass LLM pipeline extracts structured insights with hallucination protection. See [docs/conversation-intelligence.md](docs/conversation-intelligence.md).
 
 ### Framework support
-16 built-in skills improve card generation and search relevance:
+18 built-in skills improve card generation and search relevance:
 
-Rails · React · Vue · Next.js · Django · FastAPI · Go · Gin · Laravel · NestJS · Angular · Svelte · Spring · Lambda · Python · Django REST
+Rails · Sinatra · React · Vue · Next.js · Django · Django REST · FastAPI · Go · Gin · Laravel · NestJS · Angular · Svelte · Spring · Lambda · Python · PHP
 
 ---
 
@@ -230,7 +230,7 @@ Tested on real open-source projects — Caddy, Huginn, Excalidraw, Gogs, Lobster
 
 - **Runtime**: TypeScript, Node.js 22, Fastify
 - **Database**: SQLite + sqlite-vec (vector search) + FTS5 (full-text search)
-- **Parsing**: tree-sitter (Ruby, JS/TS, Vue, Python, Go)
+- **Parsing**: tree-sitter (Ruby, JS/TS, Vue, Python, Go, PHP)
 - **Embeddings**: nomic-embed-text-v1.5 (768-d, in-process via Transformers.js)
 - **Reranking**: cross-encoder/ms-marco-MiniLM-L-6-v2 (in-process)
 - **Graph**: graphology (Louvain community detection, PageRank)

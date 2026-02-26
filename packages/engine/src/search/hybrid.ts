@@ -104,10 +104,13 @@ export function computeWeightedRrfScore(
   k = 60,
 ): number {
   const rrfBase = ranks.reduce((sum, rank) => sum + 1 / (k + rank), 0);
-  const avgScore = normalizedScores.length > 0
-    ? normalizedScores.reduce((s, v) => s + v, 0) / normalizedScores.length
-    : 0;
-  return rrfBase * 0.75 + avgScore * 0.25;
+  // Use max score rather than average: the RRF base already rewards dual-source
+  // presence additively. Averaging scores penalizes "both" cards when one source
+  // returns a neutral confidence (e.g. kwRange=0 → 0.5), reducing the score below
+  // a single-source card with a high raw confidence. Max preserves the strongest
+  // signal while letting the rank component capture the "both sources" bonus.
+  const maxScore = normalizedScores.length > 0 ? Math.max(...normalizedScores) : 0;
+  return rrfBase * 0.75 + maxScore * 0.25;
 }
 
 /**
