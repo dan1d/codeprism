@@ -6,18 +6,24 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
 import * as sqliteVec from "sqlite-vec";
+import { getDataDir } from "../db/connection.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const BENCHMARKS_PATH = join(__dirname, "../../../../eval/benchmarks.json");
+function getBenchmarksJsonPath(): string {
+  const dir = join(getDataDir(), "benchmarks");
+  mkdirSync(dir, { recursive: true });
+  return join(dir, "benchmarks.json");
+}
+
+const BENCHMARKS_PATH = getBenchmarksJsonPath();
 const MAX_PROJECTS = 20;
 const MAX_QUERIES_PER_PROJECT = 16;
 const FILE_CAP = 2000;
 
 function getBenchDbDir(): string {
-  const dataDir = process.env["CODEPRISM_DATA_DIR"] ?? join(__dirname, "../..", "data");
-  const dir = join(dataDir, "benchmarks");
+  const dir = join(getDataDir(), "benchmarks");
   mkdirSync(dir, { recursive: true });
   return dir;
 }

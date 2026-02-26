@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
+import { getDataDir } from "../db/connection.js";
 import {
   submitBenchmark as submitBenchmarkJob,
   getQueueStatus,
@@ -138,7 +139,7 @@ export async function registerBenchmarkRoutes(app: FastifyInstance): Promise<voi
   });
 
   app.get("/api/benchmarks", async (_request, reply) => {
-    const benchPath = join(__dirname, "../../../../eval/benchmarks.json");
+    const benchPath = join(getDataDir(), "benchmarks", "benchmarks.json");
     let benchData = null;
     try {
       benchData = JSON.parse(await readFile(benchPath, "utf-8"));
