@@ -1,0 +1,34 @@
+name: codeprism
+region: nyc
+services:
+  - name: codeprism
+    dockerfile_path: Dockerfile
+    source_dir: /
+    github:
+      repo: dan1d/codeprism
+      branch: main
+      deploy_on_push: true
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-1gb
+    http_port: 4000
+    health_check:
+      http_path: /api/health
+    envs:
+      - key: CODEPRISM_PORT
+        value: "4000"
+      - key: CODEPRISM_DATA_DIR
+        value: /data
+      - key: CODEPRISM_MULTI_TENANT
+        value: "false"
+      - key: CODEPRISM_COMPANY_NAME
+        value: ""
+        type: SECRET
+      - key: GOOGLE_API_KEY
+        value: ""
+        type: SECRET
+      - key: CODEPRISM_LLM_PROVIDER
+        value: ""
+        type: SECRET
+      - key: CODEPRISM_LLM_API_KEY
+        value: ""
+        type: SECRET

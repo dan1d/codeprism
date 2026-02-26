@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: srcmap
+    name: codeprism
     runtime: docker
     plan: starter
     envVars:
@@ -8,7 +8,19 @@ services:
         value: 4000
       - key: CODEPRISM_DB_PATH
         value: /data/codeprism.db
+      - key: CODEPRISM_DATA_DIR
+        value: /data
+      - key: CODEPRISM_MULTI_TENANT
+        value: false
+      - key: CODEPRISM_COMPANY_NAME
+        sync: false
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: CODEPRISM_LLM_PROVIDER
+        sync: false
+      - key: CODEPRISM_LLM_API_KEY
+        sync: false
     disk:
-      name: srcmap-data
+      name: codeprism-data
       mountPath: /data
-      sizeGB: 1
+      sizeGB: 5

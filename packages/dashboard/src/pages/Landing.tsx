@@ -446,9 +446,11 @@ export function Landing() {
           <h2 className="mb-10 text-center text-2xl font-bold text-[#e1e4e8]">
             Deploy your way
           </h2>
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+            {/* Local */}
             <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-6">
-              <h3 className="mb-4 text-lg font-semibold text-[#e1e4e8]">Self-hosted</h3>
+              <h3 className="mb-1 text-base font-semibold text-[#e1e4e8]">Local</h3>
+              <p className="text-xs text-[#484f58] mb-4">Solo devs</p>
               <ul className="space-y-3 text-sm text-[#8b949e]">
                 <li className="flex items-start gap-2">
                   <span className="mt-0.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-[#3fb950]" />
@@ -456,7 +458,7 @@ export function Landing() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="mt-0.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-[#3fb950]" />
-                  Your server, your data, your rules
+                  Runs on your machine, zero config
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="mt-0.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-[#3fb950]" />
@@ -464,27 +466,50 @@ export function Landing() {
                 </li>
               </ul>
             </div>
+
+            {/* VPS */}
+            <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-6">
+              <h3 className="mb-1 text-base font-semibold text-[#e1e4e8]">Self-hosted VPS</h3>
+              <p className="text-xs text-[#484f58] mb-4">Teams who own their data</p>
+              <ul className="space-y-3 text-sm text-[#8b949e]">
+                <li className="flex items-start gap-2">
+                  <span className="mt-0.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-[#3fb950]" />
+                  Deploy to Hetzner, Render, or DigitalOcean
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="mt-0.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-[#3fb950]" />
+                  Whole team points to the same server URL
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="mt-0.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-[#3fb950]" />
+                  ~$10/mo · your LLM key · your rules
+                </li>
+              </ul>
+            </div>
+
+            {/* Cloud */}
             <div className="rounded-lg border border-accent/50 bg-[#161b22] p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-[#e1e4e8]">codeprism Cloud</h3>
+              <div className="flex items-center justify-between mb-1">
+                <h3 className="text-base font-semibold text-[#e1e4e8]">codeprism Cloud</h3>
                 {founding?.founding && (
-                  <span className="rounded-full bg-[#3fb950]/10 border border-[#3fb950]/30 px-2.5 py-0.5 text-xs font-medium text-[#3fb950]">
-                    {founding.remaining} free spots left
+                  <span className="rounded-full bg-[#3fb950]/10 border border-[#3fb950]/30 px-2 py-0.5 text-[10px] font-medium text-[#3fb950]">
+                    {founding.remaining} spots left
                   </span>
                 )}
               </div>
+              <p className="text-xs text-[#484f58] mb-4">Teams who want zero infra</p>
               <ul className="space-y-3 text-sm text-[#8b949e]">
                 <li className="flex items-start gap-2">
                   <span className="mt-0.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
-                  One-click setup, no infrastructure to manage
+                  One-click setup, no server to manage
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="mt-0.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
-                  Team invitations, per-developer analytics, seat tracking
+                  Invitations, analytics, seat tracking built-in
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="mt-0.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
-                  First 100 teams — up to 10 developers free
+                  First 100 teams: up to 10 devs free
                 </li>
               </ul>
             </div>

@@ -127,18 +127,44 @@ See [docs/mcp-tools.md](docs/mcp-tools.md) for full reference with parameters an
 
 ---
 
-## Cloud vs Self-hosted
+## Deployment options
 
-|  | **Cloud** | **Self-hosted** |
-|--|-----------|-----------------|
-| **Setup** | [One-click at codeprism.dev](https://codeprism.dev) | `docker compose up -d` |
-| **Infrastructure** | We handle it | Your server |
-| **Data** | Hosted, tenant-isolated | Stays on your machine |
-| **Team features** | Invitations, analytics, seat tracking | Single user |
-| **Price** | First 100 teams (up to 10 devs) | Free forever (AGPL-3.0) |
-| **Best for** | Teams of 2–20 | Solo devs, air-gapped envs |
+|  | **codeprism.dev** | **VPS / PaaS** | **Local** |
+|--|-------------------|----------------|-----------|
+| **Setup** | [One-click signup](https://codeprism.dev) | `docker compose up -d` | `docker compose up -d` |
+| **Infrastructure** | We manage it | Your Hetzner / DO / Render | Your laptop |
+| **Data** | Hosted, tenant-isolated per team | On your server, shared across team | On your machine |
+| **Team features** | Invitations, analytics, seat tracking | Shared URL — all devs point to same instance | Single user |
+| **LLM key** | Optional (set once in dashboard) | Set in `.env`, shared by all | Set in `.env` |
+| **Price** | First 100 teams: up to 10 devs free | VPS cost only (~$10/mo Hetzner) | Free forever |
+| **Best for** | Teams who don't want to run infra | Teams who want data on their own server | Solo devs |
 
-Both run the same engine. The Cloud version adds multi-tenancy, team management, and a hosted dashboard.
+All three options run the same engine. Pick what fits your team.
+
+### One-click deploy to a VPS or PaaS
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/dan1d/codeprism)
+[![Deploy to DigitalOcean](https://www.deploytodo.com/do-btn-blue.svg)](https://cloud.digitalocean.com/apps/new?repo=https://github.com/dan1d/codeprism/tree/main)
+
+**Hetzner (recommended — best value):**
+```bash
+# On a fresh Ubuntu 24.04 CPX21 (~$10/mo)
+git clone https://github.com/dan1d/codeprism /opt/codeprism
+cd /opt/codeprism/deploy && cp .env.example .env
+# Edit .env: set CODEPRISM_DOMAIN, CODEPRISM_ADMIN_KEY, LLM keys
+docker compose -f docker-compose.prod.yml --env-file .env up -d --build
+```
+
+Once running, every team member points their AI tool to the **same server URL**:
+```json
+{
+  "mcpServers": {
+    "codeprism": {
+      "url": "https://your-server-ip:4000/mcp/sse"
+    }
+  }
+}
+```
 
 ---
 
@@ -247,23 +273,6 @@ codeprism works with zero config. For customization:
 | [Evaluation](docs/evaluation.md) | Running and extending the eval suite |
 
 ---
-
-## Self-hosting in production
-
-```bash
-# On a fresh Ubuntu 24.04 VPS (Hetzner CPX21 recommended, ~$10/mo)
-git clone https://github.com/dan1d/codeprism /opt/codeprism
-cd /opt/codeprism/deploy
-
-# Create your .env
-cp .env.example .env
-# Edit .env with your domain, admin key, and Resend API key
-
-# Start
-docker compose -f docker-compose.prod.yml --env-file .env up -d --build
-```
-
-Caddy handles HTTPS automatically. See [docs/deployment.md](docs/deployment.md) for the full production guide.
 
 ---
 
