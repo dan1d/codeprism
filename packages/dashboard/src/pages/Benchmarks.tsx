@@ -14,6 +14,7 @@ import {
   Shield,
   Search,
   MessageSquare,
+  MessageCircle,
   FileCode,
   ChevronDown,
   ChevronUp,
@@ -27,6 +28,7 @@ import {
   Plus,
   Send,
   X,
+  Github,
 } from "lucide-react";
 import {
   api,
@@ -41,6 +43,10 @@ import {
 } from "@/lib/api";
 import { cn, formatTokens } from "@/lib/utils";
 import { SiteNav } from "@/components/shared/SiteNav";
+import { PrismLogo } from "@/components/shared/PrismLogo";
+
+const GITHUB_URL = "https://github.com/dan1d/codeprism";
+const DISCORD_URL = "https://discord.gg/nsWERSde";
 
 function slugify(repo: string): string {
   return repo.replace(/\//g, "-");
@@ -1634,24 +1640,33 @@ export function Benchmarks() {
       </div>
 
       {/* Footer */}
-      <footer className="border-t border-[#30363d] px-6 py-6 mt-10">
-        <div className="flex items-center justify-center gap-4 text-sm text-[#8b949e]">
-          <Link to="/" className="hover:text-accent transition-colors">
-            Home
+      <footer className="border-t border-[#30363d] px-6 py-8 mt-10">
+        <div className="mx-auto max-w-6xl flex flex-col items-center gap-4">
+          <Link to="/">
+            <PrismLogo
+              wordmark
+              className="h-6 w-6"
+              wordmarkClassName="text-sm text-[#8b949e]"
+            />
           </Link>
-          <span className="text-[#30363d]">|</span>
-          <a
-            href="https://github.com/dan1d/codeprism"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:text-accent transition-colors"
-          >
-            GitHub
-          </a>
-          <span className="text-[#30363d]">|</span>
-          <Link to="/onboard" className="hover:text-accent transition-colors">
-            Get Started
-          </Link>
+          <div className="flex flex-wrap items-center justify-center gap-4 text-sm text-[#484f58]">
+            <Link to="/" className="flex items-center gap-1 hover:text-[#8b949e] transition-colors">
+              Home
+            </Link>
+            <span>·</span>
+            <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-[#8b949e] transition-colors">
+              <Github className="h-3.5 w-3.5" /> GitHub
+            </a>
+            <span>·</span>
+            <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-[#8b949e] transition-colors">
+              <MessageCircle className="h-3.5 w-3.5" /> Discord
+            </a>
+            <span>·</span>
+            <Link to="/onboard" className="hover:text-[#8b949e] transition-colors">
+              Get Started
+            </Link>
+          </div>
+          <p className="text-xs text-[#484f58]">© {new Date().getFullYear()} codeprism · AGPL-3.0 open source</p>
         </div>
       </footer>
     </div>
@@ -1791,6 +1806,36 @@ export function BenchmarkDetail() {
         {/* Full project section */}
         <ProjectSection project={project} />
       </div>
+
+      <footer className="border-t border-[#30363d] px-6 py-8 mt-10">
+        <div className="mx-auto max-w-6xl flex flex-col items-center gap-4">
+          <Link to="/">
+            <PrismLogo
+              wordmark
+              className="h-6 w-6"
+              wordmarkClassName="text-sm text-[#8b949e]"
+            />
+          </Link>
+          <div className="flex flex-wrap items-center justify-center gap-4 text-sm text-[#484f58]">
+            <Link to="/" className="flex items-center gap-1 hover:text-[#8b949e] transition-colors">
+              Home
+            </Link>
+            <span>·</span>
+            <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-[#8b949e] transition-colors">
+              <Github className="h-3.5 w-3.5" /> GitHub
+            </a>
+            <span>·</span>
+            <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-[#8b949e] transition-colors">
+              <MessageCircle className="h-3.5 w-3.5" /> Discord
+            </a>
+            <span>·</span>
+            <Link to="/onboard" className="hover:text-[#8b949e] transition-colors">
+              Get Started
+            </Link>
+          </div>
+          <p className="text-xs text-[#484f58]">© {new Date().getFullYear()} codeprism · AGPL-3.0 open source</p>
+        </div>
+      </footer>
     </div>
   );
 }
