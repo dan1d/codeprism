@@ -20,6 +20,8 @@ CONTAINER_DATA="/data"
 TEMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
+cd "$SCRIPT_DIR"
+
 docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" \
   sh -c "find $CONTAINER_DATA -name '*.db' -print0" | \
   xargs -0 -I{} docker compose -f "$COMPOSE_FILE" cp \

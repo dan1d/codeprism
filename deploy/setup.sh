@@ -10,6 +10,7 @@ set -euo pipefail
 
 CODEPRISM_REPO_URL="${CODEPRISM_REPO_URL:?Error: set CODEPRISM_REPO_URL to your codeprism git repository URL}"
 APP_DIR="${APP_DIR:-/opt/codeprism}"
+REPO_DIR="${REPO_DIR:-$APP_DIR/repo}"
 
 echo "=== codeprism.dev VPS setup ==="
 
@@ -42,16 +43,25 @@ ufw --force enable
 mkdir -p "$APP_DIR"
 
 # 5. Clone or update repo
-if [ -d "$APP_DIR/repo" ]; then
+# Support both layouts:
+# - /opt/codeprism/repo (default)
+# - /root/codeprism (repo directly in APP_DIR)
+if [ -d "$APP_DIR/.git" ]; then
+  REPO_DIR="$APP_DIR"
+fi
+
+mkdir -p "$(dirname -- "$REPO_DIR")"
+
+if [ -d "$REPO_DIR/.git" ]; then
   echo "Updating codeprism..."
-  cd "$APP_DIR/repo" && git pull
+  cd "$REPO_DIR" && git pull --ff-only
 else
   echo "Cloning codeprism..."
-  git clone "$CODEPRISM_REPO_URL" "$APP_DIR/repo"
+  git clone "$CODEPRISM_REPO_URL" "$REPO_DIR"
 fi
 
 # 6. Create .env if not exists
-ENV_FILE="$APP_DIR/repo/deploy/.env"
+ENV_FILE="$REPO_DIR/deploy/.env"
 if [ ! -f "$ENV_FILE" ]; then
   cat > "$ENV_FILE" <<'ENVEOF'
 # codeprism.dev configuration
@@ -66,16 +76,16 @@ ENVEOF
 fi
 
 # 7. Build and start
-cd "$APP_DIR/repo/deploy"
-chmod +x ./update.sh ./backup.sh
-./update.sh --build
+cd "$REPO_DIR"
+chmod +x ./deploy/update.sh ./deploy/backup.sh
+./deploy/update.sh --build
 
 echo ""
 echo "=== codeprism.dev is running ==="
-echo "Dashboard: https://$(grep CODEPRISM_DOMAIN .env | cut -d= -f2)"
-echo "MCP endpoint: https://$(grep CODEPRISM_DOMAIN .env | cut -d= -f2)/mcp"
+echo "Dashboard: https://$(grep CODEPRISM_DOMAIN ./deploy/.env | cut -d= -f2)"
+echo "MCP endpoint: https://$(grep CODEPRISM_DOMAIN ./deploy/.env | cut -d= -f2)/mcp"
 echo ""
 echo "Next steps:"
 echo "  1. Point your domain's A record to this server's IP"
 echo "  2. Edit $ENV_FILE with your domain and API keys"
-echo "  3. Run: cd $APP_DIR/repo/deploy && docker compose -f docker-compose.prod.yml --env-file .env up -d"
+echo "  3. Run: cd $REPO_DIR && ./deploy/update.sh --build"

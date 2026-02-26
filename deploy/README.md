@@ -15,6 +15,10 @@ curl -sSL https://raw.githubusercontent.com/codeprism/codeprism/main/deploy/setu
 5. Update safely (preserves DB volume):
    - `cd /opt/codeprism/repo && ./deploy/update.sh --build`
 
+If you keep the repo in home (e.g. `/root/codeprism`), use:
+- `.env`: `/root/codeprism/deploy/.env`
+- update: `cd /root/codeprism && ./deploy/update.sh --build`
+
 ## Manual setup
 
 ```bash

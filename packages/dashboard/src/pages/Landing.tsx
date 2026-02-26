@@ -357,7 +357,7 @@ export function Landing() {
         {/* Badge */}
         <div className="inline-flex items-center gap-2 rounded-full border border-[#30363d] bg-[#161b22] px-3 py-1 text-xs text-[#8b949e] mb-6">
           <span className="h-1.5 w-1.5 rounded-full bg-[#3fb950] animate-pulse" />
-          <span>Open source · Cursor · Claude Code · Windsurf · Lovable · Zed</span>
+          <span>Open source · Cross-repo · Cursor · Claude Code · Windsurf · Lovable · Zed</span>
         </div>
 
         <h1 className="mx-auto max-w-3xl text-4xl font-bold leading-tight text-[#e1e4e8] sm:text-5xl">
@@ -510,6 +510,96 @@ export function Landing() {
         </div>
       </section>
 
+      {/* Cross-repo feature */}
+      <section className="border-t border-[#30363d]">
+        <div className="mx-auto max-w-5xl px-6 py-24">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
+            {/* Left: messaging */}
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-[#30363d] bg-[#161b22] px-3 py-1 text-xs text-[#8b949e] mb-6">
+                <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+                Cross-repository intelligence
+              </div>
+              <h2 className="text-3xl font-bold text-[#e1e4e8] mb-6 leading-snug">
+                Your frontend and backend<br />
+                <span className="text-accent">finally share a brain.</span>
+              </h2>
+              <ul className="space-y-5">
+                <li className="flex items-start gap-3">
+                  <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
+                  <p className="text-sm leading-7 text-[#8b949e]">
+                    Map the seam between repos. When an AI asks about the billing flow, it gets the React component, the Rails controller, and the Stripe model in one card — not three separate searches across two codebases.
+                  </p>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
+                  <p className="text-sm leading-7 text-[#8b949e]">
+                    Connections are first-class citizens. codeprism indexes which FE routes hit which BE endpoints, which models own which fields, and which API contracts exist between services.
+                  </p>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
+                  <p className="text-sm leading-7 text-[#8b949e]">
+                    Add a second repo in minutes. The graph merges automatically — no manual linking, no YAML to write.
+                  </p>
+                </li>
+              </ul>
+            </div>
+
+            {/* Right: card example */}
+            <div className="rounded-xl border border-[#30363d] bg-[#0d1117] overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 bg-[#161b22] border-b border-[#21262d]">
+                <span className="h-2.5 w-2.5 rounded-full bg-[#f85149]" />
+                <span className="h-2.5 w-2.5 rounded-full bg-[#d29922]" />
+                <span className="h-2.5 w-2.5 rounded-full bg-[#3fb950]" />
+                <span className="ml-2 text-xs text-[#484f58] font-mono">codeprism_context</span>
+              </div>
+              <div className="p-5 space-y-4">
+                {/* Prompt */}
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-[#484f58] mb-2">Prompt</p>
+                  <div className="rounded-lg bg-[#161b22] border border-[#30363d] px-3 py-2 text-xs text-[#8b949e] font-mono">
+                    "Implement refund flow for Stripe invoices"
+                  </div>
+                </div>
+                {/* Card output */}
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-[#484f58] mb-2">Knowledge card · ~340 tokens</p>
+                  <div className="text-[11px] font-mono text-[#8b949e] leading-5 space-y-2">
+                    <p><span className="text-accent">Flow:</span> stripe_refund &nbsp;<span className="text-[#484f58]">·</span>&nbsp; <span className="text-[#3fb950]">repos: frontend, backend</span></p>
+                    <div className="border-t border-[#21262d] pt-2">
+                      <p className="text-[#e1e4e8] mb-1">Entry point</p>
+                      <p className="pl-2">· frontend/src/pages/billing/InvoicePage.tsx</p>
+                      <p className="pl-2">· triggers POST /api/v1/invoices/:id/refund</p>
+                    </div>
+                    <div className="border-t border-[#21262d] pt-2">
+                      <p className="text-[#e1e4e8] mb-1">API contract</p>
+                      <p className="pl-2">· Route: Api::V1::InvoicesController#refund</p>
+                      <p className="pl-2">· Params: {"{ reason: string, amount_cents?: int }"}</p>
+                      <p className="pl-2">· Auth: requires scope :billing_write</p>
+                    </div>
+                    <div className="border-t border-[#21262d] pt-2">
+                      <p className="text-[#e1e4e8] mb-1">Backend</p>
+                      <p className="pl-2">· Model: Invoice → belongs_to :stripe_customer</p>
+                      <p className="pl-2">· Service: StripeService#issue_refund!</p>
+                      <p className="pl-2">· Fires: invoice.refunded webhook</p>
+                    </div>
+                    <div className="border-t border-[#21262d] pt-2">
+                      <p className="text-[#e1e4e8] mb-1">Tests</p>
+                      <p className="pl-2">· spec/requests/api/v1/invoices_spec.rb:140</p>
+                      <p className="pl-2">· billing/__tests__/InvoicePage.test.tsx:88</p>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-[10px] text-[#484f58] border-t border-[#21262d] pt-3">
+                  340 tokens vs reading 11 files (~4,800 tokens). Your AI starts with context.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Benchmarks summary */}
       {bench?.benchmarks?.aggregate && (
         <section className="border-t border-[#30363d] bg-[#0d1117]">
@@ -535,7 +625,7 @@ export function Landing() {
                 <p className="text-3xl font-bold text-[#e1e4e8]">
                   {Math.round(bench.benchmarks.aggregate.avg_flow_hit_rate * 100)}%
                 </p>
-                <p className="text-xs text-[#8b949e] mt-1">flow accuracy</p>
+                <p className="text-xs text-[#8b949e] mt-1">flow hit-rate@k</p>
               </div>
               <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-5 text-center">
                 <Cpu className="h-5 w-5 text-[#e1e4e8] mx-auto mb-2" />
@@ -703,6 +793,48 @@ export function Landing() {
         </div>
       </section>
 
+      {/* Privacy / data mini-block */}
+      <section className="border-t border-[#30363d] bg-[#0d1117]">
+        <div className="mx-auto max-w-5xl px-6 py-14">
+          <div className="rounded-xl border border-[#30363d] bg-[#161b22] p-8 grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div>
+              <p className="text-xs uppercase tracking-wider text-[#484f58] mb-3">What's stored</p>
+              <ul className="space-y-2 text-sm text-[#8b949e]">
+                {["Symbol names & file paths", "Function signatures & routes", "Model relationships", "API contracts between services", "Verified team insights"].map((item) => (
+                  <li key={item} className="flex items-center gap-2">
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#3fb950] shrink-0" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wider text-[#484f58] mb-3">What's never stored</p>
+              <ul className="space-y-2 text-sm text-[#8b949e]">
+                {["Function bodies or raw source", "String literals or comments", "Secrets or env values", "Anything you .codeprismignore"].map((item) => (
+                  <li key={item} className="flex items-center gap-2">
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#f85149] shrink-0" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wider text-[#484f58] mb-3">How it's isolated</p>
+              <p className="text-sm leading-7 text-[#8b949e]">
+                Each team's graph is tenant-isolated at the database level. No cross-tenant queries are possible by design.
+              </p>
+              <p className="mt-4 text-sm leading-7 text-[#8b949e]">
+                Prefer full control?{" "}
+                <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                  Self-host in 10 minutes.
+                </a>
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Pricing */}
       <section id="pricing" className="border-t border-[#30363d] bg-[#0d1117]">
         <div className="mx-auto max-w-5xl px-6 py-24">
@@ -722,18 +854,21 @@ export function Landing() {
                 <span className="text-sm text-[#8b949e] ml-1">forever</span>
               </div>
               <ul className="space-y-3 text-sm text-[#8b949e] flex-1">
-                {["Self-host with Docker", "Full engine, no limits", "1 developer", "AGPL-3.0 open source", "Community support (Discord)"].map((f) => (
+                {["Self-host with Docker", "Full engine, no limits", "1 developer", "Community support (Discord)"].map((f) => (
                   <li key={f} className="flex items-center gap-2">
                     <Check className="h-3.5 w-3.5 shrink-0 text-[#3fb950]" />
                     {f}
                   </li>
                 ))}
               </ul>
+              <p className="mt-4 text-[11px] text-[#484f58] leading-5">
+                AGPL because codeprism is infrastructure — if you build on it or improve it, those improvements flow back to every team using it.
+              </p>
               <a
                 href={GITHUB_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-8 block rounded-lg border border-[#30363d] px-4 py-2.5 text-center text-sm font-medium text-[#e1e4e8] hover:border-[#8b949e] hover:bg-[#21262d] transition-colors"
+                className="mt-6 block rounded-lg border border-[#30363d] px-4 py-2.5 text-center text-sm font-medium text-[#e1e4e8] hover:border-[#8b949e] hover:bg-[#21262d] transition-colors"
               >
                 View on GitHub →
               </a>
