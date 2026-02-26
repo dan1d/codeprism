@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
 import { getDataDir } from "../db/connection.js";
 import { sanitizeFts5Query } from "../search/keyword.js";
+import { llmQueryRepair } from "../services/query-repair.js";
 import {
   submitBenchmark as submitBenchmarkJob,
   getQueueStatus,
@@ -19,6 +20,55 @@ const __dirname = dirname(__filename);
 
 /** Benchmark submission, queue status, sandbox search, and results routes. */
 export async function registerBenchmarkRoutes(app: FastifyInstance): Promise<void> {
+  // In-memory limiter for expensive miss-only sandbox repair calls.
+  const REPAIR_LIMIT = { max: 5, windowMs: 60_000 };
+  const repairWindowByIp = new Map<string, { start: number; n: number }>();
+
+  const repairCache = new Map<string, { expiresAt: number; ftsQuery?: string; likeTokens?: string[] }>();
+  const REPAIR_CACHE_TTL_MS = 15 * 60_000;
+
+  function canAttemptRepair(ip: string): boolean {
+    const now = Date.now();
+    const w = repairWindowByIp.get(ip);
+    if (!w || now - w.start >= REPAIR_LIMIT.windowMs) {
+      repairWindowByIp.set(ip, { start: now, n: 1 });
+      return true;
+    }
+    if (w.n >= REPAIR_LIMIT.max) return false;
+    w.n += 1;
+    return true;
+  }
+
+  function getIp(request: { ip?: string; headers: Record<string, unknown> }): string {
+    return request.ip ?? (typeof request.headers["x-forwarded-for"] === "string" ? request.headers["x-forwarded-for"].split(",")[0]!.trim() : "unknown");
+  }
+
+  async function llmQueryRepairSandbox(params: {
+    query: string;
+    ftsQuery: string;
+    likeTokensTried: string[];
+    hints: Array<{ title: string; flow: string; identifiers: string }>;
+    provider: "anthropic" | "openai" | "deepseek" | "gemini";
+    apiKey: string;
+    model?: string;
+    timeoutMs: number;
+  }): Promise<null | { probes: Array<{ query: string; fts_terms?: string; like_tokens?: string[] }> }> {
+    const res = await llmQueryRepair({
+      goalLabel: "an interactive sandbox search",
+      query: params.query,
+      ftsQuery: params.ftsQuery,
+      likeTokensTried: params.likeTokensTried,
+      hints: params.hints,
+      provider: params.provider,
+      apiKey: params.apiKey,
+      model: params.model,
+      timeoutMs: params.timeoutMs,
+      maxTokens: 250,
+    });
+    if (!res) return null;
+    return { probes: res.probes };
+  }
+
   app.post<{ Body: { url: string; provider?: string; apiKey?: string; model?: string } }>(
     "/api/benchmarks/submit",
     { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } },
@@ -58,11 +108,11 @@ export async function registerBenchmarkRoutes(app: FastifyInstance): Promise<voi
     return reply.send(getQueueStatus());
   });
 
-  app.post<{ Body: { query: string; repo?: string; llmLabel?: string } }>(
+  app.post<{ Body: { query: string; repo?: string; llmLabel?: string; repair?: { enabled: boolean; provider: "anthropic" | "openai" | "deepseek" | "gemini"; model?: string; apiKey?: string } } }>(
     "/api/benchmarks/sandbox",
     { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } },
     async (request, reply) => {
-      const { query, repo, llmLabel } = request.body ?? {};
+      const { query, repo, llmLabel, repair } = request.body ?? {};
       if (!query || typeof query !== "string" || query.trim().length < 3) {
         return reply.code(400).send({ error: "query is required (min 3 characters)" });
       }
@@ -78,6 +128,24 @@ export async function registerBenchmarkRoutes(app: FastifyInstance): Promise<voi
       try {
         const start = Date.now();
         const searchTerm = sanitizeFts5Query(query);
+        const diagnostics: {
+          v: 1;
+          fts_query?: string;
+          fts_attempted: boolean;
+          fts_matched: boolean;
+          fallback_used: "none" | "llm_repair" | "recent_cards" | "no_cards";
+          llm_repair_attempted?: boolean;
+          llm_repair_used?: boolean;
+          llm_repair_latency_ms?: number;
+          llm_repair_probes?: number;
+          llm_repair_cache_hit?: boolean;
+        } = {
+          v: 1,
+          fts_query: searchTerm || undefined,
+          fts_attempted: Boolean(searchTerm),
+          fts_matched: false,
+          fallback_used: "none",
+        };
 
         type CardRow = {
           id: string; title: string; flow: string;
@@ -92,13 +160,166 @@ export async function registerBenchmarkRoutes(app: FastifyInstance): Promise<voi
               "WHERE cards_fts MATCH ? AND c.stale = 0 LIMIT 5",
             )
             .all(searchTerm) as CardRow[];
+          diagnostics.fts_matched = cardRows.length > 0;
         } catch { /* FTS table may not exist in benchmark DB */ }
+
+        // If miss, try a cheap LIKE scan first (title/flow/identifiers).
+        const likeTokensTried: string[] = [];
+        if (cardRows.length === 0) {
+          const tokens = query
+            .replace(/[^a-zA-Z0-9_\\s]/g, " ")
+            .replace(/([a-z])([A-Z])/g, "$1 $2")
+            .split(/\\s+/)
+            .filter((t) => t.length > 2)
+            .slice(0, 8);
+          likeTokensTried.push(...tokens);
+          if (tokens.length > 0) {
+            try {
+              const like = tokens.map(() => "(title LIKE ? OR identifiers LIKE ? OR flow LIKE ?)").join(" AND ");
+              const args = tokens.flatMap((t) => {
+                const pat = `%${t}%`;
+                return [pat, pat, pat];
+              });
+              cardRows = db
+                .prepare(
+                  `SELECT id, title, flow, card_type, content, source_files
+                   FROM cards WHERE stale = 0 AND ${like}
+                   ORDER BY updated_at DESC LIMIT 5`,
+                )
+                .all(...args) as CardRow[];
+            } catch { /* ignore */ }
+          }
+        }
+
+        // LLM repair (user-key) on miss-only, verified by DB hits.
+        if (cardRows.length === 0 && repair?.enabled) {
+          diagnostics.llm_repair_attempted = true;
+          const ip = getIp({ ip: (request as { ip?: string }).ip, headers: request.headers as Record<string, unknown> });
+          if (!canAttemptRepair(ip)) {
+            // Skip repair (budget exceeded); fall through to recent-cards fallback.
+          } else if (!repair.apiKey || typeof repair.apiKey !== "string" || repair.apiKey.trim().length < 10) {
+            // Skip repair (no key)
+          } else {
+            const cacheKey = `${repo}::${llmLabel ?? ""}::${query.trim().toLowerCase()}`;
+            const cached = repairCache.get(cacheKey);
+            if (cached && cached.expiresAt > Date.now()) {
+              diagnostics.llm_repair_cache_hit = true;
+              if (cached.ftsQuery) {
+                try {
+                  cardRows = db
+                    .prepare(
+                      "SELECT c.id, c.title, c.flow, c.card_type, c.content, c.source_files " +
+                      "FROM cards_fts f JOIN cards c ON c.rowid = f.rowid " +
+                      "WHERE cards_fts MATCH ? AND c.stale = 0 LIMIT 5",
+                    )
+                    .all(cached.ftsQuery) as CardRow[];
+                } catch { /* ignore */ }
+              }
+              if (cardRows.length === 0 && cached.likeTokens?.length) {
+                try {
+                  const like = cached.likeTokens.map(() => "(title LIKE ? OR identifiers LIKE ? OR flow LIKE ?)").join(" AND ");
+                  const args = cached.likeTokens.flatMap((t) => {
+                    const pat = `%${t}%`;
+                    return [pat, pat, pat];
+                  });
+                  cardRows = db
+                    .prepare(
+                      `SELECT id, title, flow, card_type, content, source_files
+                       FROM cards WHERE stale = 0 AND ${like}
+                       ORDER BY updated_at DESC LIMIT 5`,
+                    )
+                    .all(...args) as CardRow[];
+                } catch { /* ignore */ }
+              }
+              if (cardRows.length > 0) {
+                diagnostics.fallback_used = "llm_repair";
+                diagnostics.llm_repair_used = true;
+              }
+            }
+
+            if (cardRows.length === 0) {
+              const t0 = Date.now();
+              const hints = (() => {
+                try {
+                  return db
+                    .prepare("SELECT title, flow, identifiers FROM cards WHERE stale = 0 ORDER BY updated_at DESC LIMIT 8")
+                    .all() as Array<{ title: string; flow: string; identifiers: string }>;
+                } catch {
+                  return [];
+                }
+              })();
+
+              const repairRes = await llmQueryRepairSandbox({
+                query: query.trim(),
+                ftsQuery: searchTerm ?? "",
+                likeTokensTried,
+                hints,
+                provider: repair.provider,
+                apiKey: repair.apiKey.trim(),
+                model: repair.model,
+                timeoutMs: 1200,
+              });
+              diagnostics.llm_repair_latency_ms = Date.now() - t0;
+              diagnostics.llm_repair_probes = repairRes?.probes?.length ?? 0;
+
+              if (repairRes?.probes?.length) {
+                for (const probe of repairRes.probes) {
+                  const probeFts = sanitizeFts5Query((probe.fts_terms ?? probe.query ?? "").slice(0, 400));
+                  if (probeFts) {
+                    try {
+                      cardRows = db
+                        .prepare(
+                          "SELECT c.id, c.title, c.flow, c.card_type, c.content, c.source_files " +
+                          "FROM cards_fts f JOIN cards c ON c.rowid = f.rowid " +
+                          "WHERE cards_fts MATCH ? AND c.stale = 0 LIMIT 5",
+                        )
+                        .all(probeFts) as CardRow[];
+                      if (cardRows.length > 0) {
+                        diagnostics.fallback_used = "llm_repair";
+                        diagnostics.llm_repair_used = true;
+                        repairCache.set(cacheKey, { expiresAt: Date.now() + REPAIR_CACHE_TTL_MS, ftsQuery: probeFts });
+                        break;
+                      }
+                    } catch { /* ignore */ }
+                  }
+
+                  const probeLike = (probe.like_tokens ?? []).map((t) => t.trim()).filter((t) => t.length > 2).slice(0, 6);
+                  if (probeLike.length > 0) {
+                    try {
+                      const like = probeLike.map(() => "(title LIKE ? OR identifiers LIKE ? OR flow LIKE ?)").join(" AND ");
+                      const args = probeLike.flatMap((t) => {
+                        const pat = `%${t}%`;
+                        return [pat, pat, pat];
+                      });
+                      cardRows = db
+                        .prepare(
+                          `SELECT id, title, flow, card_type, content, source_files
+                           FROM cards WHERE stale = 0 AND ${like}
+                           ORDER BY updated_at DESC LIMIT 5`,
+                        )
+                        .all(...args) as CardRow[];
+                      if (cardRows.length > 0) {
+                        diagnostics.fallback_used = "llm_repair";
+                        diagnostics.llm_repair_used = true;
+                        repairCache.set(cacheKey, { expiresAt: Date.now() + REPAIR_CACHE_TTL_MS, likeTokens: probeLike });
+                        break;
+                      }
+                    } catch { /* ignore */ }
+                  }
+                }
+              }
+            }
+          }
+        }
 
         if (cardRows.length === 0) {
           try {
             cardRows = db
               .prepare("SELECT id, title, flow, card_type, content, source_files FROM cards WHERE stale = 0 ORDER BY updated_at DESC LIMIT 5")
               .all() as CardRow[];
+            if (diagnostics.fallback_used === "none") {
+              diagnostics.fallback_used = cardRows.length > 0 ? "recent_cards" : "no_cards";
+            }
           } catch { /* no cards table */ }
         }
 
@@ -126,6 +347,7 @@ export async function registerBenchmarkRoutes(app: FastifyInstance): Promise<voi
           query: query.trim(), cards, formattedContext, latencyMs, cacheHit: false,
           codeprismTokens, naiveFiles, naiveTokens,
           tokenReduction: naiveTokens > 0 ? Math.round((1 - codeprismTokens / naiveTokens) * 100) : 0,
+          diagnostics,
         });
       } finally {
         db.close();

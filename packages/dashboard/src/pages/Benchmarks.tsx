@@ -329,6 +329,11 @@ function SandboxPanel({ project }: { project: BenchmarkProject }) {
   const [result, setResult] = useState<SandboxResponse | null>(null);
   const [searching, setSearching] = useState(false);
   const [activeQuery, setActiveQuery] = useState<string | null>(null);
+  const [repairOpen, setRepairOpen] = useState(false);
+  const [repairEnabled, setRepairEnabled] = useState(false);
+  const [repairProvider, setRepairProvider] = useState<BenchmarkProvider>("anthropic");
+  const [repairModel, setRepairModel] = useState<string>(PROVIDER_MODELS.anthropic[2]?.id ?? "claude-haiku-3-5");
+  const [repairApiKey, setRepairApiKey] = useState("");
 
   const exampleQueries = [
     ...project.cases.slice(0, 2).map((c) => c.query),
@@ -345,7 +350,19 @@ function SandboxPanel({ project }: { project: BenchmarkProject }) {
     setResult(null);
     setSandboxError(null);
     try {
-      const res = await api.sandboxQuery(q, project.repo, project.llmLabel);
+      const res = await api.sandboxQuery(
+        q,
+        project.repo,
+        project.llmLabel,
+        repairEnabled
+          ? {
+              enabled: true,
+              provider: repairProvider,
+              model: repairModel,
+              apiKey: repairApiKey.trim() || undefined,
+            }
+          : undefined,
+      );
       setResult(res);
     } catch (err) {
       setSandboxError(err instanceof Error ? err.message : "Search failed");
@@ -404,6 +421,67 @@ function SandboxPanel({ project }: { project: BenchmarkProject }) {
         </button>
       </div>
 
+      {/* Query repair (miss-only) */}
+      <div className="mt-3">
+        <button
+          type="button"
+          onClick={() => setRepairOpen((v) => !v)}
+          className="text-xs text-[#8b949e] hover:text-[#e1e4e8] transition-colors inline-flex items-center gap-1"
+        >
+          {repairOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+          Query repair (optional)
+        </button>
+        {repairOpen && (
+          <div className="mt-2 rounded-md border border-[#21262d] bg-[#0b0f14] p-3">
+            <label className="flex items-center gap-2 text-xs text-[#8b949e]">
+              <input
+                type="checkbox"
+                checked={repairEnabled}
+                onChange={(e) => setRepairEnabled(e.target.checked)}
+                className="accent-[#58a6ff]"
+              />
+              Enable LLM repair on misses (uses your key; not stored)
+            </label>
+
+            {repairEnabled && (
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <select
+                  value={repairProvider}
+                  onChange={(e) => {
+                    const p = e.target.value as BenchmarkProvider;
+                    setRepairProvider(p);
+                    setRepairModel(PROVIDER_MODELS[p][0]?.id ?? "");
+                  }}
+                  className="rounded border border-[#30363d] bg-[#161b22] px-3 py-2 text-xs text-[#e1e4e8] focus:border-accent focus:outline-none"
+                >
+                  {PROVIDERS.map((p) => (
+                    <option key={p.id} value={p.id}>{p.label}</option>
+                  ))}
+                </select>
+
+                <select
+                  value={repairModel}
+                  onChange={(e) => setRepairModel(e.target.value)}
+                  className="rounded border border-[#30363d] bg-[#161b22] px-3 py-2 text-xs text-[#e1e4e8] focus:border-accent focus:outline-none"
+                >
+                  {(PROVIDER_MODELS[repairProvider] ?? []).map((m) => (
+                    <option key={m.id} value={m.id}>{m.label}</option>
+                  ))}
+                </select>
+
+                <input
+                  type="password"
+                  value={repairApiKey}
+                  onChange={(e) => setRepairApiKey(e.target.value)}
+                  placeholder="API key (never stored)"
+                  className="rounded border border-[#30363d] bg-[#161b22] px-3 py-2 text-xs text-[#e1e4e8] placeholder-[#484f58] focus:border-accent focus:outline-none"
+                />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {searching && (
         <div className="flex items-center gap-2 mt-4 text-sm text-[#8b949e]">
           <Loader2 className="h-4 w-4 animate-spin text-accent" />
@@ -420,6 +498,31 @@ function SandboxPanel({ project }: { project: BenchmarkProject }) {
 
       {result && !searching && (
         <div className="mt-4">
+          {result.diagnostics && (
+            <div className="mb-3 flex flex-wrap gap-2 text-[11px]">
+              <span className={cn(
+                "rounded-full border px-2 py-0.5 font-mono",
+                result.diagnostics.fts_matched ? "border-[#3fb950]/30 text-[#3fb950] bg-[#3fb950]/10" : "border-[#30363d] text-[#8b949e] bg-[#0d1117]"
+              )}>
+                {result.diagnostics.fts_matched ? "FTS hit" : "FTS miss"}
+              </span>
+              {result.diagnostics.fallback_used === "llm_repair" && (
+                <span className="rounded-full border border-accent/30 text-accent bg-accent/10 px-2 py-0.5 font-mono">
+                  LLM repair used{result.diagnostics.llm_repair_cache_hit ? " (cache)" : ""}
+                </span>
+              )}
+              {result.diagnostics.fallback_used === "recent_cards" && (
+                <span className="rounded-full border border-[#d29922]/30 text-[#d29922] bg-[#d29922]/10 px-2 py-0.5 font-mono">
+                  fallback: recent cards
+                </span>
+              )}
+              {result.diagnostics.llm_repair_attempted && result.diagnostics.llm_repair_latency_ms != null && (
+                <span className="rounded-full border border-[#30363d] text-[#8b949e] bg-[#0d1117] px-2 py-0.5 font-mono">
+                  repair {result.diagnostics.llm_repair_latency_ms}ms · {result.diagnostics.llm_repair_probes ?? 0} probes
+                </span>
+              )}
+            </div>
+          )}
           {result.cards.length === 0 ? (
             <div className="py-6 text-center">
               <p className="text-sm text-[#8b949e]">
@@ -441,6 +544,7 @@ function SandboxPanel({ project }: { project: BenchmarkProject }) {
 function ProjectSection({ project }: { project: BenchmarkProject }) {
   const s = project.stats;
   const maxNaive = Math.max(...project.cases.map((c) => c.naive_tokens));
+  const [openRow, setOpenRow] = useState<number | null>(null);
 
   const fmtMaybePct = (v: number, applicable: boolean | undefined) =>
     applicable === false ? "—" : `${Math.round(v * 100)}%`;
@@ -530,6 +634,7 @@ function ProjectSection({ project }: { project: BenchmarkProject }) {
             <thead>
               <tr className="text-[#8b949e] border-b border-[#21262d]">
                 <th className="text-left py-1.5 font-medium">Query</th>
+                <th className="text-right py-1.5 font-medium w-10">Dbg</th>
                 <th className="text-right py-1.5 font-medium w-16">Flow</th>
                 <th className="text-right py-1.5 font-medium w-16">File</th>
                 <th className="text-right py-1.5 font-medium w-16">P@K</th>
@@ -541,10 +646,26 @@ function ProjectSection({ project }: { project: BenchmarkProject }) {
             </thead>
             <tbody>
               {project.cases.map((c, i) => (
-                <tr key={i} className="border-b border-[#21262d]/50">
-                  <td className="py-1.5 text-[#e1e4e8] truncate max-w-[180px]">
-                    {c.query.split(" ").slice(0, 5).join(" ")}…
-                  </td>
+                <>
+                  <tr key={i} className="border-b border-[#21262d]/50">
+                    <td className="py-1.5 text-[#e1e4e8] truncate max-w-[180px]" title={c.query}>
+                      {c.query.split(" ").slice(0, 5).join(" ")}…
+                    </td>
+                    <td className="text-right py-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setOpenRow((prev) => (prev === i ? null : i))}
+                        className={cn(
+                          "font-mono text-[10px] px-1.5 py-0.5 rounded border transition-colors",
+                          openRow === i
+                            ? "border-accent text-accent bg-accent/10"
+                            : "border-[#30363d] text-[#8b949e] hover:text-[#e1e4e8] hover:border-[#484f58]"
+                        )}
+                        title="Show debug details for this query"
+                      >
+                        dbg
+                      </button>
+                    </td>
                   <td className="text-right py-1.5">
                     <span
                       className={cn(
@@ -607,7 +728,35 @@ function ProjectSection({ project }: { project: BenchmarkProject }) {
                   <td className="text-right py-1.5 font-mono text-[#8b949e]">
                     {c.latency_ms}
                   </td>
-                </tr>
+                  </tr>
+
+                  {openRow === i && (
+                    <tr className="border-b border-[#21262d]/50">
+                      <td colSpan={project.cases.some((x) => x.quality_score !== undefined) ? 7 : 6} className="py-2.5">
+                        <div className="rounded-md border border-[#21262d] bg-[#0b0f14] px-3 py-2 text-[11px] text-[#8b949e] space-y-1">
+                          <div className="flex flex-wrap gap-x-4 gap-y-1">
+                            <span><span className="text-[#484f58]">FTS:</span> {c.diagnostics?.fts_matched ? "matched" : c.diagnostics?.fts_attempted ? "miss" : "not attempted"}</span>
+                            <span><span className="text-[#484f58]">fallback:</span> {c.diagnostics?.fallback_used ?? "—"}</span>
+                            <span><span className="text-[#484f58]">retrieval:</span> {c.diagnostics?.retrieval_success ? "ok" : "none"}</span>
+                            <span><span className="text-[#484f58]">cards:</span> {c.diagnostics?.returned_cards ?? c.result_count}</span>
+                            <span><span className="text-[#484f58]">files:</span> {c.diagnostics?.returned_unique_files ?? "—"}</span>
+                            <span><span className="text-[#484f58]">expected files:</span> {(c.diagnostics?.expected_files_scored ?? 0).toLocaleString()}/{(c.diagnostics?.expected_files_total ?? 0).toLocaleString()}</span>
+                          </div>
+                          {c.diagnostics?.fts_query && (
+                            <div className="truncate">
+                              <span className="text-[#484f58]">fts_query:</span> <span className="font-mono text-[#c9d1d9]">{c.diagnostics.fts_query}</span>
+                            </div>
+                          )}
+                          {c.diagnostics?.error && (
+                            <div className="text-[#f85149]">
+                              <span className="text-[#f85149]/80">error:</span> {c.diagnostics.error}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </>
               ))}
             </tbody>
           </table>

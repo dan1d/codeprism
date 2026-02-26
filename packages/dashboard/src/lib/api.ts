@@ -273,10 +273,15 @@ export const api = {
   benchmarkDetail: (slug: string) =>
     fetchJSON<BenchmarkProject>(`/api/benchmarks/${encodeURIComponent(slug)}`),
 
-  sandboxQuery: (query: string, repo: string, llmLabel?: string) =>
+  sandboxQuery: (
+    query: string,
+    repo: string,
+    llmLabel?: string,
+    repair?: { enabled: boolean; provider: "anthropic" | "openai" | "deepseek" | "gemini"; model?: string; apiKey?: string },
+  ) =>
     fetchJSON<SandboxResponse>("/api/benchmarks/sandbox", {
       method: "POST",
-      body: JSON.stringify({ query, repo, llmLabel }),
+      body: JSON.stringify({ query, repo, llmLabel, repair }),
     }),
 
   benchmarkCatalog: () =>
@@ -397,7 +402,11 @@ export interface BenchmarkCase {
     fts_query?: string;
     fts_attempted: boolean;
     fts_matched: boolean;
-    fallback_used: "none" | "recent_cards" | "no_cards";
+    fallback_used: "none" | "llm_repair" | "recent_cards" | "no_cards";
+    llm_repair_attempted?: boolean;
+    llm_repair_used?: boolean;
+    llm_repair_latency_ms?: number;
+    llm_repair_probes?: number;
     retrieval_success: boolean;
     precision_applicable: boolean;
     flow_applicable: boolean;
@@ -509,6 +518,18 @@ export interface SandboxResponse {
   naiveFiles: number;
   naiveTokens: number;
   tokenReduction: number;
+  diagnostics?: {
+    v: 1;
+    fts_query?: string;
+    fts_attempted: boolean;
+    fts_matched: boolean;
+    fallback_used: "none" | "llm_repair" | "recent_cards" | "no_cards";
+    llm_repair_attempted?: boolean;
+    llm_repair_used?: boolean;
+    llm_repair_latency_ms?: number;
+    llm_repair_probes?: number;
+    llm_repair_cache_hit?: boolean;
+  };
 }
 
 export interface CatalogPrompt {

@@ -438,17 +438,17 @@ export function Landing() {
           <span>Open source · Frontend + backend share one brain · Cursor · Claude Code · Windsurf · Zed</span>
         </a>
 
-        <h1 className="mx-auto max-w-4xl text-5xl font-bold leading-tight text-[#e1e4e8] sm:text-6xl lg:text-7xl">
+        <h1 className="mx-auto max-w-4xl text-6xl font-bold leading-tight text-[#e1e4e8] sm:text-7xl lg:text-8xl">
           Your AI forgets everything{" "}
           <span className="text-accent">between sessions.</span>
         </h1>
-        <p className="mx-auto mt-8 max-w-2xl text-xl text-[#8b949e] leading-relaxed">
+        <p className="mx-auto mt-8 max-w-3xl text-2xl text-[#8b949e] leading-relaxed">
           codeprism is a{" "}
           <span className="text-[#e1e4e8] font-semibold">persistent knowledge layer</span> for AI coding tools.
           Your team's architectural decisions, flows, and context — indexed once, available to every developer
           in every AI tool, forever.
         </p>
-        <p className="mx-auto mt-4 max-w-xl text-base text-[#484f58] leading-relaxed">
+        <p className="mx-auto mt-4 max-w-2xl text-lg text-[#484f58] leading-relaxed">
           The only tool that bridges your frontend and backend repos into a{" "}
           <span className="text-[#8b949e]">single shared brain</span> — so your React component and the Rails controller it calls are always in the same answer.
         </p>
@@ -458,7 +458,7 @@ export function Landing() {
             <Link
               to="/onboard"
               className={cn(
-                "rounded-lg bg-accent px-8 py-4 text-base font-semibold text-black",
+                "rounded-lg bg-accent px-10 py-5 text-lg font-semibold text-black",
                 "hover:bg-[#79b8ff] transition-colors shadow-lg shadow-accent/20"
               )}
             >
@@ -469,7 +469,7 @@ export function Landing() {
               target="_blank"
               rel="noopener noreferrer"
               className={cn(
-                "rounded-lg border border-[#30363d] bg-[#161b22] px-8 py-4 text-base font-semibold text-[#e1e4e8]",
+                "rounded-lg border border-[#30363d] bg-[#161b22] px-10 py-5 text-lg font-semibold text-[#e1e4e8]",
                 "hover:border-[#8b949e] transition-colors"
               )}
             >
@@ -520,9 +520,9 @@ export function Landing() {
           <div className="rounded-xl border border-[#f85149]/30 bg-[#0d1117] overflow-hidden">
             <div className="flex items-center gap-3 px-6 py-4 border-b border-[#21262d] bg-[#161b22]">
               <AlertTriangle className="h-5 w-5 text-[#f85149]" />
-              <span className="text-base font-semibold text-[#f85149]">Without codeprism</span>
+              <span className="text-lg font-semibold text-[#f85149]">Without codeprism</span>
             </div>
-            <ul className="px-6 py-6 space-y-5 text-base text-[#8b949e] leading-relaxed">
+            <ul className="px-6 py-6 space-y-5 text-lg text-[#8b949e] leading-relaxed">
               <li className="flex items-start gap-3">
                 <span className="mt-0.5 text-[#f85149] text-lg font-bold shrink-0">✗</span>
                 Alice figures out the billing flow. Bob re-discovers it tomorrow.
@@ -545,9 +545,9 @@ export function Landing() {
           <div className="rounded-xl border border-[#3fb950]/30 bg-[#0d1117] overflow-hidden">
             <div className="flex items-center gap-3 px-6 py-4 border-b border-[#21262d] bg-[#161b22]">
               <Brain className="h-5 w-5 text-[#3fb950]" />
-              <span className="text-base font-semibold text-[#3fb950]">With codeprism</span>
+              <span className="text-lg font-semibold text-[#3fb950]">With codeprism</span>
             </div>
-            <ul className="px-6 py-6 space-y-5 text-base text-[#c9d1d9] leading-relaxed">
+            <ul className="px-6 py-6 space-y-5 text-lg text-[#c9d1d9] leading-relaxed">
               <li className="flex items-start gap-3">
                 <span className="mt-0.5 text-[#3fb950] text-lg font-bold shrink-0">✓</span>
                 One shared knowledge graph — visible to every tool, every dev.
@@ -583,11 +583,11 @@ export function Landing() {
       )}
 
       {/* Token Savings Calculator */}
-      <section id="calculator" className="mx-auto max-w-5xl px-6 py-32">
-        <h2 className="mb-4 text-center text-4xl font-bold text-[#e1e4e8]">
+      <section id="calculator" className="mx-auto max-w-5xl px-6 py-40">
+        <h2 className="mb-4 text-center text-5xl font-bold text-[#e1e4e8]">
           The efficiency case, by the numbers
         </h2>
-        <p className="mb-10 text-center text-lg text-[#8b949e] max-w-2xl mx-auto leading-relaxed">
+        <p className="mb-10 text-center text-xl text-[#8b949e] max-w-2xl mx-auto leading-relaxed">
           Token savings are the measurable side effect. Plug in your team size to see what it looks like on your bill.
         </p>
         <SavingsCalculator />
@@ -596,24 +596,24 @@ export function Landing() {
       {/* How it works */}
       <section className="border-t border-[#30363d] bg-[#0d1117]">
         <div className="mx-auto max-w-5xl px-6 py-24">
-          <h2 className="mb-3 text-center text-3xl font-bold text-[#e1e4e8]">
+          <h2 className="mb-3 text-center text-4xl font-bold text-[#e1e4e8]">
             How it works
           </h2>
-          <p className="mb-12 text-center text-base text-[#8b949e] max-w-2xl mx-auto">
+          <p className="mb-12 text-center text-lg text-[#8b949e] max-w-2xl mx-auto">
             One command indexes your repos. After that, every AI tool reads from the same shared graph.
           </p>
           <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
             {HOW_IT_WORKS.map((step, i) => (
               <div
                 key={step.title}
-                className="rounded-xl border border-[#30363d] bg-[#161b22] p-8"
+                className="rounded-xl border border-[#30363d] bg-[#161b22] p-10"
               >
                 <div className="flex items-center gap-3 mb-6">
                   <span className="text-sm font-mono font-bold text-accent">0{i + 1}</span>
                   <step.icon className="h-6 w-6 text-accent" />
                 </div>
-                <h3 className="mb-3 text-xl font-semibold text-[#e1e4e8]">{step.title}</h3>
-                <p className="text-sm leading-7 text-[#8b949e]">{step.description}</p>
+                <h3 className="mb-3 text-2xl font-semibold text-[#e1e4e8]">{step.title}</h3>
+                <p className="text-base leading-7 text-[#8b949e]">{step.description}</p>
               </div>
             ))}
           </div>
@@ -763,10 +763,10 @@ export function Landing() {
       {/* For Teams */}
       <section className="border-t border-[#30363d]">
         <div className="mx-auto max-w-5xl px-6 py-20">
-          <h2 className="mb-4 text-center text-2xl font-bold text-[#e1e4e8]">
+          <h2 className="mb-4 text-center text-3xl font-bold text-[#e1e4e8]">
             Built for teams that use multiple AI tools
           </h2>
-          <p className="mb-12 text-center text-sm text-[#8b949e] max-w-2xl mx-auto">
+          <p className="mb-12 text-center text-base text-[#8b949e] max-w-2xl mx-auto">
             Your developers won't all use the same AI tool — and they shouldn't have to.
             Cursor, Claude Code, Windsurf, Lovable: every tool reads from the same knowledge graph.
             One team. One shared context.
@@ -775,11 +775,11 @@ export function Landing() {
             {TEAM_BENEFITS.map((benefit) => (
               <div
                 key={benefit.title}
-                className="rounded-lg border border-[#21262d] bg-[#161b22] p-6"
+                className="rounded-lg border border-[#21262d] bg-[#161b22] p-8"
               >
                 <benefit.icon className="mb-4 h-6 w-6 text-[#3fb950]" />
-                <h3 className="mb-2 text-sm font-semibold text-[#e1e4e8]">{benefit.title}</h3>
-                <p className="text-sm leading-relaxed text-[#8b949e]">{benefit.description}</p>
+                <h3 className="mb-2 text-base font-semibold text-[#e1e4e8]">{benefit.title}</h3>
+                <p className="text-base leading-relaxed text-[#8b949e]">{benefit.description}</p>
               </div>
             ))}
           </div>
@@ -789,18 +789,18 @@ export function Landing() {
       {/* Self-host vs Hosted */}
       <section className="border-t border-[#30363d] bg-[#0d1117]">
         <div className="mx-auto max-w-5xl px-6 py-24">
-          <h2 className="mb-3 text-center text-3xl font-bold text-[#e1e4e8]">
+          <h2 className="mb-3 text-center text-4xl font-bold text-[#e1e4e8]">
             Deploy your way
           </h2>
-          <p className="mb-12 text-center text-base text-[#8b949e] max-w-xl mx-auto">
+          <p className="mb-12 text-center text-lg text-[#8b949e] max-w-xl mx-auto">
             Open source and free to self-host. Pick what fits your team.
           </p>
           <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
             {/* Local */}
-            <div className="rounded-xl border border-[#30363d] bg-[#161b22] p-7 flex flex-col">
-              <h3 className="mb-1 text-lg font-semibold text-[#e1e4e8]">Local</h3>
+            <div className="rounded-xl border border-[#30363d] bg-[#161b22] p-8 flex flex-col">
+              <h3 className="mb-1 text-xl font-semibold text-[#e1e4e8]">Local</h3>
               <p className="text-xs text-[#484f58] mb-5">Solo devs</p>
-              <ul className="space-y-3 text-sm text-[#8b949e] flex-1">
+              <ul className="space-y-3 text-base text-[#8b949e] flex-1">
                 <li className="flex items-start gap-2">
                   <span className="mt-0.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-[#3fb950]" />
                   Runs on your machine, zero config
@@ -830,21 +830,30 @@ export function Landing() {
             </div>
 
             {/* VPS */}
-            <div className="rounded-xl border border-[#30363d] bg-[#161b22] p-7 flex flex-col">
-              <h3 className="mb-1 text-lg font-semibold text-[#e1e4e8]">Self-hosted VPS</h3>
+            <div className="rounded-xl border border-[#30363d] bg-[#161b22] p-8 flex flex-col">
+              <h3 className="mb-1 text-xl font-semibold text-[#e1e4e8]">Self-hosted VPS</h3>
               <p className="text-xs text-[#484f58] mb-5">Teams who own their data</p>
-              <ul className="space-y-3 text-sm text-[#8b949e] flex-1">
+              <ul className="space-y-3 text-base text-[#8b949e] flex-1">
                 <li className="flex items-start gap-2">
                   <span className="mt-0.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-[#3fb950]" />
                   Whole team points to the same server URL
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="mt-0.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-[#3fb950]" />
-                  ~$10/mo (Hetzner) · your LLM key · your rules
+                  ~$10/mo (Hetzner recommended) · your LLM key · your rules
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="mt-0.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-[#3fb950]" />
-                  One-click deploy to Render or DigitalOcean
+                  One-click deploy to Hetzner, Render, or DigitalOcean
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="mt-0.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-[#3fb950]" />
+                  <div>
+                    <p className="mb-1.5">Hetzner one-liner:</p>
+                    <code className="block rounded bg-[#0d1117] border border-[#30363d] px-3 py-2 text-[11px] text-[#e1e4e8] font-mono leading-relaxed">
+                      curl -sSL https://raw.githubusercontent.com/dan1d/codeprism/main/deploy/setup.sh | bash
+                    </code>
+                  </div>
                 </li>
               </ul>
               <div className="mt-6 flex flex-col gap-2">
@@ -875,13 +884,13 @@ export function Landing() {
               <div className="absolute inset-0 rounded-xl border border-[#58a6ff]/40 pointer-events-none" />
               <div className="absolute inset-0 rounded-xl shadow-[inset_0_0_40px_0_rgba(88,166,255,0.06)] pointer-events-none" />
 
-              <div className="relative p-7 flex flex-col flex-1">
+              <div className="relative p-8 flex flex-col flex-1">
                 {/* Header with logo */}
                 <div className="flex items-start justify-between mb-5">
                   <div className="flex items-center gap-3">
                     <PrismLogo className="h-9 w-9 flex-shrink-0" />
                     <div>
-                      <h3 className="text-lg font-bold text-[#e1e4e8] leading-tight">codeprism Cloud</h3>
+                      <h3 className="text-xl font-bold text-[#e1e4e8] leading-tight">codeprism Cloud</h3>
                       <p className="text-xs text-[#484f58] mt-0.5">Zero infra. Full team.</p>
                     </div>
                   </div>
@@ -898,7 +907,7 @@ export function Landing() {
                     <span className="text-4xl font-bold text-[#e1e4e8]">Free</span>
                     <span className="text-sm text-[#484f58]">for founding teams</span>
                   </div>
-                  <p className="text-xs text-[#484f58] mt-1">Up to 10 devs · free forever for founding teams · no credit card</p>
+                  <p className="text-xs text-[#484f58] mt-1">First 100 teams. Free forever. We'll tell you before anything changes.</p>
                 </div>
 
                 {/* Features */}
@@ -919,7 +928,7 @@ export function Landing() {
                 {/* CTA */}
                 <Link
                   to="/onboard"
-                  className="mt-7 block rounded-lg bg-accent px-4 py-3 text-center text-base font-semibold text-black hover:bg-[#79b8ff] transition-colors shadow-lg shadow-accent/20"
+                  className="mt-7 block rounded-lg bg-accent px-5 py-4 text-center text-lg font-semibold text-black hover:bg-[#79b8ff] transition-colors shadow-lg shadow-accent/20"
                 >
                   Get started free →
                 </Link>

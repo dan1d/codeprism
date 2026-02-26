@@ -8,6 +8,7 @@ import Database from "better-sqlite3";
 import * as sqliteVec from "sqlite-vec";
 import { getDataDir } from "../db/connection.js";
 import { sanitizeFts5Query } from "../search/keyword.js";
+import { llmQueryRepair } from "./query-repair.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -90,7 +91,11 @@ interface BenchmarkCase {
     fts_query?: string;
     fts_attempted: boolean;
     fts_matched: boolean;
-    fallback_used: "none" | "recent_cards" | "no_cards";
+    fallback_used: "none" | "llm_repair" | "recent_cards" | "no_cards";
+    llm_repair_attempted?: boolean;
+    llm_repair_used?: boolean;
+    llm_repair_latency_ms?: number;
+    llm_repair_probes?: number;
     retrieval_success: boolean;
     precision_applicable: boolean;
     flow_applicable: boolean;
@@ -339,7 +344,7 @@ async function runBenchmarkJob(job: QueueEntry & { llmConfig?: LLMConfig; tmpDir
   // Stage 4: Benchmark queries (against per-repo DB)
   job.stage = "benchmarking";
   console.log(`[benchmark] Running benchmark queries for ${job.repo}…`);
-  const { cases, flows, cardCount } = runBenchmarkQueries(benchDbPath, job.repo, clonePath);
+  const { cases, flows, cardCount } = await runBenchmarkQueries(benchDbPath, job.repo, clonePath, job.llmConfig);
 
   // Stage 4b: LLM-as-judge quality evaluation (only when LLM key is provided)
   if (job.llmConfig && cases.some((c) => c.result_count > 0)) {
@@ -689,11 +694,14 @@ function estimateFileTokens(repoDir: string, relPath: string): number | null {
   }
 }
 
-function runBenchmarkQueries(
+// LLM repair helper extracted to services/query-repair.ts
+
+async function runBenchmarkQueries(
   benchDbPath: string,
   repoName: string,
   repoDir: string,
-): { cases: BenchmarkCase[]; flows: number; cardCount: number } {
+  llmConfig?: LLMConfig,
+): Promise<{ cases: BenchmarkCase[]; flows: number; cardCount: number }> {
   let db: InstanceType<typeof Database>;
   try {
     db = new Database(benchDbPath, { readonly: true });
@@ -840,12 +848,127 @@ function runBenchmarkQueries(
             }
           }
 
+          // Second pass before falling back to "recent cards": try a cheap LIKE scan
+          // against title/identifiers/flow for high-precision identifier matches.
+          const likeTokensTried: string[] = [];
+          if (cards.length === 0) {
+            try {
+              const tokens = (q.query ?? "")
+                .replace(/[^a-zA-Z0-9_\s]/g, " ")
+                .replace(/([a-z])([A-Z])/g, "$1 $2")
+                .split(/\s+/)
+                .filter((t) => t.length > 2)
+                .slice(0, 8);
+              likeTokensTried.push(...tokens);
+              if (tokens.length > 0) {
+                const like = tokens.map(() => "(c.title LIKE ? OR c.identifiers LIKE ? OR c.flow LIKE ?)").join(" AND ");
+                const args = tokens.flatMap((t) => {
+                  const pat = `%${t}%`;
+                  return [pat, pat, pat];
+                });
+                const rows = db
+                  .prepare(
+                    `SELECT c.title, c.content, c.flow, c.source_files
+                     FROM cards c
+                     WHERE c.stale = 0 AND ${like}
+                     ORDER BY c.updated_at DESC LIMIT ${K}`,
+                  )
+                  .all(...args) as typeof cards;
+                if (rows.length > 0) {
+                  cards = rows;
+                  diagnostics.fallback_used = "none";
+                }
+              }
+            } catch { /* ignore */ }
+          }
+
+          // LLM query-repair (miss-only): propose 1–3 probes, verify by actually retrieving.
+          if (cards.length === 0 && llmConfig) {
+            diagnostics.llm_repair_attempted = true;
+            const t0 = Date.now();
+            try {
+              const hintRows = db
+                .prepare("SELECT title, flow, identifiers FROM cards WHERE stale = 0 ORDER BY updated_at DESC LIMIT 8")
+                .all() as Array<{ title: string; flow: string; identifiers: string }>;
+
+              const repair = await llmQueryRepair({
+                goalLabel: "a benchmark search",
+                query: q.query,
+                ftsQuery: ftsQuery ?? "",
+                likeTokensTried,
+                hints: hintRows,
+                provider: llmConfig.provider as unknown as "anthropic" | "openai" | "deepseek" | "gemini",
+                apiKey: llmConfig.apiKey,
+                model: llmConfig.model,
+                timeoutMs: 1200,
+                maxTokens: 250,
+              });
+              diagnostics.llm_repair_latency_ms = Date.now() - t0;
+              diagnostics.llm_repair_probes = repair?.probes?.length ?? 0;
+
+              if (repair?.probes?.length) {
+                for (const probe of repair.probes) {
+                  const probeFts = sanitizeFts5Query((probe.fts_terms ?? probe.query ?? "").slice(0, 400));
+                  if (probeFts) {
+                    try {
+                      const rows = db
+                        .prepare(
+                          `SELECT c.title, c.content, c.flow, c.source_files
+                           FROM cards_fts f JOIN cards c ON c.rowid = f.rowid
+                           WHERE cards_fts MATCH ? AND c.stale = 0 LIMIT ${K}`,
+                        )
+                        .all(probeFts) as typeof cards;
+                      if (rows.length > 0) {
+                        cards = rows;
+                        diagnostics.fallback_used = "llm_repair";
+                        diagnostics.llm_repair_used = true;
+                        break;
+                      }
+                    } catch { /* ignore */ }
+                  }
+
+                  const probeLikeTokens = (probe.like_tokens ?? [])
+                    .map((t) => t.trim())
+                    .filter((t) => t.length > 2)
+                    .slice(0, 6);
+                  if (cards.length === 0 && probeLikeTokens.length > 0) {
+                    try {
+                      const like = probeLikeTokens.map(() => "(c.title LIKE ? OR c.identifiers LIKE ? OR c.flow LIKE ?)").join(" AND ");
+                      const args = probeLikeTokens.flatMap((t) => {
+                        const pat = `%${t}%`;
+                        return [pat, pat, pat];
+                      });
+                      const rows = db
+                        .prepare(
+                          `SELECT c.title, c.content, c.flow, c.source_files
+                           FROM cards c
+                           WHERE c.stale = 0 AND ${like}
+                           ORDER BY c.updated_at DESC LIMIT ${K}`,
+                        )
+                        .all(...args) as typeof cards;
+                      if (rows.length > 0) {
+                        cards = rows;
+                        diagnostics.fallback_used = "llm_repair";
+                        diagnostics.llm_repair_used = true;
+                        break;
+                      }
+                    } catch { /* ignore */ }
+                  }
+                }
+              }
+            } catch {
+              diagnostics.llm_repair_latency_ms = Date.now() - t0;
+            }
+          }
+
           if (cards.length === 0) {
             try {
               cards = db
                 .prepare(`SELECT title, content, flow, source_files FROM cards WHERE stale = 0 ORDER BY updated_at DESC LIMIT ${K}`)
                 .all() as typeof cards;
-              diagnostics.fallback_used = cards.length > 0 ? "recent_cards" : "no_cards";
+              if (diagnostics.fallback_used === "none") {
+                diagnostics.fallback_used = cards.length > 0 ? "recent_cards" : "no_cards";
+              }
             } catch { /* ignore */ }
           }
         }
