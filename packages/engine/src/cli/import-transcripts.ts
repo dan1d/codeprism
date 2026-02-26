@@ -38,9 +38,9 @@ export interface ImportOptions {
 
 /**
  * Milliseconds to sleep between consecutive LLM calls.
- * Set SRCMAP_LLM_DELAY_MS=1000 when hitting Gemini free-tier rate limits (15 RPM).
+ * Set CODEPRISM_LLM_DELAY_MS=1000 when hitting Gemini free-tier rate limits (15 RPM).
  */
-const LLM_INTER_CALL_DELAY_MS = parseInt(process.env["SRCMAP_LLM_DELAY_MS"] ?? "0", 10);
+const LLM_INTER_CALL_DELAY_MS = parseInt(process.env["CODEPRISM_LLM_DELAY_MS"] ?? "0", 10);
 
 function sleep(ms: number): Promise<void> {
   return ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve();
@@ -54,7 +54,7 @@ export async function importTranscripts(opts: ImportOptions = {}): Promise<void>
 
   const llm = createLLMProvider();
   if (!llm) {
-    console.error("[import-transcripts] No LLM configured. Set SRCMAP_LLM_PROVIDER + SRCMAP_LLM_API_KEY.");
+    console.error("[import-transcripts] No LLM configured. Set CODEPRISM_LLM_PROVIDER + CODEPRISM_LLM_API_KEY.");
     process.exit(1);
   }
 

@@ -107,7 +107,7 @@ export async function indexRepos(repos: RepoConfig[], workspaceRoot: string, opt
 
   const llm = createLLMProvider();
   if (llm) {
-    const provider = process.env["SRCMAP_LLM_PROVIDER"] ?? "anthropic";
+    const provider = process.env["CODEPRISM_LLM_PROVIDER"] ?? "anthropic";
     console.log(`LLM: ${llm.model} (provider: ${provider})`);
     if (provider === "gemini") {
       console.log(`     Free tier: 15 RPM / 1M tokens/day — throttled to ~14 RPM`);
@@ -118,7 +118,7 @@ export async function indexRepos(repos: RepoConfig[], workspaceRoot: string, opt
     }
   } else {
     console.log(`LLM: disabled — using structural cards`);
-    console.log(`     Tip: set SRCMAP_LLM_PROVIDER=deepseek and SRCMAP_LLM_API_KEY for richer cards`);
+    console.log(`     Tip: set CODEPRISM_LLM_PROVIDER=deepseek and CODEPRISM_LLM_API_KEY for richer cards`);
   }
 
   console.log(`\n=== srcmap indexer ===\n`);
@@ -631,7 +631,7 @@ export async function indexRepos(repos: RepoConfig[], workspaceRoot: string, opt
   console.log(`    - Hub cards: ${hubCards}`);
   console.log(`  Edges: ${edges.length}`);
   console.log(`  Files indexed: ${allParsed.length}`);
-  console.log(`\nServer ready at http://localhost:${process.env["SRCMAP_PORT"] ?? 4000}`);
+  console.log(`\nServer ready at http://localhost:${process.env["CODEPRISM_PORT"] ?? 4000}`);
 
   closeDb();
 }
@@ -653,7 +653,7 @@ if (import.meta.url === new URL(`file://${process.argv[1]}`).href) {
   const legacyRepoFilter: string | null = repoFlagIdx !== -1 ? (argv[repoFlagIdx + 1] ?? null) : null;
   const positional = argv.filter((a) => !a.startsWith("--") && a !== argv[repoFlagIdx + 1]);
 
-  const workspaceRoot = positional[0] ?? userWorkspaceRootFrom(import.meta.url);
+  const workspaceRoot = positional[0] ?? process.env["CODEPRISM_WORKSPACE"] ?? userWorkspaceRootFrom(import.meta.url);
 
   const { loadWorkspaceConfig } = await import("../config/workspace-config.js");
   const config = loadWorkspaceConfig(workspaceRoot);

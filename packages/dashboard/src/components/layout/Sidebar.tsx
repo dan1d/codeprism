@@ -44,7 +44,7 @@ export function Sidebar({ companyName }: SidebarProps) {
           <Database size={13} className="text-black" />
         </div>
         <div className="min-w-0">
-          <span className="text-sm font-semibold text-[#e1e4e8] tracking-tight">srcmap</span>
+          <span className="text-sm font-semibold text-[#e1e4e8] tracking-tight">codeprism</span>
           {companyName && (
             <p className="text-[10px] text-[#8b949e] truncate leading-none mt-0.5">{companyName}</p>
           )}

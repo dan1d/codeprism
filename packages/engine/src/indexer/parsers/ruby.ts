@@ -3,6 +3,7 @@ import type {
   Association,
   ClassInfo,
   FunctionInfo,
+  ImportInfo,
   LanguageParser,
   ParsedFile,
   RouteInfo,
@@ -316,7 +317,32 @@ function parseRubySource(
     });
   }
 
-  return { classes, associations, functions, callbacks, validations };
+  // Extract require_relative and require imports
+  const imports: ImportInfo[] = [];
+  const REQUIRE_RELATIVE_RE = /require_relative\s+['"]([^'"]+)['"]/g;
+  let reqMatch: RegExpExecArray | null;
+  while ((reqMatch = REQUIRE_RELATIVE_RE.exec(source)) !== null) {
+    imports.push({
+      name: reqMatch[1].split("/").pop() ?? reqMatch[1],
+      source: `./${reqMatch[1]}`,
+      isDefault: true,
+    });
+  }
+
+  // Plain require with paths matching a gem's internal structure (e.g. require 'sinatra/base')
+  const REQUIRE_RE = /(?:^|\n)\s*require\s+['"]([a-z][a-z0-9_/]+)['"]/g;
+  while ((reqMatch = REQUIRE_RE.exec(source)) !== null) {
+    const reqPath = reqMatch[1];
+    if (reqPath.includes("/")) {
+      imports.push({
+        name: reqPath.split("/").pop() ?? reqPath,
+        source: reqPath,
+        isDefault: true,
+      });
+    }
+  }
+
+  return { classes, associations, functions, callbacks, validations, imports };
 }
 
 /* ------------------------------------------------------------------ */

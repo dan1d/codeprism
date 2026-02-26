@@ -1,4 +1,4 @@
-# Deploying srcmap.ai
+# Deploying codeprism.dev
 
 ## Quick start (Hetzner CX23, $3.49/mo)
 

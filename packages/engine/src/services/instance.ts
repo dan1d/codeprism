@@ -92,9 +92,9 @@ export function getLLMFromDb(): ReturnType<typeof createLLMProvider> {
     const row = db.prepare("SELECT value FROM search_config WHERE key = ?").get(key) as { value: string } | undefined;
     return row?.value || undefined;
   };
-  const provider = get("llm_provider") ?? process.env["SRCMAP_LLM_PROVIDER"];
-  const model    = get("llm_model")    ?? process.env["SRCMAP_LLM_MODEL"];
-  const apiKey   = get("llm_api_key")  ?? process.env["SRCMAP_LLM_API_KEY"];
+  const provider = get("llm_provider") ?? process.env["CODEPRISM_LLM_PROVIDER"];
+  const model    = get("llm_model")    ?? process.env["CODEPRISM_LLM_MODEL"];
+  const apiKey   = get("llm_api_key")  ?? process.env["CODEPRISM_LLM_API_KEY"];
   return createLLMProvider({
     provider: (provider as LLMConfig["provider"]) ?? "none",
     model,

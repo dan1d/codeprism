@@ -17,7 +17,7 @@
  *   pnpm srcmap generate-skills --skill myrails --output-dir ~/.srcmap/knowledge  # community skill
  *
  * Community contributions:
- *   Place <framework>.md files in SRCMAP_KNOWLEDGE_DIR or <workspace>/.srcmap/knowledge/.
+ *   Place <framework>.md files in CODEPRISM_KNOWLEDGE_DIR or <workspace>/.srcmap/knowledge/.
  *   srcmap picks them up automatically on next index — no TypeScript required.
  *   See: https://github.com/your-org/srcmap#community-knowledge
  */
@@ -186,7 +186,7 @@ export async function generateSkillKnowledge(opts: GenerateSkillsOptions = {}): 
   if (!llm) {
     console.error(
       "[generate-skills] No LLM configured.\n" +
-      "  Set SRCMAP_LLM_PROVIDER + SRCMAP_LLM_API_KEY and retry.\n" +
+      "  Set CODEPRISM_LLM_PROVIDER + CODEPRISM_LLM_API_KEY and retry.\n" +
       "  Tip: use a high-quality model (claude-sonnet, gpt-4o) for best results."
     );
     process.exit(1);
@@ -223,7 +223,7 @@ export async function generateSkillKnowledge(opts: GenerateSkillsOptions = {}): 
   console.log(`Skills: ${skills.map((s) => s.id).join(", ")}`);
   console.log(`Output: ${outputDir}`);
   if (isCommunityDir) {
-    console.log(`Mode: community/custom (srcmap will load these via SRCMAP_KNOWLEDGE_DIR or .srcmap/knowledge/)`);
+    console.log(`Mode: community/custom (srcmap will load these via CODEPRISM_KNOWLEDGE_DIR or .srcmap/knowledge/)`);
   }
   console.log();
 
@@ -268,7 +268,7 @@ export async function generateSkillKnowledge(opts: GenerateSkillsOptions = {}): 
 
   console.log(`\n=== Done: ${written} generated, ${skipped} skipped ===`);
   if (isCommunityDir) {
-    console.log(`\nTo activate: set SRCMAP_KNOWLEDGE_DIR=${outputDir}`);
+    console.log(`\nTo activate: set CODEPRISM_KNOWLEDGE_DIR=${outputDir}`);
     console.log(`  or place files in <workspace>/.srcmap/knowledge/`);
   } else {
     console.log(`\nIMPORTANT: Review generated files before committing!`);

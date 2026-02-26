@@ -90,7 +90,7 @@ function findPropertyStringValue(
 /*  Import extraction                                                  */
 /* ------------------------------------------------------------------ */
 
-function extractImports(root: Parser.SyntaxNode): ImportInfo[] {
+function extractEsmImports(root: Parser.SyntaxNode): ImportInfo[] {
   const imports: ImportInfo[] = [];
 
   for (const stmt of root.descendantsOfType("import_statement")) {
@@ -132,6 +132,57 @@ function extractImports(root: Parser.SyntaxNode): ImportInfo[] {
   }
 
   return imports;
+}
+
+/**
+ * Extract CommonJS require() calls: `const x = require('./foo')`
+ * and destructured: `const { a, b } = require('./bar')`
+ */
+function extractRequireImports(root: Parser.SyntaxNode): ImportInfo[] {
+  const imports: ImportInfo[] = [];
+  const seen = new Set<string>();
+
+  for (const call of root.descendantsOfType("call_expression")) {
+    const func = call.childForFieldName("function");
+    if (!func || func.type !== "identifier" || func.text !== "require") continue;
+
+    const args = call.childForFieldName("arguments");
+    const firstArg = args?.namedChildren[0];
+    const source = stringValue(firstArg);
+    if (!source) continue;
+
+    const key = source;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    // Walk up to find the variable binding: `var x = require(...)` or `const { a } = require(...)`
+    const parent = call.parent;
+    if (parent?.type === "variable_declarator") {
+      const nameNode = parent.childForFieldName("name");
+      if (nameNode?.type === "identifier") {
+        imports.push({ name: nameNode.text, source, isDefault: true });
+      } else if (nameNode?.type === "object_pattern") {
+        for (const prop of nameNode.namedChildren) {
+          if (prop.type === "shorthand_property_identifier_pattern" || prop.type === "shorthand_property_identifier") {
+            imports.push({ name: prop.text, source, isDefault: false });
+          } else if (prop.type === "pair_pattern" || prop.type === "pair") {
+            const value = prop.childForFieldName("value");
+            imports.push({ name: value?.text ?? prop.text, source, isDefault: false });
+          }
+        }
+      }
+    } else {
+      imports.push({ name: source, source, isDefault: true });
+    }
+  }
+
+  return imports;
+}
+
+function extractImports(root: Parser.SyntaxNode): ImportInfo[] {
+  const esm = extractEsmImports(root);
+  const cjs = extractRequireImports(root);
+  return [...esm, ...cjs];
 }
 
 /* ------------------------------------------------------------------ */
@@ -394,6 +445,43 @@ function extractJsClasses(
 }
 
 /* ------------------------------------------------------------------ */
+/*  Route extraction (Express/Koa/Hapi patterns)                       */
+/* ------------------------------------------------------------------ */
+
+import type { RouteInfo } from "../types.js";
+
+const ROUTE_METHODS = new Set(["get", "post", "put", "patch", "delete", "head", "options", "all", "use"]);
+
+function extractRoutes(root: Parser.SyntaxNode): RouteInfo[] {
+  const routes: RouteInfo[] = [];
+  const seen = new Set<string>();
+
+  for (const call of root.descendantsOfType("call_expression")) {
+    const func = call.childForFieldName("function");
+    if (!func || func.type !== "member_expression") continue;
+
+    const prop = func.childForFieldName("property");
+    if (!prop) continue;
+    const method = prop.text.toLowerCase();
+    if (!ROUTE_METHODS.has(method)) continue;
+
+    const args = call.childForFieldName("arguments");
+    if (!args) continue;
+    const firstArg = args.namedChildren[0];
+    const path = stringValue(firstArg) ?? (method === "use" ? "/*" : undefined);
+    if (!path) continue;
+
+    const httpMethod = method === "use" ? "USE" : (METHOD_MAP[method] ?? method.toUpperCase());
+    const key = `${httpMethod} ${path}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    routes.push({ method: httpMethod, path });
+  }
+  return routes;
+}
+
+/* ------------------------------------------------------------------ */
 /*  Combined AST extraction                                            */
 /* ------------------------------------------------------------------ */
 
@@ -406,6 +494,7 @@ function parseJsTree(
   const functions = extractFunctions(root);
   const apiCalls = extractApiCalls(root);
   const classes = extractJsClasses(root, filePath);
+  const routes = extractRoutes(root);
   const { storeUsages, sliceName } = extractStoreInfo(root);
   const componentName = extractComponentName(root);
 
@@ -422,6 +511,7 @@ function parseJsTree(
     functions,
     apiCalls,
     classes,
+    routes,
     storeUsages,
   };
 }

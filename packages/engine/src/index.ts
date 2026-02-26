@@ -17,13 +17,14 @@ import { startWatcher } from "./watcher/index.js";
 import { loadWorkspaceConfig } from "./config/workspace-config.js";
 import { getRegisteredRepos } from "./services/repos.js";
 import { runAllBranchGC } from "./sync/branch-gc.js";
-import { initTenantRegistry, closeTenantRegistry, createTenant, listTenants, deleteTenant, rotateApiKey, getTenantBySlug } from "./tenant/registry.js";
+import { initTenantRegistry, closeTenantRegistry, createTenant, listTenants, deleteTenant, rotateApiKey, getTenantBySlug, getTenantCount } from "./tenant/registry.js";
 import { tenantMiddleware } from "./tenant/middleware.js";
 import { receiveTelemetry } from "./telemetry/receiver.js";
 import { getAggregateStats } from "./telemetry/receiver.js";
 import { createMagicLink, verifyMagicLink, ensureUser, createSession, validateSession, destroySession } from "./services/auth.js";
 import { inviteMembers, listMembers, activateMember, deactivateMember, getActiveSeatCount } from "./services/members.js";
 import { sendMagicLinkEmail, sendInvitationEmail } from "./services/email.js";
+import { submitBenchmark as submitBenchmarkJob, getQueueStatus, getFileCountCap, getBenchmarkProject, openBenchmarkDb, type LLMConfig } from "./services/benchmark-worker.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -53,8 +54,8 @@ async function main(): Promise<void> {
   runMigrations(db);
 
   // Seed instance_profile from env vars on first boot (no-op on subsequent starts)
-  const companyName = process.env["SRCMAP_COMPANY_NAME"] ?? "";
-  const plan = process.env["SRCMAP_PLAN"] ?? "self_hosted";
+  const companyName = process.env["CODEPRISM_COMPANY_NAME"] ?? "";
+  const plan = process.env["CODEPRISM_PLAN"] ?? "self_hosted";
   db.prepare(
     "UPDATE instance_profile SET company_name = CASE WHEN company_name = '' THEN ? ELSE company_name END, plan = ? WHERE id = 1",
   ).run(companyName, plan);
@@ -62,18 +63,18 @@ async function main(): Promise<void> {
   // ── Fastify ────────────────────────────────────────────────────────
   const app = Fastify({ logger: true });
 
-  const isMultiTenant = process.env["SRCMAP_MULTI_TENANT"] === "true";
-  const srcmapDomain = process.env["SRCMAP_DOMAIN"];
+  const isMultiTenant = process.env["CODEPRISM_MULTI_TENANT"] === "true";
+  const codeprismDomain = process.env["CODEPRISM_DOMAIN"];
 
   await app.register(cors, {
-    origin: isMultiTenant && srcmapDomain
-      ? [`https://${srcmapDomain}`, `https://*.${srcmapDomain}`]
+    origin: isMultiTenant && codeprismDomain
+      ? [`https://${codeprismDomain}`, `https://*.${codeprismDomain}`]
       : true,
   });
 
   await app.register(rateLimit, { global: false });
 
-  // ── Multi-tenancy (opt-in via SRCMAP_MULTI_TENANT=true) ─────────
+  // ── Multi-tenancy (opt-in via CODEPRISM_MULTI_TENANT=true) ─────────
   if (isMultiTenant) {
     initTenantRegistry();
   }
@@ -329,6 +330,148 @@ async function main(): Promise<void> {
     },
   );
 
+  app.get("/api/founding-status", async (_request, reply) => {
+    if (!isMultiTenant) return reply.send({ founding: false, remaining: 0, total: 0, limit: 100 });
+    const count = getTenantCount();
+    const limit = 100;
+    return reply.send({
+      founding: count < limit,
+      remaining: Math.max(0, limit - count),
+      total: count,
+      limit,
+    });
+  });
+
+  app.post<{ Body: { url: string; provider?: string; apiKey?: string } }>(
+    "/api/benchmarks/submit",
+    { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const { url, provider, apiKey } = request.body ?? {};
+      if (!url || typeof url !== "string") {
+        return reply.code(400).send({ queued: false, error: "url is required" });
+      }
+
+      const githubMatch = url.match(/github\.com\/([^/]+\/[^/]+)/);
+      if (!githubMatch) {
+        return reply.code(400).send({ queued: false, error: "Must be a valid GitHub repository URL" });
+      }
+
+      const validProviders = ["gemini", "openai", "deepseek", "anthropic"];
+      let llmConfig: LLMConfig | undefined;
+      if (apiKey && provider) {
+        if (!validProviders.includes(provider)) {
+          return reply.code(400).send({ queued: false, error: `Invalid provider. Must be one of: ${validProviders.join(", ")}` });
+        }
+        llmConfig = { provider: provider as LLMConfig["provider"], apiKey };
+      }
+
+      const result = await submitBenchmarkJob(url, llmConfig);
+      const code = result.queued ? 202 : 200;
+      return reply.code(code).send(result);
+    },
+  );
+
+  app.get("/api/benchmarks/queue", async (_request, reply) => {
+    return reply.send(getQueueStatus());
+  });
+
+  app.post<{ Body: { query: string; repo?: string } }>(
+    "/api/benchmarks/sandbox",
+    { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const { query, repo } = request.body ?? {};
+      if (!query || typeof query !== "string" || query.trim().length < 3) {
+        return reply.code(400).send({ error: "query is required (min 3 characters)" });
+      }
+      if (!repo) {
+        return reply.code(400).send({ error: "repo is required" });
+      }
+
+      const db = openBenchmarkDb(repo);
+      if (!db) {
+        return reply.code(404).send({ error: "No indexed data found for this project. Submit it for benchmarking first." });
+      }
+
+      try {
+        const start = Date.now();
+        const searchTerm = query.trim().replace(/[^a-zA-Z0-9\s]/g, "");
+
+        type CardRow = { id: string; title: string; flow: string; card_type: string; content: string; source_files: string };
+        let cardRows: CardRow[] = [];
+        try {
+          cardRows = db
+            .prepare("SELECT c.id, c.title, c.flow, c.card_type, c.content, c.source_files FROM cards_fts f JOIN cards c ON c.rowid = f.rowid WHERE cards_fts MATCH ? AND c.stale = 0 LIMIT 5")
+            .all(searchTerm) as CardRow[];
+        } catch { /* FTS may not exist */ }
+
+        if (cardRows.length === 0) {
+          try {
+            cardRows = db
+              .prepare("SELECT id, title, flow, card_type, content, source_files FROM cards WHERE stale = 0 ORDER BY updated_at DESC LIMIT 5")
+              .all() as CardRow[];
+          } catch { /* no cards table */ }
+        }
+
+        const latencyMs = Date.now() - start;
+
+        const allSourceFiles = new Set<string>();
+        const cards = cardRows.map((c) => {
+          let sourceFiles: string[] = [];
+          try { sourceFiles = JSON.parse(c.source_files || "[]"); } catch { /* ignore */ }
+          sourceFiles.forEach((f) => allSourceFiles.add(f));
+          return {
+            id: c.id,
+            title: c.title,
+            flow: c.flow,
+            cardType: c.card_type,
+            content: c.content,
+            sourceFiles: sourceFiles.slice(0, 8),
+          };
+        });
+
+        const formattedContext = cards.map((c) =>
+          `## ${c.title}\n**Flow:** ${c.flow}\n**Files:** ${c.sourceFiles.join(", ")}\n\n${c.content}`
+        ).join("\n\n---\n\n");
+        const codeprismTokens = Math.ceil(formattedContext.length / 4);
+        const naiveFiles = allSourceFiles.size;
+        const naiveTokens = naiveFiles * 500;
+
+        return reply.send({
+          query: query.trim(),
+          cards,
+          formattedContext,
+          latencyMs,
+          cacheHit: false,
+          codeprismTokens,
+          naiveFiles,
+          naiveTokens,
+          tokenReduction: naiveTokens > 0 ? Math.round((1 - codeprismTokens / naiveTokens) * 100) : 0,
+        });
+      } finally {
+        db.close();
+      }
+    },
+  );
+
+  app.get<{ Params: { slug: string } }>("/api/benchmarks/:slug", async (request, reply) => {
+    const project = getBenchmarkProject(request.params.slug);
+    if (!project) {
+      return reply.code(404).send({ error: "Project not found" });
+    }
+    return reply.send(project);
+  });
+
+  app.get("/api/benchmarks", async (_request, reply) => {
+    const benchPath = join(__dirname, "../../../eval/benchmarks.json");
+    let benchData = null;
+    try {
+      const raw = await readFile(benchPath, "utf-8");
+      benchData = JSON.parse(raw);
+    } catch { /* no benchmark file yet */ }
+
+    return reply.send({ benchmarks: benchData });
+  });
+
   app.get("/api/public-stats", async (_request, reply) => {
     try {
       return reply.send(getAggregateStats());
@@ -375,16 +518,16 @@ async function main(): Promise<void> {
 
   // ── Start ──────────────────────────────────────────────────────────
 
-  const port = Number(process.env["SRCMAP_PORT"]) || 4000;
-  const host = process.env["SRCMAP_HOST"] ?? "0.0.0.0";
+  const port = Number(process.env["CODEPRISM_PORT"]) || 4000;
+  const host = process.env["CODEPRISM_HOST"] ?? "0.0.0.0";
 
   await app.listen({ port, host });
 
   const cardCount = (
     getDb().prepare("SELECT COUNT(*) AS c FROM cards").get() as { c: number }
   ).c;
-  console.log(`[srcmap] Engine listening on http://${host}:${port}`);
-  console.log(`[srcmap] Database ready – ${cardCount} cards indexed`);
+  console.log(`[codeprism] Engine listening on http://${host}:${port}`);
+  console.log(`[codeprism] Database ready – ${cardCount} cards indexed`);
 
   // Pre-load the cross-encoder model so the first query has no cold-start latency
   warmReranker();
@@ -395,7 +538,7 @@ async function main(): Promise<void> {
   // ── Automatic file + git watcher (zero CLI required) ──────────────
   // Collects repos from workspace config + any UI-registered repos.
   // Watches source files for code changes and .git/ for branch/merge events.
-  const workspaceRoot = process.env["SRCMAP_WORKSPACE"] ?? process.cwd();
+  const workspaceRoot = process.env["CODEPRISM_WORKSPACE"] ?? process.cwd();
   let watchedRepos: Array<{ name: string; path: string }> = [];
   try {
     const cfg = loadWorkspaceConfig(workspaceRoot);
@@ -417,7 +560,7 @@ async function main(): Promise<void> {
   // ── Graceful shutdown ──────────────────────────────────────────────
 
   const shutdown = async (): Promise<void> => {
-    console.log("[srcmap] Shutting down…");
+    console.log("[codeprism] Shutting down…");
     stopWatcher();
     stopTelemetryReporter();
     await app.close();
@@ -431,6 +574,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  console.error("[srcmap] Fatal startup error:", err);
+  console.error("[codeprism] Fatal startup error:", err);
   process.exit(1);
 });

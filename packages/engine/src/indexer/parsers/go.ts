@@ -4,6 +4,7 @@ import type {
   ClassInfo,
   FunctionInfo,
   ImportInfo,
+  RouteInfo,
 } from "../types.js";
 
 /* ------------------------------------------------------------------ */
@@ -127,11 +128,21 @@ function parse(
     }
   }
 
+  /* --- Routes: r.GET("/path", handler) / e.POST("/path", handler) ---- */
+  const routes: RouteInfo[] = [];
+  const GO_ROUTE_RE = /\.\s*(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|Any|Use)\s*\(\s*"([^"]+)"/gm;
+
+  while ((match = GO_ROUTE_RE.exec(content)) !== null) {
+    const method = match[1] === "Any" ? "ANY" : match[1] === "Use" ? "USE" : match[1];
+    routes.push({ method, path: match[2] });
+  }
+
   return {
     language: "go",
     classes,
     functions,
     imports,
+    routes,
   };
 }
 

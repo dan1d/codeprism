@@ -4,12 +4,12 @@
  * Loads framework best-practice knowledge from Markdown files.
  *
  * Resolution order (first hit wins for each skill):
- *   1. SRCMAP_KNOWLEDGE_DIR/<skill-id>.md   — user / team override
+ *   1. CODEPRISM_KNOWLEDGE_DIR/<skill-id>.md   — user / team override
  *   2. <workspace>/.srcmap/knowledge/<id>.md — workspace-local contribution
  *   3. src/skills/knowledge/<id>.md          — built-in (shipped with srcmap)
  *
  * This makes the knowledge base community-extensible: anyone can drop a
- * `myframework.md` file in SRCMAP_KNOWLEDGE_DIR and srcmap picks it up on
+ * `myframework.md` file in CODEPRISM_KNOWLEDGE_DIR and srcmap picks it up on
  * next index — no TypeScript skill registration required.
  *
  * ## Community contribution format
@@ -124,7 +124,7 @@ function candidatePaths(skillId: string, workspaceRoot: string): string[] {
   const candidates: string[] = [];
 
   // 1. Explicit env override dir (team / CI override)
-  const envDir = process.env["SRCMAP_KNOWLEDGE_DIR"];
+  const envDir = process.env["CODEPRISM_KNOWLEDGE_DIR"];
   if (envDir) candidates.push(join(envDir, `${skillId}.md`));
 
   // 2. Workspace-local contribution directory
@@ -176,7 +176,7 @@ export async function loadAllKnowledge(
  * List all discoverable skill IDs, including community-contributed ones
  * that have no corresponding TypeScript Skill definition.
  *
- * Community frameworks: any `.md` file in SRCMAP_KNOWLEDGE_DIR or
+ * Community frameworks: any `.md` file in CODEPRISM_KNOWLEDGE_DIR or
  * <workspace>/.srcmap/knowledge/ whose stem doesn't match a built-in skill.
  */
 export async function discoverCommunitySkillIds(
@@ -186,7 +186,7 @@ export async function discoverCommunitySkillIds(
   const { readdir } = await import("node:fs/promises");
   const dirs: string[] = [];
 
-  const envDir = process.env["SRCMAP_KNOWLEDGE_DIR"];
+  const envDir = process.env["CODEPRISM_KNOWLEDGE_DIR"];
   if (envDir) dirs.push(envDir);
   dirs.push(join(workspaceRoot, ".srcmap", "knowledge"));
 

@@ -727,7 +727,7 @@ export async function generateProjectDocs(
   //   rules gets Performance — query/N+1 rules are enforced as domain constraints (not just style).
   //
   // Knowledge is loaded from (priority order):
-  //   1. SRCMAP_KNOWLEDGE_DIR/<id>.md   — user / team override
+  //   1. CODEPRISM_KNOWLEDGE_DIR/<id>.md   — user / team override
   //   2. <workspace>/.srcmap/knowledge/<id>.md — workspace-local community contribution
   //   3. src/skills/knowledge/<id>.md   — built-in (shipped with srcmap)
   const resolvedSkills = stackProfile ? resolveSkills(stackProfile.skillIds) : [];

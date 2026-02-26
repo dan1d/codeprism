@@ -13,6 +13,7 @@ import { Onboard } from "@/pages/Onboard";
 import { Login } from "@/pages/Login";
 import { AcceptInvite } from "@/pages/AcceptInvite";
 import { Team } from "@/pages/Team";
+import { Benchmarks, BenchmarkDetail } from "@/pages/Benchmarks";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { api, type InstanceInfo } from "@/lib/api";
 
@@ -44,6 +45,8 @@ function DashboardRoutes() {
       <Route path="/" element={<Landing />} />
       <Route path="/stats" element={<PublicStats />} />
       <Route path="/onboard" element={<Onboard />} />
+      <Route path="/benchmarks" element={<Benchmarks />} />
+      <Route path="/benchmarks/:slug" element={<BenchmarkDetail />} />
       <Route path="/login" element={<Login />} />
       <Route path="/accept-invite" element={<AcceptInvite />} />
       <Route path="/auth/verify" element={<AcceptInvite />} />

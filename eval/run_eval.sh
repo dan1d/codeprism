@@ -57,10 +57,10 @@ if ! python3 -c "import requests" 2>/dev/null; then
 fi
 
 # ── Check srcmap is reachable ─────────────────────────────────────────
-SRCMAP_SERVER="${SRCMAP_SERVER:-http://localhost:4000}"
-if ! curl -sf "$SRCMAP_SERVER/api/health" > /dev/null 2>&1; then
+CODEPRISM_SERVER="${CODEPRISM_SERVER:-http://localhost:4000}"
+if ! curl -sf "$CODEPRISM_SERVER/api/health" > /dev/null 2>&1; then
   echo ""
-  echo "  ✗  srcmap is not running at $SRCMAP_SERVER"
+  echo "  ✗  srcmap is not running at $CODEPRISM_SERVER"
   echo "     Start it first:  cd $(dirname "$SCRIPT_DIR") && pnpm dev"
   echo ""
   exit 1
@@ -79,18 +79,18 @@ fi
 
 echo ""
 echo "  srcmap Ragas Evaluation"
-echo "  Server : $SRCMAP_SERVER"
+echo "  Server : $CODEPRISM_SERVER"
 echo "  Judge  : $JUDGE_LLM"
 echo ""
 
-python3 evaluate.py --ragas --server "$SRCMAP_SERVER" "$@"
+python3 evaluate.py --ragas --server "$CODEPRISM_SERVER" "$@"
 
 # ── DeepEval (per-card contextual relevance) ──────────────────────────
 echo ""
 echo "  Running DeepEval (per-card relevance scoring)..."
 echo ""
 
-python3 evaluate_deepeval.py --server "$SRCMAP_SERVER" "$@"
+python3 evaluate_deepeval.py --server "$CODEPRISM_SERVER" "$@"
 
 # ── Append Ragas metrics to history ledger ────────────────────────────
 if [ -f eval_results.json ]; then

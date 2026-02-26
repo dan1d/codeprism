@@ -70,7 +70,7 @@ export function AcceptInvite() {
     ? JSON.stringify(
         {
           mcpServers: {
-            srcmap: {
+            codeprism: {
               url: `${baseUrl}/${verified.tenantSlug}/mcp/sse`,
               headers: {
                 Authorization: "Bearer YOUR_TEAM_API_KEY",
@@ -120,7 +120,7 @@ export function AcceptInvite() {
               <h1 className="text-xl font-bold text-[#e1e4e8]">Welcome to {verified.tenantName}!</h1>
               <p className="text-sm text-[#8b949e] mt-2">
                 You've joined as <strong className="text-[#e1e4e8]">{verified.email}</strong>.
-                Set up your editor to start using srcmap.
+                Set up your editor to start using codeprism.
               </p>
             </div>
 

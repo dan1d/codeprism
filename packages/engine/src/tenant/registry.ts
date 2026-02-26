@@ -161,9 +161,20 @@ function generateApiKey(): string {
   return `sk_${randomBytes(32).toString("hex")}`;
 }
 
+const FOUNDING_TEAM_LIMIT = 100;
+
+/** Returns the total number of tenants in the registry. */
+export function getTenantCount(): number {
+  const db = getRegistryDb();
+  return (db.prepare("SELECT COUNT(*) AS c FROM tenants").get() as { c: number }).c;
+}
+
 /**
  * Creates a new tenant. Returns the public tenant record plus the raw API key.
  * The raw key is only available at creation time -- it is never stored.
+ *
+ * First 100 teams get "founding" plan with unlimited seats.
+ * After that, new teams get "free" plan with 3 seats.
  */
 export function createTenant(
   name: string,
@@ -174,11 +185,15 @@ export function createTenant(
   const rawKey = generateApiKey();
   const keyHash = hashApiKey(rawKey);
   const keyPrefix = rawKey.slice(0, 7);
-  const maxSeats = 3; // free plan default
+
+  const currentCount = getTenantCount();
+  const isFounding = currentCount < FOUNDING_TEAM_LIMIT;
+  const plan = isFounding ? "founding" : "free";
+  const maxSeats = isFounding ? null : 3; // founding = unlimited, free = 3
 
   db.prepare(
-    "INSERT INTO tenants (slug, name, api_key_hash, api_key_prefix, owner_email, max_seats) VALUES (?, ?, ?, ?, ?, ?)",
-  ).run(slug, name, keyHash, keyPrefix, ownerEmail ?? null, maxSeats);
+    "INSERT INTO tenants (slug, name, api_key_hash, api_key_prefix, plan, owner_email, max_seats) VALUES (?, ?, ?, ?, ?, ?, ?)",
+  ).run(slug, name, keyHash, keyPrefix, plan, ownerEmail ?? null, maxSeats);
 
   const tenant = getTenantBySlug(slug)!;
   return {

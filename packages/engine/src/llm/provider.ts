@@ -138,7 +138,7 @@ export class DeepSeekProvider implements LLMProvider {
 
 /**
  * Create an LLM provider from config or environment variables.
- * Falls back to env: SRCMAP_LLM_PROVIDER, SRCMAP_LLM_MODEL, SRCMAP_LLM_API_KEY.
+ * Falls back to env: CODEPRISM_LLM_PROVIDER, CODEPRISM_LLM_MODEL, CODEPRISM_LLM_API_KEY.
  *
  * Supported providers:
  *  - deepseek  → DeepSeek-V3 via OpenAI-compatible API (cheap: ~$0.14/1M input tokens)
@@ -151,9 +151,9 @@ export class DeepSeekProvider implements LLMProvider {
 export function createLLMProvider(config?: LLMConfig): LLMProvider | null {
   const cfg: LLMConfig = config ?? {
     provider:
-      (process.env["SRCMAP_LLM_PROVIDER"] as LLMConfig["provider"]) ?? "none",
-    model: process.env["SRCMAP_LLM_MODEL"],
-    apiKey: process.env["SRCMAP_LLM_API_KEY"],
+      (process.env["CODEPRISM_LLM_PROVIDER"] as LLMConfig["provider"]) ?? "none",
+    model: process.env["CODEPRISM_LLM_MODEL"],
+    apiKey: process.env["CODEPRISM_LLM_API_KEY"],
   };
 
   if (cfg.provider === "none" || !cfg.apiKey) return null;

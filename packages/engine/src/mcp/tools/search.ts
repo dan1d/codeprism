@@ -44,7 +44,7 @@ export function registerSearchTools(server: McpServer): void {
           ? `**Flows touched:** ${flowHits.join(", ")}\n\n`
           : "";
 
-        let text = `${header}Found ${cards.length} card(s) for "${query}":\n\n${flowContext}${formatCards(cards)}`;
+        let text = `${header}Found ${cards.length} card(s) for "${query}":\n\n${flowContext}${formatCards(cards, undefined, query)}`;
 
         if (debug) {
           const scoreLines = results.map((r, i) => {
@@ -155,7 +155,7 @@ export function registerSearchTools(server: McpServer): void {
           `**Flows:** ${flows.join(", ")}\n` +
           `**Key files (${allFiles.size}):**\n${[...allFiles].slice(0, 20).map((f) => `- ${f}`).join("\n")}\n\n` +
           `---\n\n` +
-          formatCards(capped);
+          formatCards(capped, undefined, hydeQuery);
 
         return { content: [{ type: "text" as const, text: summary }] };
       } catch (err) {

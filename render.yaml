@@ -4,10 +4,10 @@ services:
     runtime: docker
     plan: starter
     envVars:
-      - key: SRCMAP_PORT
+      - key: CODEPRISM_PORT
         value: 4000
-      - key: SRCMAP_DB_PATH
-        value: /data/srcmap.db
+      - key: CODEPRISM_DB_PATH
+        value: /data/codeprism.db
     disk:
       name: srcmap-data
       mountPath: /data

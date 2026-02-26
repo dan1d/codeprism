@@ -15,12 +15,12 @@ services:
   srcmap:
     build: .
     ports:
-      - "${SRCMAP_PORT:-4000}:4000"
+      - "${CODEPRISM_PORT:-4000}:4000"
     volumes:
       - srcmap-data:/data
     environment:
-      - SRCMAP_PORT=4000
-      - SRCMAP_DB_PATH=/data/srcmap.db
+      - CODEPRISM_PORT=4000
+      - CODEPRISM_DB_PATH=/data/codeprism.db
       - GOOGLE_API_KEY=your-gemini-api-key  # optional, enables premium cards
     restart: unless-stopped
 
@@ -45,7 +45,7 @@ The final image runs `node packages/engine/dist/index.js` which:
 
 ### Persistent storage
 
-The database (`srcmap.db`) must persist across container restarts. The Docker volume `srcmap-data` is mounted at `/data`.
+The database (`codeprism.db`) must persist across container restarts. The Docker volume `srcmap-data` is mounted at `/data`.
 
 Embedding models (~300 MB) are cached inside the container at `~/.cache/srcmap/models/`. To persist across rebuilds, add a second volume:
 

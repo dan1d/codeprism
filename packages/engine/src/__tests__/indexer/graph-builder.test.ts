@@ -143,7 +143,8 @@ describe("buildGraph — test file exclusion", () => {
 
     const edges = buildGraph([entryFile, domainFile]);
     const fromEntry = edges.filter((e) => e.sourceFile === entryFile.path);
-    expect(fromEntry).toHaveLength(0);
+    expect(fromEntry).toHaveLength(1);
+    expect(fromEntry[0].weight).toBeLessThan(1);
   });
 });
 

@@ -11,11 +11,11 @@ import { homedir } from "node:os";
  * Without prefixes the model still works but underperforms its MTEB benchmarks.
  * Dimension: 768 (vs 384 for all-MiniLM-L6-v2).
  *
- * Fallback: set SRCMAP_EMBEDDING_MODEL=Xenova/all-MiniLM-L6-v2 and
- * SRCMAP_EMBEDDING_DIM=384 to revert to the smaller model.
+ * Fallback: set CODEPRISM_EMBEDDING_MODEL=Xenova/all-MiniLM-L6-v2 and
+ * CODEPRISM_EMBEDDING_DIM=384 to revert to the smaller model.
  */
-const MODEL_ID = process.env["SRCMAP_EMBEDDING_MODEL"] ?? "nomic-ai/nomic-embed-text-v1.5";
-export const EMBEDDING_DIM = parseInt(process.env["SRCMAP_EMBEDDING_DIM"] ?? "768", 10);
+const MODEL_ID = process.env["CODEPRISM_EMBEDDING_MODEL"] ?? "nomic-ai/nomic-embed-text-v1.5";
+export const EMBEDDING_DIM = parseInt(process.env["CODEPRISM_EMBEDDING_DIM"] ?? "768", 10);
 
 export type EmbedTaskType = "query" | "document";
 

@@ -18,6 +18,11 @@ const PUBLIC_ROUTES = new Set([
   "GET /api/health",
   "POST /api/tenants",
   "GET /api/public-stats",
+  "GET /api/founding-status",
+  "GET /api/benchmarks",
+  "POST /api/benchmarks/submit",
+  "GET /api/benchmarks/queue",
+  "POST /api/benchmarks/sandbox",
   "POST /api/telemetry",
   "POST /api/auth/magic-link",
   "POST /api/auth/verify",
@@ -26,6 +31,7 @@ const PUBLIC_ROUTES = new Set([
 function isPublicRoute(method: string, url: string): boolean {
   const path = url.split("?")[0];
   if (PUBLIC_ROUTES.has(`${method} ${path}`)) return true;
+  if (method === "GET" && /^\/api\/benchmarks\/[a-zA-Z0-9._-]+$/.test(path)) return true;
   if (method === "GET" && !path.startsWith("/api/") && !path.startsWith("/mcp/")) {
     return true;
   }
@@ -41,7 +47,7 @@ function isAdminRoute(method: string, url: string): boolean {
 }
 
 function checkAdminAuth(request: FastifyRequest): boolean {
-  const adminKey = process.env["SRCMAP_ADMIN_KEY"];
+  const adminKey = process.env["CODEPRISM_ADMIN_KEY"];
   if (!adminKey) return false;
   const authHeader = request.headers.authorization;
   return authHeader === `Bearer ${adminKey}`;
@@ -75,7 +81,7 @@ async function tenantPlugin(app: FastifyInstance): Promise<void> {
   app.decorateRequest("tenant", undefined);
   app.decorateRequest("devEmail", undefined);
 
-  const multiTenant = process.env["SRCMAP_MULTI_TENANT"] === "true";
+  const multiTenant = process.env["CODEPRISM_MULTI_TENANT"] === "true";
   if (!multiTenant) return;
 
   app.addHook(

@@ -61,7 +61,7 @@ function collectStats(): TelemetryPayload {
     .get() as { reposIndexed: number };
 
   // Token savings estimate: response_tokens * 35x expansion factor
-  // (AI would read ~35x more tokens from raw files without srcmap cards)
+  // (AI would read ~35x more tokens from raw files without codeprism cards)
   const tokensSaved = metricsStats.totalResponseTokens * 35;
 
   return {
@@ -99,16 +99,16 @@ async function sendTelemetry(url: string): Promise<void> {
 /**
  * Starts the opt-in telemetry reporter.
  *
- * Enabled by SRCMAP_TELEMETRY=true env var.
+ * Enabled by CODEPRISM_TELEMETRY=true env var.
  * Sends daily anonymous stats to the configured URL.
  * Fails silently, never blocks the engine.
  */
 export function startTelemetryReporter(): void {
-  const enabled = process.env["SRCMAP_TELEMETRY"] === "true";
+  const enabled = process.env["CODEPRISM_TELEMETRY"] === "true";
   if (!enabled) return;
 
   const url =
-    process.env["SRCMAP_TELEMETRY_URL"] ?? "https://srcmap.ai/api/telemetry";
+    process.env["CODEPRISM_TELEMETRY_URL"] ?? "https://codeprism.dev/api/telemetry";
   console.log(`[telemetry] Opt-in telemetry enabled, reporting to ${url}`);
 
   // Send first report after 60 seconds (let the engine settle)

@@ -1,14 +1,14 @@
 services:
-  srcmap:
+  codeprism:
     build: .
     ports:
-      - "${SRCMAP_PORT:-4000}:4000"
+      - "${CODEPRISM_PORT:-4000}:4000"
     volumes:
-      - srcmap-data:/data
+      - codeprism-data:/data
     environment:
-      - SRCMAP_PORT=4000
-      - SRCMAP_DB_PATH=/data/srcmap.db
+      - CODEPRISM_PORT=4000
+      - CODEPRISM_DB_PATH=/data/codeprism.db
     restart: unless-stopped
 
 volumes:
-  srcmap-data:
+  codeprism-data:

@@ -2,8 +2,25 @@
   "name": "srcmap",
   "version": "0.1.0",
   "private": true,
-  "description": "Code context engine for AI coding tools. Parses your codebase, builds a knowledge graph, and serves context via MCP.",
+  "description": "Shared context layer for AI coding tools. Parses your codebase, builds a knowledge graph, and serves context to Cursor, Claude Code, and Windsurf via MCP.",
   "license": "AGPL-3.0",
+  "homepage": "https://codeprism.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/srcmap/srcmap.git"
+  },
+  "keywords": [
+    "mcp",
+    "code-context",
+    "knowledge-graph",
+    "ai-coding",
+    "cursor",
+    "claude",
+    "windsurf",
+    "codebase-search",
+    "rag",
+    "developer-tools"
+  ],
   "scripts": {
     "dev": "pnpm --filter @srcmap/engine dev",
     "dev:dashboard": "pnpm --filter @srcmap/dashboard dev",

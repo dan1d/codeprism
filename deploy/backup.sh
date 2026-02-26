@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# srcmap.ai daily backup
+# codeprism.dev daily backup
 # Add to crontab: 0 3 * * * /opt/srcmap/repo/deploy/backup.sh
 
 BACKUP_DIR="/opt/srcmap/backups"

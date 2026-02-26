@@ -1,10 +1,19 @@
-const RESEND_API_KEY = process.env["SRCMAP_RESEND_API_KEY"];
-const SRCMAP_DOMAIN = process.env["SRCMAP_DOMAIN"] ?? "localhost:4000";
-const FROM_EMAIL = process.env["SRCMAP_FROM_EMAIL"] ?? "srcmap <noreply@srcmap.ai>";
+const RESEND_API_KEY = process.env["CODEPRISM_RESEND_API_KEY"];
+const CODEPRISM_DOMAIN = process.env["CODEPRISM_DOMAIN"] ?? "localhost:4000";
+const FROM_EMAIL = process.env["CODEPRISM_FROM_EMAIL"] ?? "codeprism <noreply@codeprism.dev>";
+const SUPPORT_EMAIL = process.env["CODEPRISM_SUPPORT_EMAIL"] ?? "support@codeprism.dev";
+
+const EMAIL_FOOTER = `
+  <div style="border-top: 1px solid #21262d; margin-top: 32px; padding-top: 16px;">
+    <p style="color: #484f58; font-size: 11px; margin: 0;">
+      Need help? Reach out at <a href="mailto:${SUPPORT_EMAIL}" style="color: #58a6ff;">${SUPPORT_EMAIL}</a>
+    </p>
+  </div>
+`;
 
 function getBaseUrl(): string {
-  const protocol = SRCMAP_DOMAIN.includes("localhost") ? "http" : "https";
-  return `${protocol}://${SRCMAP_DOMAIN}`;
+  const protocol = CODEPRISM_DOMAIN.includes("localhost") ? "http" : "https";
+  return `${protocol}://${CODEPRISM_DOMAIN}`;
 }
 
 async function sendEmail(to: string, subject: string, html: string): Promise<void> {
@@ -38,20 +47,21 @@ export async function sendMagicLinkEmail(
 
   const html = `
     <div style="font-family: -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 0;">
-      <h2 style="color: #e1e4e8; font-size: 20px;">Sign in to srcmap</h2>
+      <h2 style="color: #e1e4e8; font-size: 20px;">Sign in to codeprism</h2>
       <p style="color: #8b949e; font-size: 14px;">
-        Click the button below to sign in to <strong>${tenantName}</strong> on srcmap.
+        Click the button below to sign in to <strong>${tenantName}</strong> on codeprism.
       </p>
       <a href="${link}" style="display: inline-block; background: #58a6ff; color: #0d1117; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 14px; margin: 16px 0;">
-        Sign in to srcmap
+        Sign in to codeprism
       </a>
       <p style="color: #484f58; font-size: 12px; margin-top: 24px;">
         This link expires in 15 minutes. If you didn't request this, you can safely ignore this email.
       </p>
+      ${EMAIL_FOOTER}
     </div>
   `;
 
-  await sendEmail(email, `Sign in to ${tenantName} on srcmap`, html);
+  await sendEmail(email, `Sign in to ${tenantName} on codeprism`, html);
 }
 
 export async function sendInvitationEmail(
@@ -64,15 +74,15 @@ export async function sendInvitationEmail(
   const link = `${getBaseUrl()}/accept-invite?token=${encodeURIComponent(token)}&tenant=${encodeURIComponent(tenantSlug)}`;
 
   const inviterLine = inviterEmail
-    ? `<p style="color: #8b949e; font-size: 14px;"><strong>${inviterEmail}</strong> invited you to join <strong>${tenantName}</strong> on srcmap.</p>`
-    : `<p style="color: #8b949e; font-size: 14px;">You've been invited to join <strong>${tenantName}</strong> on srcmap.</p>`;
+    ? `<p style="color: #8b949e; font-size: 14px;"><strong>${inviterEmail}</strong> invited you to join <strong>${tenantName}</strong> on codeprism.</p>`
+    : `<p style="color: #8b949e; font-size: 14px;">You've been invited to join <strong>${tenantName}</strong> on codeprism.</p>`;
 
   const html = `
     <div style="font-family: -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 0;">
-      <h2 style="color: #e1e4e8; font-size: 20px;">Join ${tenantName} on srcmap</h2>
+      <h2 style="color: #e1e4e8; font-size: 20px;">Join ${tenantName} on codeprism</h2>
       ${inviterLine}
       <p style="color: #8b949e; font-size: 14px;">
-        srcmap gives your AI coding tools deep context about your codebase, saving tokens and improving accuracy.
+        codeprism gives your AI coding tools deep context about your codebase — 90% fewer tokens, better answers.
       </p>
       <a href="${link}" style="display: inline-block; background: #58a6ff; color: #0d1117; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 14px; margin: 16px 0;">
         Accept Invitation
@@ -80,8 +90,9 @@ export async function sendInvitationEmail(
       <p style="color: #484f58; font-size: 12px; margin-top: 24px;">
         This link expires in 15 minutes.
       </p>
+      ${EMAIL_FOOTER}
     </div>
   `;
 
-  await sendEmail(email, `Join ${tenantName} on srcmap`, html);
+  await sendEmail(email, `Join ${tenantName} on codeprism`, html);
 }

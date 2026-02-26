@@ -12,7 +12,7 @@ export type { DatabaseType };
 let instance: DatabaseType | null = null;
 
 const _moduleDir = dirname(fileURLToPath(import.meta.url));
-const DEFAULT_DB_PATH = join(_moduleDir, "..", "..", "srcmap.db");
+const DEFAULT_DB_PATH = join(_moduleDir, "..", "..", "codeprism.db");
 
 const tenantDbStorage = new AsyncLocalStorage<DatabaseType>();
 
@@ -27,7 +27,7 @@ export function getDb(): DatabaseType {
 
   if (instance) return instance;
 
-  const dbPath = process.env["SRCMAP_DB_PATH"] ?? DEFAULT_DB_PATH;
+  const dbPath = process.env["CODEPRISM_DB_PATH"] ?? DEFAULT_DB_PATH;
   const db = new Database(dbPath);
 
   sqliteVec.load(db);
@@ -73,7 +73,7 @@ export function closeDb(): void {
 
 /** Base directory for per-tenant database files. */
 export function getDataDir(): string {
-  return process.env["SRCMAP_DATA_DIR"] ?? join(_moduleDir, "..", "..", "data");
+  return process.env["CODEPRISM_DATA_DIR"] ?? join(_moduleDir, "..", "..", "data");
 }
 
 const MAX_TENANT_POOL_SIZE = 50;

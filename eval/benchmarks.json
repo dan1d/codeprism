@@ -1,0 +1,811 @@
+{
+  "generated_at": "2026-02-25T23:56:55.353Z",
+  "projects": [
+    {
+      "name": "flask",
+      "repo": "pallets/flask",
+      "language": "Python",
+      "framework": "Flask",
+      "live": true,
+      "llmEnhanced": false,
+      "cardCount": 2,
+      "dbPath": "benchmarks/pallets-flask.db",
+      "stats": {
+        "queries_tested": 4,
+        "avg_tokens_with_srcmap": 97,
+        "avg_tokens_without": 2000,
+        "token_reduction_pct": 95.2,
+        "avg_latency_ms": 0,
+        "p50_latency_ms": 0,
+        "p95_latency_ms": 1,
+        "p99_latency_ms": 1,
+        "cache_hit_rate": 0,
+        "flow_hit_rate": 1,
+        "file_hit_rate": 1,
+        "precision_at_5": 0.5
+      },
+      "cases": [
+        {
+          "query": "How does the remove_ctx work?",
+          "srcmap_tokens": 97,
+          "naive_tokens": 2000,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 0.5,
+          "result_count": 2
+        },
+        {
+          "query": "remove_ctx implementation and data model",
+          "srcmap_tokens": 97,
+          "naive_tokens": 2000,
+          "latency_ms": 1,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 0.5,
+          "result_count": 2
+        },
+        {
+          "query": "How does the scaffold work?",
+          "srcmap_tokens": 97,
+          "naive_tokens": 2000,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 0.5,
+          "result_count": 2
+        },
+        {
+          "query": "scaffold implementation and data model",
+          "srcmap_tokens": 97,
+          "naive_tokens": 2000,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 0.5,
+          "result_count": 2
+        }
+      ]
+    },
+    {
+      "name": "express",
+      "repo": "expressjs/express",
+      "language": "JavaScript",
+      "framework": "Node.js",
+      "live": true,
+      "llmEnhanced": false,
+      "cardCount": 6,
+      "dbPath": "benchmarks/expressjs-express.db",
+      "stats": {
+        "queries_tested": 12,
+        "avg_tokens_with_srcmap": 304,
+        "avg_tokens_without": 3500,
+        "token_reduction_pct": 91.3,
+        "avg_latency_ms": 0,
+        "p50_latency_ms": 0,
+        "p95_latency_ms": 0,
+        "p99_latency_ms": 0,
+        "cache_hit_rate": 0,
+        "flow_hit_rate": 1,
+        "file_hit_rate": 1,
+        "precision_at_5": 0.6
+      },
+      "cases": [
+        {
+          "query": "How does the api_v1 work?",
+          "srcmap_tokens": 533,
+          "naive_tokens": 6000,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 0.2,
+          "result_count": 5
+        },
+        {
+          "query": "api_v1 implementation and data model",
+          "srcmap_tokens": 533,
+          "naive_tokens": 6000,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 0.2,
+          "result_count": 5
+        },
+        {
+          "query": "How does the createApplication work?",
+          "srcmap_tokens": 155,
+          "naive_tokens": 1000,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 1,
+          "result_count": 1
+        },
+        {
+          "query": "createApplication implementation and data model",
+          "srcmap_tokens": 155,
+          "naive_tokens": 1000,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 1,
+          "result_count": 1
+        },
+        {
+          "query": "How does the format work?",
+          "srcmap_tokens": 36,
+          "naive_tokens": 1000,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 1,
+          "result_count": 1
+        },
+        {
+          "query": "format implementation and data model",
+          "srcmap_tokens": 36,
+          "naive_tokens": 1000,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 1,
+          "result_count": 1
+        },
+        {
+          "query": "How does the index work?",
+          "srcmap_tokens": 392,
+          "naive_tokens": 5000,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 0.2,
+          "result_count": 5
+        },
+        {
+          "query": "index implementation and data model",
+          "srcmap_tokens": 392,
+          "naive_tokens": 5000,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 0.2,
+          "result_count": 5
+        },
+        {
+          "query": "How does the sendfile work?",
+          "srcmap_tokens": 177,
+          "naive_tokens": 2000,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 1,
+          "result_count": 1
+        },
+        {
+          "query": "sendfile implementation and data model",
+          "srcmap_tokens": 177,
+          "naive_tokens": 2000,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 1,
+          "result_count": 1
+        },
+        {
+          "query": "How does the user_pet work?",
+          "srcmap_tokens": 533,
+          "naive_tokens": 6000,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 0.2,
+          "result_count": 5
+        },
+        {
+          "query": "user_pet implementation and data model",
+          "srcmap_tokens": 533,
+          "naive_tokens": 6000,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 0.2,
+          "result_count": 5
+        }
+      ]
+    },
+    {
+      "name": "gin",
+      "repo": "gin-gonic/gin",
+      "language": "Go",
+      "framework": "Gin",
+      "live": true,
+      "llmEnhanced": false,
+      "cardCount": 2,
+      "dbPath": "benchmarks/gin-gonic-gin.db",
+      "stats": {
+        "queries_tested": 4,
+        "avg_tokens_with_srcmap": 104,
+        "avg_tokens_without": 4500,
+        "token_reduction_pct": 97.7,
+        "avg_latency_ms": 0,
+        "p50_latency_ms": 0,
+        "p95_latency_ms": 0,
+        "p99_latency_ms": 0,
+        "cache_hit_rate": 0,
+        "flow_hit_rate": 1,
+        "file_hit_rate": 1,
+        "precision_at_5": 0.5
+      },
+      "cases": [
+        {
+          "query": "How does the Error.SetType work?",
+          "srcmap_tokens": 104,
+          "naive_tokens": 4500,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 0.5,
+          "result_count": 2
+        },
+        {
+          "query": "Error.SetType implementation and data model",
+          "srcmap_tokens": 104,
+          "naive_tokens": 4500,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 0.5,
+          "result_count": 2
+        },
+        {
+          "query": "How does the HandlersChain.Last work?",
+          "srcmap_tokens": 104,
+          "naive_tokens": 4500,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 0.5,
+          "result_count": 2
+        },
+        {
+          "query": "HandlersChain.Last implementation and data model",
+          "srcmap_tokens": 104,
+          "naive_tokens": 4500,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 0.5,
+          "result_count": 2
+        }
+      ]
+    },
+    {
+      "name": "preact",
+      "repo": "preactjs/preact",
+      "language": "JavaScript",
+      "framework": "Node.js",
+      "live": true,
+      "llmEnhanced": false,
+      "cardCount": 7,
+      "dbPath": "benchmarks/preactjs-preact.db",
+      "stats": {
+        "queries_tested": 14,
+        "avg_tokens_with_srcmap": 276,
+        "avg_tokens_without": 7500,
+        "token_reduction_pct": 96.3,
+        "avg_latency_ms": 0,
+        "p50_latency_ms": 0,
+        "p95_latency_ms": 0,
+        "p99_latency_ms": 0,
+        "cache_hit_rate": 0,
+        "flow_hit_rate": 1,
+        "file_hit_rate": 1,
+        "precision_at_5": 0.886
+      },
+      "cases": [
+        {
+          "query": "How does the EmptyFragment work?",
+          "srcmap_tokens": 166,
+          "naive_tokens": 9500,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 1,
+          "result_count": 1
+        },
+        {
+          "query": "EmptyFragment implementation and data model",
+          "srcmap_tokens": 166,
+          "naive_tokens": 9500,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 1,
+          "result_count": 1
+        },
+        {
+          "query": "How does the Loading work?",
+          "srcmap_tokens": 53,
+          "naive_tokens": 1500,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 1,
+          "result_count": 1
+        },
+        {
+          "query": "Loading implementation and data model",
+          "srcmap_tokens": 53,
+          "naive_tokens": 1500,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 1,
+          "result_count": 1
+        },
+        {
+          "query": "How does the detachedClone work?",
+          "srcmap_tokens": 179,
+          "naive_tokens": 6000,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 1,
+          "result_count": 1
+        },
+        {
+          "query": "detachedClone implementation and data model",
+          "srcmap_tokens": 179,
+          "naive_tokens": 6000,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 1,
+          "result_count": 1
+        },
+        {
+          "query": "How does the getDomChildren work?",
+          "srcmap_tokens": 92,
+          "naive_tokens": 3000,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 1,
+          "result_count": 1
+        },
+        {
+          "query": "getDomChildren implementation and data model",
+          "srcmap_tokens": 92,
+          "naive_tokens": 3000,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 1,
+          "result_count": 1
+        },
+        {
+          "query": "How does the jsx.d work?",
+          "srcmap_tokens": 942,
+          "naive_tokens": 26000,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 0.2,
+          "result_count": 5
+        },
+        {
+          "query": "jsx.d implementation and data model",
+          "srcmap_tokens": 942,
+          "naive_tokens": 26000,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 0.2,
+          "result_count": 5
+        },
+        {
+          "query": "How does the removeNode work?",
+          "srcmap_tokens": 401,
+          "naive_tokens": 5500,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 1,
+          "result_count": 1
+        },
+        {
+          "query": "removeNode implementation and data model",
+          "srcmap_tokens": 401,
+          "naive_tokens": 5500,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 1,
+          "result_count": 1
+        },
+        {
+          "query": "How does the useRouter work?",
+          "srcmap_tokens": 100,
+          "naive_tokens": 1000,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 1,
+          "result_count": 1
+        },
+        {
+          "query": "useRouter implementation and data model",
+          "srcmap_tokens": 100,
+          "naive_tokens": 1000,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 1,
+          "result_count": 1
+        }
+      ]
+    },
+    {
+      "name": "clover_sandbox_simulator",
+      "repo": "dan1d/clover_sandbox_simulator",
+      "language": "Ruby",
+      "framework": "Rails",
+      "live": true,
+      "llmEnhanced": false,
+      "cardCount": 5,
+      "dbPath": "benchmarks/dan1d-clover_sandbox_simulator.db",
+      "stats": {
+        "queries_tested": 10,
+        "avg_tokens_with_srcmap": 591,
+        "avg_tokens_without": 2500,
+        "token_reduction_pct": 76.4,
+        "avg_latency_ms": 0,
+        "p50_latency_ms": 0,
+        "p95_latency_ms": 0,
+        "p99_latency_ms": 0,
+        "cache_hit_rate": 0,
+        "flow_hit_rate": 1,
+        "file_hit_rate": 1,
+        "precision_at_5": 0.246
+      },
+      "cases": [
+        {
+          "query": "How does the BusinessType work?",
+          "srcmap_tokens": 675,
+          "naive_tokens": 2500,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 0.2,
+          "result_count": 5
+        },
+        {
+          "query": "BusinessType implementation and data model",
+          "srcmap_tokens": 675,
+          "naive_tokens": 2500,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 0.2,
+          "result_count": 5
+        },
+        {
+          "query": "How does the Category work?",
+          "srcmap_tokens": 556,
+          "naive_tokens": 2500,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 0.25,
+          "result_count": 4
+        },
+        {
+          "query": "Category implementation and data model",
+          "srcmap_tokens": 556,
+          "naive_tokens": 2500,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 0.25,
+          "result_count": 4
+        },
+        {
+          "query": "How does the SimulatedOrder work?",
+          "srcmap_tokens": 491,
+          "naive_tokens": 2500,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 0.33,
+          "result_count": 3
+        },
+        {
+          "query": "SimulatedOrder implementation and data model",
+          "srcmap_tokens": 491,
+          "naive_tokens": 2500,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 0.33,
+          "result_count": 3
+        },
+        {
+          "query": "How does the business_type work?",
+          "srcmap_tokens": 675,
+          "naive_tokens": 2500,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 0.2,
+          "result_count": 5
+        },
+        {
+          "query": "business_type implementation and data model",
+          "srcmap_tokens": 675,
+          "naive_tokens": 2500,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 0.2,
+          "result_count": 5
+        },
+        {
+          "query": "How does the category work?",
+          "srcmap_tokens": 556,
+          "naive_tokens": 2500,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 0.25,
+          "result_count": 4
+        },
+        {
+          "query": "category implementation and data model",
+          "srcmap_tokens": 556,
+          "naive_tokens": 2500,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 0.25,
+          "result_count": 4
+        }
+      ]
+    },
+    {
+      "name": "koa",
+      "repo": "koajs/koa",
+      "language": "JavaScript",
+      "framework": "Node.js",
+      "live": true,
+      "llmEnhanced": false,
+      "cardCount": 2,
+      "dbPath": "benchmarks/koajs-koa.db",
+      "stats": {
+        "queries_tested": 4,
+        "avg_tokens_with_srcmap": 131,
+        "avg_tokens_without": 1750,
+        "token_reduction_pct": 92.5,
+        "avg_latency_ms": 0,
+        "p50_latency_ms": 0,
+        "p95_latency_ms": 0,
+        "p99_latency_ms": 0,
+        "cache_hit_rate": 0,
+        "flow_hit_rate": 1,
+        "file_hit_rate": 1,
+        "precision_at_5": 1
+      },
+      "cases": [
+        {
+          "query": "How does the respond work?",
+          "srcmap_tokens": 140,
+          "naive_tokens": 2000,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 1,
+          "result_count": 1
+        },
+        {
+          "query": "respond implementation and data model",
+          "srcmap_tokens": 140,
+          "naive_tokens": 2000,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 1,
+          "result_count": 1
+        },
+        {
+          "query": "How does the splitCommaSeparatedValues work?",
+          "srcmap_tokens": 121,
+          "naive_tokens": 1500,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 1,
+          "result_count": 1
+        },
+        {
+          "query": "splitCommaSeparatedValues implementation and data model",
+          "srcmap_tokens": 121,
+          "naive_tokens": 1500,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 1,
+          "result_count": 1
+        }
+      ]
+    },
+    {
+      "name": "sinatra",
+      "repo": "sinatra/sinatra",
+      "language": "Ruby",
+      "framework": "Sinatra",
+      "live": true,
+      "llmEnhanced": false,
+      "cardCount": 4,
+      "dbPath": "benchmarks/sinatra-sinatra.db",
+      "stats": {
+        "queries_tested": 8,
+        "avg_tokens_with_srcmap": 287,
+        "avg_tokens_without": 11500,
+        "token_reduction_pct": 97.5,
+        "avg_latency_ms": 0,
+        "p50_latency_ms": 0,
+        "p95_latency_ms": 1,
+        "p99_latency_ms": 1,
+        "cache_hit_rate": 0,
+        "flow_hit_rate": 1,
+        "file_hit_rate": 1,
+        "precision_at_5": 0.813
+      },
+      "cases": [
+        {
+          "query": "How does the accept work?",
+          "srcmap_tokens": 228,
+          "naive_tokens": 9000,
+          "latency_ms": 1,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 1,
+          "result_count": 1
+        },
+        {
+          "query": "accept implementation and data model",
+          "srcmap_tokens": 228,
+          "naive_tokens": 9000,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 1,
+          "result_count": 1
+        },
+        {
+          "query": "How does the call work?",
+          "srcmap_tokens": 245,
+          "naive_tokens": 11000,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 1,
+          "result_count": 1
+        },
+        {
+          "query": "call implementation and data model",
+          "srcmap_tokens": 245,
+          "naive_tokens": 11000,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 1,
+          "result_count": 1
+        },
+        {
+          "query": "How does the contrib work?",
+          "srcmap_tokens": 54,
+          "naive_tokens": 2000,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 1,
+          "result_count": 1
+        },
+        {
+          "query": "contrib implementation and data model",
+          "srcmap_tokens": 54,
+          "naive_tokens": 2000,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 1,
+          "result_count": 1
+        },
+        {
+          "query": "How does the haml_helpers work?",
+          "srcmap_tokens": 619,
+          "naive_tokens": 24000,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 0.25,
+          "result_count": 4
+        },
+        {
+          "query": "haml_helpers implementation and data model",
+          "srcmap_tokens": 619,
+          "naive_tokens": 24000,
+          "latency_ms": 0,
+          "cache_hit": false,
+          "flow_hit_rate": 1,
+          "file_hit_rate": 1,
+          "precision_at_k": 0.25,
+          "result_count": 4
+        }
+      ]
+    }
+  ],
+  "aggregate": {
+    "total_projects": 7,
+    "total_queries": 56,
+    "avg_token_reduction_pct": 92.4,
+    "avg_latency_ms": 0,
+    "avg_flow_hit_rate": 1,
+    "avg_cache_hit_rate": 0
+  }
+}

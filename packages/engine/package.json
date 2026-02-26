@@ -3,8 +3,20 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "srcmap core engine: code indexer, knowledge graph, MCP server, and search",
+  "description": "srcmap core engine: code indexer, knowledge graph, MCP server, and hybrid search",
   "license": "AGPL-3.0",
+  "keywords": [
+    "mcp",
+    "code-context",
+    "knowledge-graph",
+    "ai-coding",
+    "tree-sitter",
+    "embeddings",
+    "sqlite",
+    "vector-search",
+    "rag",
+    "codebase-search"
+  ],
   "main": "./dist/index.js",
   "bin": {
     "srcmap": "./dist/cli/srcmap.js"

@@ -254,8 +254,32 @@ export const api = {
       method: "DELETE",
     }),
 
+  benchmarks: () =>
+    fetchJSON<BenchmarkResponse>("/api/benchmarks"),
+
+  submitBenchmark: (req: BenchmarkSubmitRequest) =>
+    fetchJSON<BenchmarkSubmitResponse>("/api/benchmarks/submit", {
+      method: "POST",
+      body: JSON.stringify(req),
+    }),
+
+  benchmarkQueue: () =>
+    fetchJSON<BenchmarkQueueResponse>("/api/benchmarks/queue"),
+
+  benchmarkDetail: (slug: string) =>
+    fetchJSON<BenchmarkProject>(`/api/benchmarks/${encodeURIComponent(slug)}`),
+
+  sandboxQuery: (query: string, repo: string) =>
+    fetchJSON<SandboxResponse>("/api/benchmarks/sandbox", {
+      method: "POST",
+      body: JSON.stringify({ query, repo }),
+    }),
+
   publicStats: () =>
     fetchJSON<PublicStats>("/api/public-stats"),
+
+  foundingStatus: () =>
+    fetchJSON<FoundingStatus>("/api/founding-status"),
 
   createTenant: (name: string, email?: string) =>
     fetchJSON<TenantInfo>("/api/tenants", {
@@ -325,4 +349,112 @@ export interface InviteResponse {
   invited: number;
   skipped: number;
   details: Array<{ email: string; alreadyMember: boolean }>;
+}
+
+export interface BenchmarkCase {
+  query: string;
+  ticket?: string | null;
+  srcmap_tokens: number;
+  naive_tokens: number;
+  latency_ms: number;
+  cache_hit: boolean;
+  flow_hit_rate: number;
+  file_hit_rate: number;
+  precision_at_k: number;
+  result_count: number;
+  quality_score?: number;
+}
+
+export interface BenchmarkProject {
+  name: string;
+  repo: string;
+  language: string;
+  framework: string;
+  stats: {
+    queries_tested: number;
+    avg_tokens_with_srcmap: number;
+    avg_tokens_without: number;
+    token_reduction_pct: number;
+    avg_latency_ms: number;
+    p50_latency_ms: number;
+    p95_latency_ms: number;
+    p99_latency_ms: number;
+    cache_hit_rate: number;
+    flow_hit_rate: number;
+    file_hit_rate: number;
+    precision_at_5: number;
+  };
+  live?: boolean;
+  llmEnhanced?: boolean;
+  cardCount?: number;
+  cases: BenchmarkCase[];
+}
+
+export interface BenchmarkData {
+  generated_at: string;
+  projects: BenchmarkProject[];
+  aggregate: {
+    total_projects: number;
+    total_queries: number;
+    avg_token_reduction_pct: number;
+    avg_latency_ms: number;
+    avg_flow_hit_rate: number;
+    avg_cache_hit_rate: number;
+  };
+}
+
+export interface BenchmarkResponse {
+  benchmarks: BenchmarkData | null;
+}
+
+export interface FoundingStatus {
+  founding: boolean;
+  remaining: number;
+  total: number;
+  limit: number;
+}
+
+export type BenchmarkProvider = "gemini" | "openai" | "deepseek" | "anthropic";
+
+export interface BenchmarkSubmitRequest {
+  url: string;
+  provider?: BenchmarkProvider;
+  apiKey?: string;
+}
+
+export interface BenchmarkSubmitResponse {
+  queued: boolean;
+  position?: number;
+  requiresKey?: boolean;
+  fileEstimate?: number;
+  error?: string;
+}
+
+export type BenchmarkStage = "queued" | "cloning" | "analyzing" | "indexing" | "benchmarking" | "saving";
+
+export interface BenchmarkQueueResponse {
+  queue: Array<{ repo: string; status: "pending" | "running" | "done" | "error"; stage: BenchmarkStage; position: number; error?: string }>;
+  slotsUsed: number;
+  slotsTotal: number;
+}
+
+export interface SandboxCard {
+  id: string;
+  title: string;
+  flow: string;
+  cardType: string;
+  content: string;
+  sourceFiles: string[];
+}
+
+export interface SandboxResponse {
+  query: string;
+  cards: SandboxCard[];
+  formattedContext: string;
+  latencyMs: number;
+  cacheHit: boolean;
+  srcmapTokens: number;
+  naiveFiles: number;
+  naiveTokens: number;
+  tokenReduction: number;
 }

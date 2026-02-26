@@ -9,7 +9,7 @@ const _servicesDir = dirname(fileURLToPath(import.meta.url));
  * Centralized here so path depth is defined in one place.
  */
 export function getWorkspaceRoot(): string {
-  return process.env["SRCMAP_WORKSPACE_ROOT"] ?? resolve(_servicesDir, "../../../..");
+  return process.env["CODEPRISM_WORKSPACE_ROOT"] ?? resolve(_servicesDir, "../../../..");
 }
 
 /** Safely parse a JSON string expected to be a string array. Returns [] on failure. */

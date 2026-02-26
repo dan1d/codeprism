@@ -1,8 +1,8 @@
-{$SRCMAP_DOMAIN:localhost} {
+{$CODEPRISM_DOMAIN:localhost} {
     reverse_proxy srcmap:4000
 }
 
-*.{$SRCMAP_DOMAIN:localhost} {
+*.{$CODEPRISM_DOMAIN:localhost} {
     tls {
         dns cloudflare {env.CF_API_TOKEN}
     }

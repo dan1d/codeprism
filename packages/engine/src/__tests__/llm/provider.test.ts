@@ -59,9 +59,9 @@ const {
 describe("createLLMProvider", () => {
   beforeEach(() => {
     // Clean env vars between tests
-    delete process.env["SRCMAP_LLM_PROVIDER"];
-    delete process.env["SRCMAP_LLM_API_KEY"];
-    delete process.env["SRCMAP_LLM_MODEL"];
+    delete process.env["CODEPRISM_LLM_PROVIDER"];
+    delete process.env["CODEPRISM_LLM_API_KEY"];
+    delete process.env["CODEPRISM_LLM_MODEL"];
   });
 
   it("returns null when provider is 'none'", () => {
@@ -102,23 +102,23 @@ describe("createLLMProvider", () => {
   });
 
   it("reads config from environment variables when no config passed", () => {
-    process.env["SRCMAP_LLM_PROVIDER"] = "deepseek";
-    process.env["SRCMAP_LLM_API_KEY"] = "env-key";
+    process.env["CODEPRISM_LLM_PROVIDER"] = "deepseek";
+    process.env["CODEPRISM_LLM_API_KEY"] = "env-key";
 
     const provider = createLLMProvider();
     expect(provider).toBeInstanceOf(DeepSeekProvider);
   });
 
   it("returns null when env provider is 'none'", () => {
-    process.env["SRCMAP_LLM_PROVIDER"] = "none";
+    process.env["CODEPRISM_LLM_PROVIDER"] = "none";
 
     const provider = createLLMProvider();
     expect(provider).toBeNull();
   });
 
   it("returns null when env has no api key", () => {
-    process.env["SRCMAP_LLM_PROVIDER"] = "gemini";
-    // SRCMAP_LLM_API_KEY not set
+    process.env["CODEPRISM_LLM_PROVIDER"] = "gemini";
+    // CODEPRISM_LLM_API_KEY not set
 
     const provider = createLLMProvider();
     expect(provider).toBeNull();

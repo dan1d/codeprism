@@ -22,7 +22,7 @@
  *   - git worktrees (.git as a file) are not yet supported for git-event detection
  *     (source file watching still works).
  *
- * Multi-tenant: disabled automatically when SRCMAP_MULTI_TENANT=true because
+ * Multi-tenant: disabled automatically when CODEPRISM_MULTI_TENANT=true because
  *   watcher callbacks run outside the Fastify request context (no tenant DB scope).
  */
 
@@ -394,7 +394,7 @@ const activeWatchers = new Map<string, RepoWatcher>();
  */
 export function startWatcher(repos: Array<{ name: string; path: string }>): () => void {
   // C3 fix: disable in multi-tenant mode (watcher has no tenant DB context)
-  if (process.env["SRCMAP_MULTI_TENANT"] === "true") {
+  if (process.env["CODEPRISM_MULTI_TENANT"] === "true") {
     console.warn("[watcher] Multi-tenant mode active — automatic file watching disabled. Watchers would write to the wrong tenant DB.");
     return () => {};
   }

@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Copy, Check, ArrowRight, ArrowLeft, Users, Sparkles, SkipForward } from "lucide-react";
-import { api, type TenantInfo } from "@/lib/api";
+import { api, type TenantInfo, type FoundingStatus } from "@/lib/api";
 import { cn } from "@/lib/utils";
+
+const SUPPORT_EMAIL = "danielfromarg@gmail.com";
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -51,6 +53,11 @@ export function Onboard() {
   const [inviteEmails, setInviteEmails] = useState("");
   const [inviting, setInviting] = useState(false);
   const [inviteResult, setInviteResult] = useState<{ invited: number; skipped: number } | null>(null);
+  const [founding, setFounding] = useState<FoundingStatus | null>(null);
+
+  useEffect(() => {
+    api.foundingStatus().then(setFounding).catch(() => {});
+  }, []);
 
   const handleCreateWorkspace = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,7 +101,7 @@ export function Onboard() {
     ? JSON.stringify(
         {
           mcpServers: {
-            srcmap: {
+            codeprism: {
               url: result.mcpUrl,
               headers: {
                 Authorization: `Bearer ${result.apiKey}`,
@@ -119,9 +126,19 @@ export function Onboard() {
             <h1 className="mb-2 text-2xl font-bold text-[#e1e4e8]">
               Create your workspace
             </h1>
-            <p className="mb-8 text-sm text-[#8b949e]">
-              Set up srcmap for your team. Takes less than a minute.
+            <p className="mb-4 text-sm text-[#8b949e]">
+              Set up codeprism for your team. Takes less than a minute.
             </p>
+            {founding?.founding && (
+              <div className="mb-6 rounded-lg border border-[#3fb950]/30 bg-[#3fb950]/5 px-4 py-3">
+                <p className="text-sm text-[#3fb950] font-medium">
+                  Founding team offer — free with unlimited developers
+                </p>
+                <p className="text-xs text-[#8b949e] mt-1">
+                  {founding.remaining} of {founding.limit} free spots remaining. No credit card needed.
+                </p>
+              </div>
+            )}
 
             <form onSubmit={handleCreateWorkspace} className="space-y-4">
               <div>
@@ -181,6 +198,9 @@ export function Onboard() {
           <>
             <div className="rounded-lg border border-[#3fb950]/30 bg-[#3fb950]/5 p-4 mb-6">
               <p className="text-sm font-medium text-[#3fb950]">Workspace created successfully</p>
+              {founding?.founding && (
+                <p className="text-xs text-[#8b949e] mt-1">You're a founding team — unlimited developers, free forever.</p>
+              )}
             </div>
 
             <h2 className="mb-4 text-lg font-semibold text-[#e1e4e8]">Your API Key</h2>
@@ -312,6 +332,10 @@ export function Onboard() {
                 <ArrowLeft className="h-4 w-4" /> Back to API key
               </button>
             </div>
+
+            <p className="mt-6 text-center text-xs text-[#484f58]">
+              Need help? <a href={`mailto:${SUPPORT_EMAIL}`} className="text-accent hover:underline">{SUPPORT_EMAIL}</a>
+            </p>
           </>
         )}
       </div>

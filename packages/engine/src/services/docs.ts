@@ -26,7 +26,7 @@ export async function refreshDocs(targetRepo?: string): Promise<{ refreshed: num
   const db = getDb();
 
   const llm = getLLMFromDb();
-  if (!llm) throw new Error("LLM not configured. Set SRCMAP_LLM_PROVIDER and SRCMAP_LLM_API_KEY to enable refresh.");
+  if (!llm) throw new Error("LLM not configured. Set CODEPRISM_LLM_PROVIDER and CODEPRISM_LLM_API_KEY to enable refresh.");
 
   const staleQuery = targetRepo
     ? "SELECT * FROM project_docs WHERE stale = 1 AND repo = ? ORDER BY repo, doc_type"

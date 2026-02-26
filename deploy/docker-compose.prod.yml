@@ -1,5 +1,5 @@
 services:
-  srcmap:
+  codeprism:
     build:
       context: ..
       dockerfile: Dockerfile
@@ -7,18 +7,18 @@ services:
     ports:
       - "127.0.0.1:4000:4000"
     volumes:
-      - srcmap-data:/data
+      - codeprism-data:/data
     environment:
-      - SRCMAP_PORT=4000
-      - SRCMAP_DB_PATH=/data/srcmap.db
-      - SRCMAP_DATA_DIR=/data
-      - SRCMAP_MULTI_TENANT=${SRCMAP_MULTI_TENANT:-false}
+      - CODEPRISM_PORT=4000
+      - CODEPRISM_DB_PATH=/data/codeprism.db
+      - CODEPRISM_DATA_DIR=/data
+      - CODEPRISM_MULTI_TENANT=${CODEPRISM_MULTI_TENANT:-false}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
-      - SRCMAP_COMPANY_NAME=${SRCMAP_COMPANY_NAME:-}
-      - SRCMAP_TELEMETRY=${SRCMAP_TELEMETRY:-false}
-      - SRCMAP_TELEMETRY_URL=${SRCMAP_TELEMETRY_URL:-}
-      - SRCMAP_ADMIN_KEY=${SRCMAP_ADMIN_KEY:-}
-      - SRCMAP_DOMAIN=${SRCMAP_DOMAIN:-localhost}
+      - CODEPRISM_COMPANY_NAME=${CODEPRISM_COMPANY_NAME:-}
+      - CODEPRISM_TELEMETRY=${CODEPRISM_TELEMETRY:-false}
+      - CODEPRISM_TELEMETRY_URL=${CODEPRISM_TELEMETRY_URL:-}
+      - CODEPRISM_ADMIN_KEY=${CODEPRISM_ADMIN_KEY:-}
+      - CODEPRISM_DOMAIN=${CODEPRISM_DOMAIN:-localhost}
 
   caddy:
     build:
@@ -35,6 +35,6 @@ services:
       - caddy-config:/config
 
 volumes:
-  srcmap-data:
+  codeprism-data:
   caddy-data:
   caddy-config:

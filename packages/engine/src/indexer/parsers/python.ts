@@ -4,6 +4,7 @@ import type {
   ClassInfo,
   FunctionInfo,
   ImportInfo,
+  RouteInfo,
 } from "../types.js";
 
 /* ------------------------------------------------------------------ */
@@ -161,11 +162,22 @@ function parse(
     }
   }
 
+  /* --- Routes: @app.route('/path') / @app.get('/path') --------------- */
+  const routes: RouteInfo[] = [];
+  const ROUTE_DECORATOR_RE = /^\s*@\w+\.(route|get|post|put|patch|delete|head|options)\(\s*['"]([^'"]+)['"]/gm;
+  ROUTE_DECORATOR_RE.lastIndex = 0;
+
+  while ((match = ROUTE_DECORATOR_RE.exec(content)) !== null) {
+    const method = match[1] === "route" ? "GET" : match[1].toUpperCase();
+    routes.push({ method, path: match[2] });
+  }
+
   return {
     language: "python",
     classes,
     functions,
     imports,
+    routes,
   };
 }
 

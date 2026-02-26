@@ -33,7 +33,7 @@ export function Login() {
           <div className="w-10 h-10 rounded-lg bg-accent flex items-center justify-center mx-auto mb-4">
             <Mail size={20} className="text-black" />
           </div>
-          <h1 className="text-xl font-bold text-[#e1e4e8]">Sign in to srcmap</h1>
+          <h1 className="text-xl font-bold text-[#e1e4e8]">Sign in to codeprism</h1>
           <p className="text-sm text-[#8b949e] mt-1">We'll send you a magic link to sign in.</p>
         </div>
 

@@ -47,11 +47,11 @@ Your patterns are additive on top of these defaults.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `SRCMAP_PORT` | `4000` | HTTP port for the Fastify server |
-| `SRCMAP_HOST` | `0.0.0.0` | Bind address |
-| `SRCMAP_DB_PATH` | `./srcmap.db` | Path to the SQLite database file |
-| `SRCMAP_COMPANY_NAME` | `""` | Company name (shown in dashboard, seeded on first boot) |
-| `SRCMAP_PLAN` | `self_hosted` | Instance plan identifier |
+| `CODEPRISM_PORT` | `4000` | HTTP port for the Fastify server |
+| `CODEPRISM_HOST` | `0.0.0.0` | Bind address |
+| `CODEPRISM_DB_PATH` | `./codeprism.db` | Path to the SQLite database file |
+| `CODEPRISM_COMPANY_NAME` | `""` | Company name (shown in dashboard, seeded on first boot) |
+| `CODEPRISM_PLAN` | `self_hosted` | Instance plan identifier |
 
 ### LLM providers
 
@@ -69,10 +69,10 @@ Without any key, all cards are structural-only (no LLM prose, but still useful).
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `SRCMAP_EMBEDDING_MODEL` | `nomic-ai/nomic-embed-text-v1.5` | HuggingFace model ID for embeddings |
-| `SRCMAP_EMBEDDING_DIM` | `768` | Embedding dimension (must match model) |
+| `CODEPRISM_EMBEDDING_MODEL` | `nomic-ai/nomic-embed-text-v1.5` | HuggingFace model ID for embeddings |
+| `CODEPRISM_EMBEDDING_DIM` | `768` | Embedding dimension (must match model) |
 
-To use the smaller model: `SRCMAP_EMBEDDING_MODEL=Xenova/all-MiniLM-L6-v2` and `SRCMAP_EMBEDDING_DIM=384`.
+To use the smaller model: `CODEPRISM_EMBEDDING_MODEL=Xenova/all-MiniLM-L6-v2` and `CODEPRISM_EMBEDDING_DIM=384`.
 
 ## CLI options
 

@@ -120,7 +120,7 @@ Before running the full pipeline, srcmap checks the `metrics` table for a recent
 
 ## Database schema
 
-All data lives in a single SQLite file (`srcmap.db`):
+All data lives in a single SQLite file (`codeprism.db`):
 
 | Table | Purpose |
 |-------|---------|
@@ -150,7 +150,7 @@ Uses Matryoshka Representation Learning with task-type prefixes:
 
 The model (~300 MB) is downloaded to `~/.cache/srcmap/models/` on first use.
 
-Fallback: set `SRCMAP_EMBEDDING_MODEL=Xenova/all-MiniLM-L6-v2` and `SRCMAP_EMBEDDING_DIM=384` for a smaller model.
+Fallback: set `CODEPRISM_EMBEDDING_MODEL=Xenova/all-MiniLM-L6-v2` and `CODEPRISM_EMBEDDING_DIM=384` for a smaller model.
 
 ## Cross-encoder reranker
 

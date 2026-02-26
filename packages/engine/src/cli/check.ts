@@ -128,7 +128,7 @@ async function checkWithLLM(
   diff: string,
   llm: ReturnType<typeof createLLMProvider>,
 ): Promise<RuleViolation[]> {
-  if (!llm) throw new Error("No LLM configured. Set SRCMAP_LLM_PROVIDER + SRCMAP_LLM_API_KEY.");
+  if (!llm) throw new Error("No LLM configured. Set CODEPRISM_LLM_PROVIDER + CODEPRISM_LLM_API_KEY.");
   if (!diff.trim()) return [];
 
   const ruleList = rules

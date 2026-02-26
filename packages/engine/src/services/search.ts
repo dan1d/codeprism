@@ -59,6 +59,60 @@ export function truncateContent(content: string, maxLines: number): string {
   return lines.slice(0, maxLines).join("\n") + "\n\n_(truncated)_";
 }
 
+/**
+ * Query-aware content trimming: keep the card header/summary and only the
+ * markdown sections whose headers or content match query terms.
+ * Falls back to full content if no sections are detected or all sections match.
+ */
+export function trimContentByQuery(content: string, query: string): string {
+  const queryTerms = query
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, "")
+    .split(/\s+/)
+    .filter((t) => t.length > 2);
+
+  if (queryTerms.length === 0) return content;
+
+  const lines = content.split("\n");
+  const sections: Array<{ headerIdx: number; endIdx: number; text: string }> = [];
+  let currentStart = -1;
+
+  for (let i = 0; i < lines.length; i++) {
+    if (/^#{2,4}\s/.test(lines[i])) {
+      if (currentStart >= 0) {
+        sections.push({
+          headerIdx: currentStart,
+          endIdx: i,
+          text: lines.slice(currentStart, i).join("\n"),
+        });
+      }
+      currentStart = i;
+    }
+  }
+  if (currentStart >= 0) {
+    sections.push({
+      headerIdx: currentStart,
+      endIdx: lines.length,
+      text: lines.slice(currentStart).join("\n"),
+    });
+  }
+
+  if (sections.length <= 1) return content;
+
+  // Keep header (everything before first section) + matching sections
+  const header = lines.slice(0, sections[0].headerIdx).join("\n").trim();
+  const matching = sections.filter((s) => {
+    const lower = s.text.toLowerCase();
+    return queryTerms.some((t) => lower.includes(t));
+  });
+
+  if (matching.length === 0 || matching.length === sections.length) return content;
+
+  const trimmedSections = matching.map((s) => s.text).join("\n\n");
+  const omitted = sections.length - matching.length;
+  return `${header}\n\n${trimmedSections}\n\n_(${omitted} section${omitted > 1 ? "s" : ""} omitted — not matching query)_`;
+}
+
 export function shortenPath(p: string): string {
   const parts = p.split("/");
   const repoIdx = parts.findIndex((_seg, i) =>
@@ -68,13 +122,14 @@ export function shortenPath(p: string): string {
   return parts.length > 3 ? parts.slice(-3).join("/") : p;
 }
 
-export function formatCards(cards: CardSummary[], totalLinesBudget = MAX_TOTAL_LINES): string {
+export function formatCards(cards: CardSummary[], totalLinesBudget = MAX_TOTAL_LINES, query?: string): string {
   const parts: string[] = [];
   let linesUsed = 0;
 
   for (let i = 0; i < cards.length; i++) {
     const r = cards[i]!;
-    const trimmed = truncateContent(r.content, MAX_CARD_LINES);
+    const relevantContent = query ? trimContentByQuery(r.content, query) : r.content;
+    const trimmed = truncateContent(relevantContent, MAX_CARD_LINES);
 
     const files = safeParseJsonArray(r.source_files);
     const fileList = files.slice(0, 5).map((f) => shortenPath(f)).join(", ");
@@ -198,24 +253,29 @@ export function expandWithGraphNeighbours(results: SearchResult[]): SearchResult
   const fileListJson = JSON.stringify([...sourceFiles]);
   const existingIdsJson = JSON.stringify(results.map((r) => r.card.id));
 
-  const neighbours = db
-    .prepare(
-      `SELECT DISTINCT c.* FROM cards c
-       WHERE c.stale = 0
-         AND EXISTS (
-           SELECT 1 FROM json_each(c.source_files) sf
-           WHERE sf.value IN (
-             SELECT ge.target_file FROM graph_edges ge
-               WHERE ge.source_file IN (SELECT j.value FROM json_each(?))
-             UNION
-             SELECT ge.source_file FROM graph_edges ge
-               WHERE ge.target_file IN (SELECT j.value FROM json_each(?))
+  let neighbours: Card[] = [];
+  try {
+    neighbours = db
+      .prepare(
+        `SELECT DISTINCT c.* FROM cards c
+         WHERE c.stale = 0
+           AND EXISTS (
+             SELECT 1 FROM json_each(c.source_files) sf
+             WHERE sf.value IN (
+               SELECT ge.target_file FROM graph_edges ge
+                 WHERE ge.source_file IN (SELECT j1.value FROM json_each(?) j1)
+               UNION
+               SELECT ge.source_file FROM graph_edges ge
+                 WHERE ge.target_file IN (SELECT j2.value FROM json_each(?) j2)
+             )
            )
-         )
-         AND c.id NOT IN (SELECT j.value FROM json_each(?))
-       LIMIT 5`,
-    )
-    .all(fileListJson, fileListJson, existingIdsJson) as Card[];
+           AND c.id NOT IN (SELECT j3.value FROM json_each(?) j3)
+         LIMIT 5`,
+      )
+      .all(fileListJson, fileListJson, existingIdsJson) as Card[];
+  } catch {
+    // graph expansion is non-critical; degrade gracefully
+  }
 
   return [
     ...results,

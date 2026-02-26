@@ -104,28 +104,39 @@ describe("classifyFileRole — config detection", () => {
 });
 
 describe("classifyFileRole — entry_point detection", () => {
-  it("classifies src/index.ts as entry_point", () => {
-    expect(classifyFileRole("src/index.ts", emptyJs)).toBe("entry_point");
+  it("classifies top-level index.ts as entry_point", () => {
+    expect(classifyFileRole("index.ts", emptyJs)).toBe("entry_point");
   });
 
   it("classifies app/root.rb as entry_point", () => {
     expect(classifyFileRole("app/root.rb", empty)).toBe("entry_point");
   });
 
-  it("classifies app.js as entry_point", () => {
-    expect(classifyFileRole("src/app.js", emptyJs)).toBe("entry_point");
+  it("classifies top-level app.js as entry_point", () => {
+    expect(classifyFileRole("app.js", emptyJs)).toBe("entry_point");
   });
 
-  it("classifies main.ts as entry_point", () => {
-    expect(classifyFileRole("src/main.ts", emptyJs)).toBe("entry_point");
+  it("classifies bin/main.ts as entry_point", () => {
+    expect(classifyFileRole("bin/main.ts", emptyJs)).toBe("entry_point");
   });
 
-  it("classifies server.ts as entry_point", () => {
-    expect(classifyFileRole("src/server.ts", emptyJs)).toBe("entry_point");
+  it("classifies cmd/server.ts as entry_point", () => {
+    expect(classifyFileRole("cmd/server.ts", emptyJs)).toBe("entry_point");
   });
 
-  it("classifies router.js as entry_point", () => {
-    expect(classifyFileRole("src/router.js", emptyJs)).toBe("entry_point");
+  it("classifies scripts/router.js as entry_point", () => {
+    expect(classifyFileRole("scripts/router.js", emptyJs)).toBe("entry_point");
+  });
+
+  it("files under src/ are domain (not entry_point) even with entry-point basenames", () => {
+    expect(classifyFileRole("src/index.ts", emptyJs)).toBe("domain");
+    expect(classifyFileRole("src/app.js", emptyJs)).toBe("domain");
+    expect(classifyFileRole("src/main.ts", emptyJs)).toBe("domain");
+  });
+
+  it("files under lib/ are domain (not entry_point) even with entry-point basenames", () => {
+    expect(classifyFileRole("lib/application.js", emptyJs)).toBe("domain");
+    expect(classifyFileRole("lib/router.js", emptyJs)).toBe("domain");
   });
 });
 

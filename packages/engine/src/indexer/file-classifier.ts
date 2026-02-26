@@ -191,8 +191,12 @@ export function classifyFileRole(
     }
   }
 
-  // Entry-point basename
-  if (ENTRY_POINT_BASENAMES.has(baseNoExt)) return "entry_point";
+  // Entry-point basename — but NOT for files inside lib/ or src/ directories,
+  // which conventionally contain library/domain source code, not structural wiring.
+  if (ENTRY_POINT_BASENAMES.has(baseNoExt)) {
+    const inLibOrSrc = segments.some((s) => s === "lib" || s === "src");
+    if (!inLibOrSrc) return "entry_point";
+  }
 
   return "domain";
 }

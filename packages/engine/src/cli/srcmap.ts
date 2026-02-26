@@ -198,7 +198,7 @@ program
     "Demo branches are silently skipped. Always exits 0 — never blocks git."
   )
   .option("--repo <name>", "repository name override (default: inferred from git remote)")
-  .option("--port <n>", "srcmap server port (default: SRCMAP_PORT env or 4000)", parseInt)
+  .option("--port <n>", "srcmap server port (default: CODEPRISM_PORT env or 4000)", parseInt)
   .option(
     "--event-type <type>",
     "event type: save | merge | pull | rebase | checkout (default: auto-detected from branch)"

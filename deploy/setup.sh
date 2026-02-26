@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# srcmap.ai VPS Setup Script
+# codeprism.dev VPS Setup Script
 # Tested on: Ubuntu 24.04 (Hetzner CX23)
 #
-# Set SRCMAP_REPO_URL before running:
-#   export SRCMAP_REPO_URL=https://github.com/YOUR_ORG/srcmap.git
+# Set CODEPRISM_REPO_URL before running:
+#   export CODEPRISM_REPO_URL=https://github.com/YOUR_ORG/codeprism.git
 #   curl -sSL https://raw.githubusercontent.com/.../setup.sh | bash
 
-SRCMAP_REPO_URL="${SRCMAP_REPO_URL:?Error: set SRCMAP_REPO_URL to your srcmap git repository URL}"
+CODEPRISM_REPO_URL="${CODEPRISM_REPO_URL:?Error: set CODEPRISM_REPO_URL to your codeprism git repository URL}"
 
-echo "=== srcmap.ai VPS setup ==="
+echo "=== codeprism.dev VPS setup ==="
 
 # 1. Install Docker (official method)
 if ! command -v docker &>/dev/null; then
@@ -38,28 +38,28 @@ ufw allow 443/udp   # HTTP/3 (QUIC)
 ufw --force enable
 
 # 4. Create app directory
-APP_DIR=/opt/srcmap
+APP_DIR=/opt/codeprism
 mkdir -p "$APP_DIR"
 
 # 5. Clone or update repo
 if [ -d "$APP_DIR/repo" ]; then
-  echo "Updating srcmap..."
+  echo "Updating codeprism..."
   cd "$APP_DIR/repo" && git pull
 else
-  echo "Cloning srcmap..."
-  git clone "$SRCMAP_REPO_URL" "$APP_DIR/repo"
+  echo "Cloning codeprism..."
+  git clone "$CODEPRISM_REPO_URL" "$APP_DIR/repo"
 fi
 
 # 6. Create .env if not exists
 ENV_FILE="$APP_DIR/repo/deploy/.env"
 if [ ! -f "$ENV_FILE" ]; then
   cat > "$ENV_FILE" <<'ENVEOF'
-# srcmap.ai configuration
-SRCMAP_DOMAIN=srcmap.ai
-SRCMAP_MULTI_TENANT=true
-SRCMAP_COMPANY_NAME=srcmap
+# codeprism.dev configuration
+CODEPRISM_DOMAIN=codeprism.dev
+CODEPRISM_MULTI_TENANT=true
+CODEPRISM_COMPANY_NAME=codeprism
 GOOGLE_API_KEY=
-# SRCMAP_TELEMETRY=true
+# CODEPRISM_TELEMETRY=true
 # CF_API_TOKEN=  # Only needed for wildcard SSL with Cloudflare DNS
 ENVEOF
   echo "Created $ENV_FILE -- edit it with your domain and API keys"
@@ -70,9 +70,9 @@ cd "$APP_DIR/repo/deploy"
 docker compose -f docker-compose.prod.yml --env-file .env up -d --build
 
 echo ""
-echo "=== srcmap.ai is running ==="
-echo "Dashboard: https://$(grep SRCMAP_DOMAIN .env | cut -d= -f2)"
-echo "MCP endpoint: https://$(grep SRCMAP_DOMAIN .env | cut -d= -f2)/mcp"
+echo "=== codeprism.dev is running ==="
+echo "Dashboard: https://$(grep CODEPRISM_DOMAIN .env | cut -d= -f2)"
+echo "MCP endpoint: https://$(grep CODEPRISM_DOMAIN .env | cut -d= -f2)/mcp"
 echo ""
 echo "Next steps:"
 echo "  1. Point your domain's A record to this server's IP"

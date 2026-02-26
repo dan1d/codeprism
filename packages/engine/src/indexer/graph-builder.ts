@@ -41,9 +41,9 @@ export function buildGraph(parsedFiles: ParsedFile[]): GraphEdge[] {
   // Pre-compute role multipliers per file
   const roleWeightMultiplier = (role: ParsedFile["fileRole"]): number => {
     switch (role) {
-      case "test":         return 0;   // no edges at all — test files have no domain meaning
-      case "config":       return 0;   // config files don't define domain relationships
-      case "entry_point":  return 0;   // entry points are structurally noisy, excluded from graph
+      case "test":         return 0;    // no edges at all — test files have no domain meaning
+      case "config":       return 0;    // config files don't define domain relationships
+      case "entry_point":  return 0.15; // present but heavily downweighted (may wire domain code)
       case "shared_utility": return 0.2; // present but strongly downweighted
       default:             return 1.0;
     }
@@ -64,6 +64,7 @@ export function buildGraph(parsedFiles: ParsedFile[]): GraphEdge[] {
     addModelAssociationEdgesWeighted(pf, classIndex, addEdge, mult);
     addRouteControllerEdges(pf, parsedFiles, addEdge);
     addControllerModelEdges(pf, classIndex, addEdge);
+    addInheritanceEdges(pf, classIndex, addEdge);
     // Entry points should NOT create cross-service or store edges (too noisy)
     if (pf.fileRole === "domain" || pf.fileRole === "shared_utility") {
       addCrossRepoApiEdges(pf, parsedFiles, addEdge);
@@ -340,6 +341,32 @@ function addImportEdges(
   }
 }
 
+/**
+ * Creates edges from class inheritance: class Foo(Bar) → file containing Bar.
+ * Works for Python, JS/TS, Go struct embedding (not yet), Ruby (via associations).
+ */
+function addInheritanceEdges(
+  pf: ParsedFile,
+  classIndex: Map<string, ParsedFile>,
+  addEdge: (e: GraphEdge) => void,
+): void {
+  for (const cls of pf.classes) {
+    if (!cls.parent) continue;
+    const parentFile = classIndex.get(cls.parent);
+    if (!parentFile || parentFile.path === pf.path) continue;
+    if (parentFile.repo !== pf.repo) continue;
+
+    addEdge({
+      sourceFile: pf.path,
+      targetFile: parentFile.path,
+      relation: "model_association",
+      metadata: { associationType: "inherits", child: cls.name, parent: cls.parent },
+      repo: pf.repo,
+      weight: EDGE_WEIGHTS["model_association"],
+    });
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Naming helpers
 // ---------------------------------------------------------------------------
@@ -395,34 +422,63 @@ function buildClassIndex(
   return index;
 }
 
-/** Resolves a relative import source (e.g. `../api/billing-orders`) to a ParsedFile. */
+/** Resolves an import source to a ParsedFile. Handles relative paths, Go module paths, and Python dotted imports. */
 function resolveImport(
   from: ParsedFile,
   source: string,
   parsedFiles: ParsedFile[],
 ): ParsedFile | undefined {
-  if (!source.startsWith(".")) return undefined;
+  // 1. Relative imports (JS/TS/Python): ./foo, ../bar
+  if (source.startsWith(".")) {
+    const dir = from.path.replace(/\/[^/]+$/, "");
+    const combined = `${dir}/${source}`;
 
-  const dir = from.path.replace(/\/[^/]+$/, "");
-  const combined = `${dir}/${source}`;
-
-  const segments = combined.split("/");
-  const resolved: string[] = [];
-  for (const seg of segments) {
-    if (seg === "..") {
-      resolved.pop();
-    } else if (seg !== ".") {
-      resolved.push(seg);
+    const segments = combined.split("/");
+    const resolved: string[] = [];
+    for (const seg of segments) {
+      if (seg === "..") {
+        resolved.pop();
+      } else if (seg !== ".") {
+        resolved.push(seg);
+      }
     }
+
+    const normalizedBase = stripExtension(resolved.join("/"));
+    return parsedFiles.find((pf) => stripExtension(pf.path) === normalizedBase);
   }
 
-  const normalizedBase = stripExtension(resolved.join("/"));
+  // 2. Go module-internal imports: match by package directory suffix
+  if (from.language === "go" && source.includes("/")) {
+    const pkgName = source.split("/").pop()!;
+    return parsedFiles.find((pf) => {
+      if (pf.repo !== from.repo || pf.path === from.path) return false;
+      const parts = pf.path.split("/");
+      const dir = parts[parts.length - 2];
+      return dir === pkgName;
+    });
+  }
 
-  return parsedFiles.find((pf) => {
-    return stripExtension(pf.path) === normalizedBase;
-  });
+  // 3. Python dotted imports: from app.models.user → app/models/user.py
+  if (from.language === "python" && source.includes(".")) {
+    const asPath = source.replace(/\./g, "/");
+    return parsedFiles.find((pf) => {
+      if (pf.repo !== from.repo || pf.path === from.path) return false;
+      return stripExtension(pf.path).endsWith(asPath) ||
+        stripExtension(pf.path).endsWith(`${asPath}/__init__`);
+    });
+  }
+
+  // 4. Ruby gem-style require: require 'sinatra/base' → lib/sinatra/base.rb
+  if (from.language === "ruby" && source.includes("/")) {
+    return parsedFiles.find((pf) => {
+      if (pf.repo !== from.repo || pf.path === from.path) return false;
+      return stripExtension(pf.path).endsWith(source);
+    });
+  }
+
+  return undefined;
 }
 
 function stripExtension(filePath: string): string {
-  return filePath.replace(/\.(js|ts|jsx|tsx|vue|rb)$/, "");
+  return filePath.replace(/\.(js|ts|jsx|tsx|vue|rb|py|go)$/, "");
 }

@@ -28,7 +28,7 @@ import { resolve, join } from "node:path";
 export type SyncLevel = "skip" | "lightweight" | "full";
 
 export interface SyncOptions {
-  /** Override the detected port. Defaults to SRCMAP_PORT env or 4000. */
+  /** Override the detected port. Defaults to CODEPRISM_PORT env or 4000. */
   port?: number;
   /** Force a specific event type instead of the auto-detected one. */
   eventType?: "save" | "merge" | "pull" | "rebase" | "checkout";
@@ -294,7 +294,7 @@ async function post<T>(port: number, path: string, body: unknown): Promise<T> {
 export async function runSync(cwd: string, opts: SyncOptions = {}): Promise<void> {
   const branch = getCurrentBranch(cwd);
   const repoName = getRepoName(cwd, opts.repo);
-  const port = opts.port ?? Number(process.env["SRCMAP_PORT"] ?? 4000);
+  const port = opts.port ?? Number(process.env["CODEPRISM_PORT"] ?? 4000);
   const isCheckout = opts.eventType === "checkout";
 
   // ── Branch context (always extracted, even for skipped branches) ───────────
