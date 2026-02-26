@@ -441,13 +441,27 @@ async function runIndex(
   const skipDocs = !llmConfig;
   const engineRoot = join(__dirname, "../..");
 
-  const args = ["tsx", join(engineRoot, "src/cli/index-repos.ts"), "--repo", repoName];
+  // Detect whether we're running from compiled dist/ (production/Docker) or src/ (dev with tsx).
+  // __dirname is e.g. /app/packages/engine/dist/services in prod, or .../src/services in dev.
+  const isCompiled = __dirname.replace(/\\/g, "/").includes("/dist/");
+  let cmd: string;
+  let args: string[];
+  if (isCompiled) {
+    // Production: compiled JS available, node resolves it directly
+    cmd = "node";
+    args = [join(engineRoot, "dist/cli/index-repos.js"), "--repo", repoName];
+  } else {
+    // Development: TypeScript source, run via tsx
+    cmd = "npx";
+    args = ["tsx", join(engineRoot, "src/cli/index-repos.ts"), "--repo", repoName];
+  }
   if (skipDocs) args.push("--skip-docs");
 
   const childEnv: Record<string, string> = {
     ...process.env as Record<string, string>,
     CODEPRISM_WORKSPACE: repoPath,
     CODEPRISM_DB_PATH: benchDbPath,
+    PATH: EXTENDED_PATH,
   };
 
   if (llmConfig) {
@@ -456,7 +470,7 @@ async function runIndex(
   }
 
   return new Promise((resolve, reject) => {
-    const child = spawn("npx", args, {
+    const child = spawn(cmd, args, {
       cwd: engineRoot,
       stdio: ["ignore", "pipe", "pipe"],
       env: childEnv,

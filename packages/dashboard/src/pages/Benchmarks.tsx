@@ -699,6 +699,9 @@ const CATALOG_PAGE_SIZE = 6;
 
 // ── Per-card component with persistent prompt saving ──────────────────────────
 
+const PROMPT_MAX = 500;
+const SUPPORT_EMAIL_BENCHMARKS = "support@codeprism.dev";
+
 function CatalogCard({
   project,
   onSelect,
@@ -714,15 +717,17 @@ function CatalogCard({
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const handleAddPrompt = async () => {
-    if (draft.trim().length < 10) return;
+    const trimmed = draft.trim();
+    if (trimmed.length < 10 || trimmed.length > PROMPT_MAX) return;
     setSaving(true);
     setSaveError(null);
     try {
-      const res = await api.addCatalogPrompt(project.repo, draft.trim());
+      const res = await api.addCatalogPrompt(project.repo, trimmed);
       onPromptAdded(project.repo, {
         id: res.id,
-        prompt: draft.trim(),
+        prompt: trimmed,
         isDefault: false,
+        runCount: 0,
         createdAt: new Date().toISOString(),
       });
       setDraft("");
@@ -732,6 +737,11 @@ function CatalogCard({
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleUsePrompt = (promptId: number, repoUrl: string) => {
+    api.runCatalogPrompt(promptId).catch(() => {});
+    onSelect(repoUrl);
   };
 
   return (
@@ -765,15 +775,35 @@ function CatalogCard({
       <div className="space-y-2 flex-1">
         {project.prompts.map((p) => (
           <div key={p.id} className="flex items-start gap-2 group">
-            <CopyButton text={p.prompt} />
+            <button
+              onClick={() => handleUsePrompt(p.id, `https://github.com/${project.repo}`)}
+              className="shrink-0 text-[10px] text-accent hover:text-[#79b8ff] border border-accent/30 hover:border-accent/60 rounded px-1.5 py-0.5 transition-colors"
+              title="Use this prompt"
+            >
+              Use
+            </button>
             <span className="text-xs text-[#8b949e] group-hover:text-[#c9d1d9] transition-colors leading-snug flex-1">
               {p.prompt}
             </span>
-            {!p.isDefault && (
-              <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#1f6feb]/20 border border-[#1f6feb]/30 text-[#58a6ff] shrink-0 self-start mt-0.5">
-                new
-              </span>
-            )}
+            <div className="flex items-center gap-1.5 shrink-0 self-start mt-0.5">
+              {p.runCount > 0 && (
+                <span className="text-[9px] text-[#484f58]" title="Times this prompt was run">
+                  {p.runCount} run{p.runCount !== 1 ? "s" : ""}
+                </span>
+              )}
+              {!p.isDefault && (
+                <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#1f6feb]/20 border border-[#1f6feb]/30 text-[#58a6ff]">
+                  new
+                </span>
+              )}
+              <a
+                href={`mailto:${SUPPORT_EMAIL_BENCHMARKS}?subject=Flag prompt ${p.id}&body=Prompt:%20${encodeURIComponent(p.prompt)}%0ARepo:%20${project.repo}`}
+                className="text-[9px] text-[#30363d] hover:text-[#484f58] transition-colors"
+                title="Flag as low quality"
+              >
+                flag
+              </a>
+            </div>
           </div>
         ))}
       </div>
@@ -785,7 +815,7 @@ function CatalogCard({
             <input
               autoFocus
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
+              onChange={(e) => setDraft(e.target.value.slice(0, PROMPT_MAX))}
               onKeyDown={(e) => {
                 if (e.key === "Enter") handleAddPrompt();
                 if (e.key === "Escape") { setShowInput(false); setDraft(""); }
@@ -809,10 +839,13 @@ function CatalogCard({
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
+          <div className="flex items-center justify-between mt-1">
+            <p className="text-[10px] text-[#484f58]">Saved for everyone · min 10 chars</p>
+            <span className={cn("text-[10px]", draft.length > PROMPT_MAX * 0.9 ? "text-[#d29922]" : "text-[#484f58]")}>
+              {draft.length}/{PROMPT_MAX}
+            </span>
+          </div>
           {saveError && <p className="text-[10px] text-[#f85149] mt-1">{saveError}</p>}
-          <p className="text-[10px] text-[#484f58] mt-1">
-            Saved for everyone · appears after the project is indexed
-          </p>
         </div>
       ) : (
         <button

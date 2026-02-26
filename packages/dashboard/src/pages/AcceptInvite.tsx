@@ -187,14 +187,14 @@ export function AcceptInvite() {
               <div className="pt-1 border-t border-[#21262d]">
                 <p className="text-xs text-[#8b949e] mb-2 font-medium">Branch-aware context</p>
                 <div className="flex flex-wrap gap-1.5 mb-2">
-                  {["main / master", "feature/*", "hotfix/*", "release/2.x", "staging", "demo"].map((b) => (
+                  {["main", "feature/auth-v2", "hotfix/login-fix", "release/2.1", "staging", "demo"].map((b) => (
                     <span key={b} className="inline-flex items-center rounded-full border border-[#30363d] bg-[#21262d] px-2.5 py-0.5 text-[11px] font-mono text-[#8b949e]">
                       {b}
                     </span>
                   ))}
                 </div>
                 <p className="text-xs text-[#484f58]">
-                  Each branch gets its own context. Feature branches stay isolated — merged changes propagate to main automatically.
+                  Each branch gets its own isolated context — <code className="font-mono">feature/*</code>, <code className="font-mono">hotfix/*</code>, <code className="font-mono">release/*</code> globs all supported. Merged changes propagate to main automatically.
                 </p>
               </div>
             </div>

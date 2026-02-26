@@ -25,6 +25,7 @@ function scrollTo(id: string) {
 function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const stars = useGithubStars("dan1d/codeprism");
 
   useEffect(() => {
     const handler = () => setScrolled(window.scrollY > 10);
@@ -82,14 +83,26 @@ function Navbar() {
           >
             <Github className="h-3.5 w-3.5" />
             Open source
+            {stars && <span className="text-xs text-[#484f58]">★ {stars}</span>}
+          </a>
+          <a
+            href={DISCORD_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-3 py-2 text-sm text-[#8b949e] hover:text-[#e1e4e8] transition-colors rounded-md hover:bg-[#21262d]"
+          >
+            <MessageCircle className="h-3.5 w-3.5" />
+            Discord
           </a>
         </nav>
 
         {/* Right CTAs */}
         <div className="flex items-center gap-2">
-          {/* Log in is intentionally low-contrast — primary action is Get started */}
-          <Link to="/login" className="hidden sm:block px-4 py-2 text-sm text-[#484f58] hover:text-[#8b949e] transition-colors">
-            Log in
+          <Link
+            to="/login"
+            className="hidden sm:block px-4 py-2 text-sm text-[#8b949e] hover:text-[#e1e4e8] transition-colors border border-[#30363d] rounded-lg hover:border-[#8b949e]"
+          >
+            Sign in to your team →
           </Link>
           <Link to="/onboard" className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-black hover:bg-[#79b8ff] transition-colors">
             Get started →
@@ -130,9 +143,18 @@ function Navbar() {
           >
             <Github className="h-3.5 w-3.5" /> Open source
           </a>
+          <a
+            href={DISCORD_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setMobileOpen(false)}
+            className="flex items-center gap-1.5 px-3 py-2.5 text-sm text-[#8b949e] hover:text-[#e1e4e8] transition-colors rounded-md hover:bg-[#21262d]"
+          >
+            <MessageCircle className="h-3.5 w-3.5" /> Discord
+          </a>
           <div className="border-t border-[#21262d] mt-2 pt-2">
-            <Link to="/login" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 text-sm text-[#484f58] hover:text-[#8b949e] transition-colors rounded-md">
-              Log in
+            <Link to="/login" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 text-sm text-[#8b949e] hover:text-[#e1e4e8] transition-colors rounded-md">
+              Sign in to your team →
             </Link>
             <Link to="/onboard" onClick={() => setMobileOpen(false)} className="mt-1 block rounded-lg bg-accent px-4 py-2.5 text-center text-sm font-semibold text-black hover:bg-[#79b8ff] transition-colors">
               Get started →
@@ -368,10 +390,25 @@ function SavingsCalculator() {
   );
 }
 
+function useGithubStars(repo: string): string | null {
+  const [stars, setStars] = useState<string | null>(null);
+  useEffect(() => {
+    fetch(`https://api.github.com/repos/${repo}`, { headers: { Accept: "application/vnd.github+json" } })
+      .then((r) => r.json())
+      .then((data: { stargazers_count?: number }) => {
+        const n = data.stargazers_count ?? 0;
+        setStars(n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
+      })
+      .catch(() => {});
+  }, [repo]);
+  return stars;
+}
+
 export function Landing() {
   const [stats, setStats] = useState<PublicStats | null>(null);
   const [founding, setFounding] = useState<FoundingStatus | null>(null);
   const [bench, setBench] = useState<BenchmarkResponse | null>(null);
+  const githubStars = useGithubStars("dan1d/codeprism");
 
   useEffect(() => {
     api.publicStats().then(setStats).catch(() => {});
@@ -389,10 +426,17 @@ export function Landing() {
         style={{ background: "linear-gradient(180deg, #0f1117 0%, #161b22 100%)" }}
       >
         {/* Badge */}
-        <div className="inline-flex items-center gap-2 rounded-full border border-[#30363d] bg-[#161b22] px-4 py-1.5 text-sm text-[#8b949e] mb-8">
+        <a
+          href={GITHUB_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 rounded-full border border-[#30363d] bg-[#161b22] px-4 py-1.5 text-sm text-[#8b949e] mb-8 hover:border-[#8b949e] transition-colors"
+        >
           <span className="h-2 w-2 rounded-full bg-[#3fb950] animate-pulse" />
+          <Github className="h-3.5 w-3.5" />
+          {githubStars && <span className="font-semibold text-[#e1e4e8]">★ {githubStars}</span>}
           <span>Open source · Frontend + backend share one brain · Cursor · Claude Code · Windsurf · Zed</span>
-        </div>
+        </a>
 
         <h1 className="mx-auto max-w-4xl text-5xl font-bold leading-tight text-[#e1e4e8] sm:text-6xl lg:text-7xl">
           Your AI forgets everything{" "}

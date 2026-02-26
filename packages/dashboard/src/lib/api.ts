@@ -288,6 +288,9 @@ export const api = {
       body: JSON.stringify({ repo, prompt }),
     }),
 
+  runCatalogPrompt: (id: number) =>
+    fetchJSON<{ ok: boolean }>(`/api/benchmarks/catalog/prompts/${id}/run`, { method: "POST" }),
+
   publicStats: () =>
     fetchJSON<PublicStats>("/api/public-stats"),
 
@@ -488,6 +491,7 @@ export interface CatalogPrompt {
   id: number;
   prompt: string;
   isDefault: boolean;
+  runCount: number;
   createdAt: string;
 }
 

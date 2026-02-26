@@ -10,7 +10,7 @@ import {
   openBenchmarkDb,
   type LLMConfig,
 } from "../services/benchmark-worker.js";
-import { getCatalog, addCatalogPrompt } from "../services/catalog.js";
+import { getCatalog, addCatalogPrompt, incrementPromptRunCount } from "../services/catalog.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -169,6 +169,9 @@ export async function registerBenchmarkRoutes(app: FastifyInstance): Promise<voi
       if (!prompt || typeof prompt !== "string" || prompt.trim().length < 10) {
         return reply.code(400).send({ error: "prompt must be at least 10 characters" });
       }
+      if (prompt.trim().length > 500) {
+        return reply.code(400).send({ error: "prompt must be 500 characters or fewer" });
+      }
       try {
         const id = addCatalogPrompt(repo, prompt);
         return reply.code(201).send({ ok: true, id });
@@ -178,6 +181,20 @@ export async function registerBenchmarkRoutes(app: FastifyInstance): Promise<voi
         app.log.error(err, "Failed to save catalog prompt");
         return reply.code(500).send({ error: "Failed to save prompt" });
       }
+    },
+  );
+
+  /** Catalog: increment run count when a prompt is used. */
+  app.post<{ Params: { id: string } }>(
+    "/api/benchmarks/catalog/prompts/:id/run",
+    { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const id = Number(request.params.id);
+      if (!Number.isInteger(id) || id < 1) {
+        return reply.code(400).send({ error: "invalid prompt id" });
+      }
+      incrementPromptRunCount(id);
+      return reply.send({ ok: true });
     },
   );
 }

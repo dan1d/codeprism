@@ -36,6 +36,7 @@ function db(): InstanceType<typeof Database> {
       repo        TEXT NOT NULL,
       prompt      TEXT NOT NULL,
       is_default  INTEGER NOT NULL DEFAULT 0,
+      run_count   INTEGER NOT NULL DEFAULT 0,
       created_at  TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (repo) REFERENCES benchmark_catalog(repo) ON DELETE CASCADE
     );
@@ -43,6 +44,8 @@ function db(): InstanceType<typeof Database> {
     CREATE INDEX IF NOT EXISTS idx_catalog_prompts_repo
       ON benchmark_catalog_prompts(repo);
   `);
+  // Migrate existing DBs that don't have run_count yet
+  try { _db.exec("ALTER TABLE benchmark_catalog_prompts ADD COLUMN run_count INTEGER NOT NULL DEFAULT 0"); } catch { /* column already exists */ }
   return _db;
 }
 
@@ -268,7 +271,7 @@ export interface CatalogEntry {
   language: string;
   description: string;
   requiresKey: boolean;
-  prompts: Array<{ id: number; prompt: string; isDefault: boolean; createdAt: string }>;
+  prompts: Array<{ id: number; prompt: string; isDefault: boolean; runCount: number; createdAt: string }>;
 }
 
 let _seeded = false;
@@ -316,7 +319,7 @@ export function getCatalog(): CatalogEntry[] {
     description: string; requires_key: number;
   };
   type PromptRow = {
-    id: number; repo: string; prompt: string; is_default: number; created_at: string;
+    id: number; repo: string; prompt: string; is_default: number; run_count: number; created_at: string;
   };
 
   const projects = d
@@ -324,7 +327,7 @@ export function getCatalog(): CatalogEntry[] {
     .all() as ProjectRow[];
 
   const prompts = d
-    .prepare("SELECT id, repo, prompt, is_default, created_at FROM benchmark_catalog_prompts ORDER BY is_default DESC, id ASC")
+    .prepare("SELECT id, repo, prompt, is_default, run_count, created_at FROM benchmark_catalog_prompts ORDER BY is_default DESC, run_count DESC, id ASC")
     .all() as PromptRow[];
 
   const promptsByRepo = new Map<string, CatalogEntry["prompts"]>();
@@ -334,6 +337,7 @@ export function getCatalog(): CatalogEntry[] {
       id: p.id,
       prompt: p.prompt,
       isDefault: p.is_default === 1,
+      runCount: p.run_count,
       createdAt: p.created_at,
     });
   }
@@ -356,8 +360,15 @@ export function addCatalogPrompt(repo: string, prompt: string): number {
   if (!exists) {
     throw Object.assign(new Error(`Repo '${repo}' is not in the benchmark catalog`), { statusCode: 404 });
   }
+  const trimmed = prompt.trim().slice(0, 500);
   const result = d.prepare(
     "INSERT INTO benchmark_catalog_prompts (repo, prompt, is_default) VALUES (?, ?, 0)"
-  ).run(repo, prompt.trim());
+  ).run(repo, trimmed);
   return result.lastInsertRowid as number;
+}
+
+/** Increment the run counter for a prompt. No-op if the id doesn't exist. */
+export function incrementPromptRunCount(id: number): void {
+  const d = db();
+  d.prepare("UPDATE benchmark_catalog_prompts SET run_count = run_count + 1 WHERE id = ?").run(id);
 }

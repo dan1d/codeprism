@@ -276,14 +276,14 @@ export function Onboard() {
                 <div className="pt-1 border-t border-[#21262d]">
                   <p className="text-xs text-[#8b949e] mb-2 font-medium">Branch-aware context</p>
                   <div className="flex flex-wrap gap-1.5 mb-2">
-                    {["main / master", "feature/*", "hotfix/*", "release/2.x", "staging", "demo"].map((b) => (
+                    {["main", "feature/auth-v2", "hotfix/login-fix", "release/2.1", "staging", "demo"].map((b) => (
                       <span key={b} className="inline-flex items-center rounded-full border border-[#30363d] bg-[#21262d] px-2.5 py-0.5 text-[11px] font-mono text-[#8b949e]">
                         {b}
                       </span>
                     ))}
                   </div>
                   <p className="text-xs text-[#484f58]">
-                    Each branch gets its own context. Feature branches stay isolated — merged changes propagate to main automatically.
+                    Each branch gets its own isolated context — <code className="font-mono">feature/*</code>, <code className="font-mono">hotfix/*</code>, <code className="font-mono">release/*</code> globs all supported. Merged changes propagate to main automatically.
                   </p>
                 </div>
               </div>
@@ -302,27 +302,34 @@ export function Onboard() {
           </>
         )}
 
-        {/* Step 2: Share with team */}
+        {/* Step 2: Invite team — this is where the value actually kicks in */}
         {step === 2 && result && (
           <>
-            <h2 className="mb-2 text-lg font-semibold text-[#e1e4e8] flex items-center gap-2">
-              <Users size={18} /> Invite your team
-            </h2>
-            <p className="mb-6 text-sm text-[#8b949e]">
-              Share your workspace URL with teammates. Once logged in, you can invite them from the Team page.
+            <div className="rounded-lg border border-[#3fb950]/30 bg-[#3fb950]/5 px-5 py-4 mb-6">
+              <p className="text-sm font-semibold text-[#3fb950] flex items-center gap-2">
+                <Users size={16} /> This is where codeprism gets powerful.
+              </p>
+              <p className="text-xs text-[#8b949e] mt-1.5 leading-relaxed">
+                One developer using codeprism is useful. A whole team sharing the same knowledge graph is transformative — every AI session starts with what your team already knows.
+              </p>
+            </div>
+
+            <h2 className="mb-1 text-lg font-semibold text-[#e1e4e8]">Invite your team</h2>
+            <p className="mb-5 text-sm text-[#8b949e]">
+              Share your workspace link. Each dev adds the MCP config to their AI tool — that's it.
             </p>
 
             <div className="rounded-lg border border-[#30363d] bg-[#0f1117] p-4 mb-4">
-              <p className="text-xs text-[#8b949e] mb-2">Workspace URL</p>
+              <p className="text-xs text-[#8b949e] mb-2">Your team's workspace</p>
               <div className="flex items-center justify-between gap-2">
                 <code className="text-sm text-[#e1e4e8] break-all">{result.dashboardUrl}</code>
                 <CopyButton text={result.dashboardUrl} />
               </div>
             </div>
 
-            <div className="rounded-lg border border-[#30363d] bg-[#0f1117] p-4 mb-6 text-xs text-[#8b949e] space-y-1">
-              <p>Each developer adds the MCP config to their own AI tool and points to your workspace URL.</p>
-              <p>You can send formal email invitations from <strong className="text-[#c9d1d9]">Team → Invite developers</strong> once you've logged in.</p>
+            <div className="rounded-lg border border-[#30363d] bg-[#0f1117] p-4 mb-6 text-xs text-[#8b949e] space-y-1.5">
+              <p>Send teammates the workspace link above. They sign in, add the MCP config from step 1 to their editor, and they're sharing context with you immediately.</p>
+              <p>You can also send formal email invitations from <strong className="text-[#c9d1d9]">Team → Invite developers</strong> once you've logged in.</p>
             </div>
 
             <button
