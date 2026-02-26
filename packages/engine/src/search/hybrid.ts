@@ -87,6 +87,30 @@ export function computeRrfScore(ranks: number[], k = 60): number {
 }
 
 /**
+ * Score-weighted RRF: blends the standard rank-based RRF with normalized raw
+ * scores (cosine similarity for semantic, normalized BM25 for keyword).
+ *
+ * Pure RRF ignores that rank-0 distance=0.05 is a much stronger match than
+ * rank-0 distance=0.40. This blend adds a small score-proportional bonus
+ * (weight=0.25) on top of the rank signal (weight=0.75), preserving the
+ * rank ordering while rewarding strong confidence matches.
+ *
+ * @param ranks - 0-based rank positions from each retrieval list
+ * @param normalizedScores - scores in [0,1] where 1 = best (cosine similarity or normalized BM25)
+ */
+export function computeWeightedRrfScore(
+  ranks: number[],
+  normalizedScores: number[],
+  k = 60,
+): number {
+  const rrfBase = ranks.reduce((sum, rank) => sum + 1 / (k + rank), 0);
+  const avgScore = normalizedScores.length > 0
+    ? normalizedScores.reduce((s, v) => s + v, 0) / normalizedScores.length
+    : 0;
+  return rrfBase * 0.75 + avgScore * 0.25;
+}
+
+/**
  * Minimum number of signal hits before a repo earns a text-affinity boost.
  * A threshold of 2 prevents single spurious keyword matches (e.g. a query
  * containing the word "client") from distorting the affinity multiplier.
@@ -144,12 +168,28 @@ export async function hybridSearch(
 
   // Build rank maps for RRF (position 0 = best match in each list)
   const semanticRankMap = new Map<string, number>();
+  const semanticScoreMap = new Map<string, number>(); // cosine similarity [0,1]
   for (let i = 0; i < semanticResults.length; i++) {
-    semanticRankMap.set(semanticResults[i]!.cardId, i);
+    const r = semanticResults[i]!;
+    semanticRankMap.set(r.cardId, i);
+    // sqlite-vec returns cosine distance [0,2]; similarity = 1 - distance (clamped)
+    semanticScoreMap.set(r.cardId, Math.max(0, 1 - r.distance));
   }
+
   const keywordRankMap = new Map<string, number>();
+  // Normalize BM25 ranks: FTS5 returns negative values (more negative = better).
+  // Map the best rank to 1.0 and the worst to 0.0.
+  const kwMin = keywordResults.length > 0 ? Math.min(...keywordResults.map((r) => r.rank)) : 0;
+  const kwMax = keywordResults.length > 0 ? Math.max(...keywordResults.map((r) => r.rank)) : 0;
+  const kwRange = kwMax - kwMin;
+  const keywordScoreMap = new Map<string, number>(); // normalized BM25 [0,1]
   for (let i = 0; i < keywordResults.length; i++) {
-    keywordRankMap.set(keywordResults[i]!.cardId, i);
+    const r = keywordResults[i]!;
+    keywordRankMap.set(r.cardId, i);
+    // Lower (more negative) rank = better. Invert so 1.0 = best.
+    // When kwRange === 0, all scores are identical — use neutral 0.5 rather than 1
+  // so uniform keyword results don't artificially over-weight the keyword list.
+  keywordScoreMap.set(r.cardId, kwRange !== 0 ? (r.rank - kwMax) / kwRange : 0.5);
   }
 
   // Union of all candidate IDs from both retrieval lists
@@ -211,11 +251,18 @@ export async function hybridSearch(
       : hasSemantic ? "semantic"
       : "keyword";
 
-    // RRF base score — additive across lists, naturally rewards dual-list hits
+    // Score-weighted RRF — blends rank position with raw confidence scores
     const ranks: number[] = [];
-    if (semRank !== undefined) ranks.push(semRank);
-    if (kwRank  !== undefined) ranks.push(kwRank);
-    let score = computeRrfScore(ranks);
+    const normalizedScores: number[] = [];
+    if (semRank !== undefined) {
+      ranks.push(semRank);
+      normalizedScores.push(semanticScoreMap.get(cardId) ?? 0);
+    }
+    if (kwRank !== undefined) {
+      ranks.push(kwRank);
+      normalizedScores.push(keywordScoreMap.get(cardId) ?? 0);
+    }
+    let score = computeWeightedRrfScore(ranks, normalizedScores);
 
     const card = cardMap.get(cardId);
     if (!card) continue;

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, Link } from "react-router-dom";
 import {
   RefreshCw,
   ChevronRight,
@@ -578,12 +578,12 @@ export function Repositories() {
       {/* "View in Knowledge Base" link from drawer */}
       {selected && (
         <div className="fixed bottom-6 right-[460px] z-50">
-          <a
-            href={`/knowledge?repo=${encodeURIComponent(selected.repo)}`}
+          <Link
+            to={`/dashboard/knowledge?repo=${encodeURIComponent(selected.repo)}`}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1c2333] border border-[#30363d] text-xs text-accent hover:bg-[#30363d] transition-colors"
           >
             View cards <ChevronRight size={12} />
-          </a>
+          </Link>
         </div>
       )}
     </div>

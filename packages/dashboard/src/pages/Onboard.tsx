@@ -137,15 +137,15 @@ export function Onboard() {
               Create your workspace
             </h1>
             <p className="mb-4 text-sm text-[#8b949e]">
-              Set up codeprism for your team. Takes less than a minute.
+              Your team's shared AI memory, ready in under 2 minutes. No credit card.
             </p>
             {founding?.founding && (
               <div className="mb-6 rounded-lg border border-[#3fb950]/30 bg-[#3fb950]/5 px-4 py-3">
                 <p className="text-sm text-[#3fb950] font-medium">
-                  Founding team offer — up to 10 developers free
+                  Founding team — up to 10 developers, free forever
                 </p>
                 <p className="text-xs text-[#8b949e] mt-1">
-                  {founding.remaining} of {founding.limit} free spots remaining. No credit card needed.
+                  {founding.remaining} of {founding.limit} spots left. First come, first served.
                 </p>
               </div>
             )}
@@ -347,9 +347,14 @@ export function Onboard() {
           <>
             <div className="text-center mb-8">
               <Sparkles className="h-10 w-10 text-accent mx-auto mb-4" />
-              <h2 className="text-xl font-bold text-[#e1e4e8]">You're all set!</h2>
-              <p className="text-sm text-[#8b949e] mt-2">
-                Your workspace is ready. Developers who accept their invitations will appear in your Team page.
+              <h2 className="text-xl font-bold text-[#e1e4e8]">Workspace ready.</h2>
+              <p className="text-sm text-[#8b949e] mt-2 max-w-sm mx-auto">
+                Run <code className="text-accent text-xs">pnpm index</code> inside your repo
+                to build the first knowledge graph. After that, every AI query your team makes
+                gets instant context — no raw file dumps.
+              </p>
+              <p className="text-xs text-[#484f58] mt-3">
+                Invited developers will appear in your Team page once they accept.
               </p>
             </div>
 

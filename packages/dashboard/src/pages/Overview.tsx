@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import {
   Zap,
@@ -60,7 +61,6 @@ export function Overview() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reindexing, setReindexing] = useState(false);
-  const [reindexMsg, setReindexMsg] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -73,12 +73,11 @@ export function Overview() {
 
   const handleReindex = async () => {
     setReindexing(true);
-    setReindexMsg(null);
     try {
       const r = (await api.reindexStale()) as { message?: string };
-      setReindexMsg(r?.message ?? "Reindex started");
+      toast.success(r?.message ?? "Reindex started");
     } catch (e) {
-      setReindexMsg(String(e));
+      toast.error(String(e));
     } finally {
       setReindexing(false);
     }
@@ -128,12 +127,6 @@ export function Overview() {
           ) : null
         }
       />
-
-      {reindexMsg && (
-        <div className="mb-4 px-3 py-2 rounded-md bg-[#1c2333] border border-[#30363d] text-xs text-[#8b949e]">
-          {reindexMsg}
-        </div>
-      )}
 
       {noData ? (
         <EmptyState
@@ -210,7 +203,7 @@ export function Overview() {
                   label="Stale Cards"
                   value={String(summary.staleCards)}
                   status={summary.staleCards > 0 ? "warn" : "ok"}
-                  link={summary.staleCards > 0 ? "/knowledge?filter=stale" : undefined}
+                  link={summary.staleCards > 0 ? "/dashboard/knowledge?filter=stale" : undefined}
                   linkLabel="View stale →"
                 />
               </div>

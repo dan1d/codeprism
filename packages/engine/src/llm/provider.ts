@@ -97,6 +97,41 @@ export class GeminiProvider implements LLMProvider {
 }
 
 /**
+ * OpenAI provider (GPT-4o-mini default).
+ * Get an API key at https://platform.openai.com/
+ */
+export class OpenAIProvider implements LLMProvider {
+  private client: OpenAI;
+  public model: string;
+
+  constructor(apiKey: string, model?: string) {
+    this.client = new OpenAI({ apiKey });
+    this.model = model ?? "gpt-4o-mini";
+  }
+
+  async generate(prompt: string, options?: GenerateOptions): Promise<string> {
+    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [];
+    if (options?.systemPrompt) {
+      messages.push({ role: "system", content: options.systemPrompt });
+    }
+    messages.push({ role: "user", content: prompt });
+
+    const response = await this.client.chat.completions.create({
+      model: this.model,
+      messages,
+      max_tokens: options?.maxTokens ?? 1024,
+      temperature: options?.temperature ?? 0.2,
+    });
+
+    return response.choices[0]?.message?.content ?? "";
+  }
+
+  estimateTokens(text: string): number {
+    return Math.ceil(text.length / 4);
+  }
+}
+
+/**
  * DeepSeek provider using the OpenAI-compatible API.
  * Default model: deepseek-chat (DeepSeek-V3).
  * Get an API key at https://platform.deepseek.com/
@@ -166,7 +201,7 @@ export function createLLMProvider(config?: LLMConfig): LLMProvider | null {
     case "anthropic":
       return new AnthropicProvider(cfg.apiKey, cfg.model);
     case "openai":
-      return new DeepSeekProvider(cfg.apiKey, cfg.model ?? "gpt-4o-mini");
+      return new OpenAIProvider(cfg.apiKey, cfg.model);
     default:
       return null;
   }

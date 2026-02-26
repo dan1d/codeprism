@@ -241,6 +241,63 @@ export function getRegistryDb_(): DatabaseType {
 }
 
 /**
+ * Returns true when the user has an active or invited membership for the
+ * given tenant (i.e. they were explicitly invited), or when they are the
+ * tenant's owner. Deactivated members are treated as non-members.
+ */
+export function isMemberOfTenant(userId: string, tenantSlug: string): boolean {
+  const db = getRegistryDb();
+  const member = db
+    .prepare(
+      "SELECT 1 FROM team_members WHERE user_id = ? AND tenant_slug = ? AND status != 'deactivated'",
+    )
+    .get(userId, tenantSlug);
+  if (member) return true;
+
+  const tenant = db
+    .prepare("SELECT owner_email FROM tenants WHERE slug = ?")
+    .get(tenantSlug) as { owner_email: string | null } | undefined;
+  if (!tenant) return false;
+
+  const user = db
+    .prepare("SELECT email FROM users WHERE id = ?")
+    .get(userId) as { email: string } | undefined;
+
+  return (
+    !!tenant.owner_email &&
+    !!user &&
+    tenant.owner_email.toLowerCase() === user.email.toLowerCase()
+  );
+}
+
+/**
+ * Email-first membership check — used before `ensureUser()` to avoid creating
+ * a user row for addresses that have never been invited.
+ *
+ * Returns true if the email has an active/invited team_members row for the
+ * tenant, or if the email matches the tenant's owner_email.
+ */
+export function isEmailInvitedToTenant(email: string, tenantSlug: string): boolean {
+  const db = getRegistryDb();
+  const normalized = email.trim().toLowerCase();
+
+  const member = db
+    .prepare(
+      `SELECT 1 FROM team_members tm
+         JOIN users u ON u.id = tm.user_id
+        WHERE u.email = ? AND tm.tenant_slug = ? AND tm.status != 'deactivated'`,
+    )
+    .get(normalized, tenantSlug);
+  if (member) return true;
+
+  const tenant = db
+    .prepare("SELECT owner_email FROM tenants WHERE slug = ?")
+    .get(tenantSlug) as { owner_email: string | null } | undefined;
+
+  return !!tenant?.owner_email && tenant.owner_email.toLowerCase() === normalized;
+}
+
+/**
  * Rotates the API key for a tenant.
  * Returns the new raw key (shown once), or null if tenant not found.
  */

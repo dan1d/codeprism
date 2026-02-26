@@ -21,9 +21,11 @@ export function registerSearchTools(server: McpServer): void {
   server.registerTool(
     "codeprism_search",
     {
+      title: "Search Knowledge Cards",
       description:
         "Search codeprism knowledge cards by query. Returns matching cards with " +
         "content, flow, and source files. Uses hybrid FTS + semantic vector search.",
+      annotations: { readOnlyHint: true, idempotentHint: false },
       inputSchema: {
         query: z.string().describe("The search query string"),
         branch: z.string().optional().describe("Optional branch name to scope results"),
@@ -70,11 +72,13 @@ export function registerSearchTools(server: McpServer): void {
   server.registerTool(
     "codeprism_context",
     {
+      title: "Get Codebase Context for Task",
       description:
         "Get codebase context for a ticket or task. Runs a primary semantic " +
         "search on the full description, then supplements with entity-specific " +
         "keyword lookups. ALWAYS call this first when starting work on any ticket. " +
         "If description is omitted, the active branch context set by the last git checkout is used automatically.",
+      annotations: { readOnlyHint: true, idempotentHint: false },
       inputSchema: {
         description: z.string().optional().describe(
           "The full ticket or task description. If omitted, the current branch context is used automatically.",
@@ -168,9 +172,11 @@ export function registerSearchTools(server: McpServer): void {
   server.registerTool(
     "codeprism_ticket_files",
     {
+      title: "Get Files for Task",
       description:
         "Returns the files most likely to need edits for a given task. " +
         "Use after codeprism_context to narrow down to specific files.",
+      annotations: { readOnlyHint: true, idempotentHint: true },
       inputSchema: {
         description: z.string().describe("Brief summary of what needs to change"),
       },

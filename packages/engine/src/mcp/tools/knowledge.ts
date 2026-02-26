@@ -7,13 +7,15 @@ export function registerKnowledgeTools(server: McpServer): void {
   server.registerTool(
     "codeprism_save_insight",
     {
+      title: "Save Knowledge Insight",
       description:
         "Save a knowledge card capturing an architectural insight, design " +
         "decision, or important context discovered during development.",
+      annotations: { readOnlyHint: false, idempotentHint: false },
       inputSchema: {
         flow: z.string().describe("The flow/category this insight belongs to"),
         title: z.string().describe("A concise title for the knowledge card"),
-        content: z.string().describe("The full markdown content of the insight"),
+        content: z.string().max(4000).describe("The full markdown content of the insight (max 4000 chars)"),
         files: z.array(z.string()).optional().describe("Related source file paths"),
       },
     },
@@ -33,9 +35,11 @@ export function registerKnowledgeTools(server: McpServer): void {
   server.registerTool(
     "codeprism_verify_card",
     {
+      title: "Verify Card Accuracy",
       description:
         "Mark a card as verified — confirming its content is still accurate after " +
         "reviewing it. This builds confidence scores over time.",
+      annotations: { readOnlyHint: false, idempotentHint: true },
       inputSchema: {
         card_id: z.string().describe("The card ID to mark as verified"),
       },
@@ -57,8 +61,10 @@ export function registerKnowledgeTools(server: McpServer): void {
   server.registerTool(
     "codeprism_list_flows",
     {
+      title: "List Knowledge Flows",
       description:
         "List all flows in the knowledge base with card counts, repos, and file counts.",
+      annotations: { readOnlyHint: true, idempotentHint: true },
     },
     async () => {
       const flows = listFlows();
@@ -85,8 +91,10 @@ export function registerKnowledgeTools(server: McpServer): void {
   server.registerTool(
     "codeprism_project_docs",
     {
+      title: "Get Project Documentation",
       description:
         "Retrieve AI-generated project documentation for one or more repositories.",
+      annotations: { readOnlyHint: true, idempotentHint: true },
       inputSchema: {
         repo: z.string().optional().describe("Repository name. Omit to list all repos with docs."),
         doc_type: z
@@ -153,8 +161,10 @@ export function registerKnowledgeTools(server: McpServer): void {
   server.registerTool(
     "codeprism_promote_insight",
     {
+      title: "Promote Insight to Project Docs",
       description:
         "Promote a conversation-extracted insight to the rules or code_style doc after human review",
+      annotations: { readOnlyHint: false, idempotentHint: false },
       inputSchema: {
         insight_id: z.string().describe("ID from extracted_insights table"),
         approve: z.boolean().describe("true = promote to doc, false = mark as aspirational"),
@@ -162,6 +172,7 @@ export function registerKnowledgeTools(server: McpServer): void {
       },
     },
     async ({ insight_id, approve, target_doc }) => {
+      try {
       const result = promoteInsight(insight_id, approve, target_doc);
 
       if (!result.promoted && !approve) {
@@ -185,6 +196,10 @@ export function registerKnowledgeTools(server: McpServer): void {
           ].join("\n"),
         }],
       };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { content: [{ type: "text" as const, text: `Promote error: ${message}` }], isError: true };
+      }
     },
   );
 }

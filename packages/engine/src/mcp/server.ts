@@ -103,7 +103,17 @@ export async function createMcpServer(): Promise<McpContext> {
           devEmail,
         });
 
+        // TTL: remove the session after 4 h regardless of TCP close event.
+        // 30 min was too short for active multi-hour development sessions.
+        // This prevents proxy/LB timeouts from leaking sessions indefinitely.
+        const SESSION_TTL_MS = 4 * 60 * 60 * 1_000;
+        const ttlTimer = setTimeout(() => {
+          sessions.delete(transport.sessionId);
+          server.close().catch(() => {});
+        }, SESSION_TTL_MS);
+
         reply.raw.on("close", () => {
+          clearTimeout(ttlTimer);
           sessions.delete(transport.sessionId);
           server.close().catch(() => {});
         });
@@ -122,6 +132,14 @@ export async function createMcpServer(): Promise<McpContext> {
 
         if (!session) {
           reply.code(404).send({ error: "Unknown or expired session" });
+          return;
+        }
+
+        // Tenant ownership check: the session must belong to the same tenant
+        // that authenticated this request. Without this, Tenant B could pass
+        // Tenant A's sessionId and read their knowledge cards.
+        if (session.tenant !== req.tenant) {
+          reply.code(403).send({ error: "Session does not belong to this tenant" });
           return;
         }
 

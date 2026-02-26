@@ -57,15 +57,18 @@ export function keywordSearch(query: string, limit = 10): KeywordResult[] {
     )
     .all(ftsQuery, limit) as { rowid: number; rank: number }[];
 
-  const idStmt = db.prepare("SELECT id FROM cards WHERE rowid = ?");
-  const results: KeywordResult[] = [];
+  if (rows.length === 0) return [];
 
-  for (const row of rows) {
-    const card = idStmt.get(row.rowid) as { id: string } | undefined;
-    if (card) {
-      results.push({ cardId: card.id, rank: row.rank });
-    }
-  }
+  // Resolve all rowids in a single query instead of N individual lookups
+  const placeholders = rows.map(() => "?").join(",");
+  const cardRows = db
+    .prepare(`SELECT id, rowid FROM cards WHERE rowid IN (${placeholders})`)
+    .all(...rows.map((r) => r.rowid)) as { id: string; rowid: number }[];
 
-  return results;
+  const rowidToId = new Map(cardRows.map((c) => [c.rowid, c.id]));
+
+  return rows.flatMap((row) => {
+    const cardId = rowidToId.get(row.rowid);
+    return cardId ? [{ cardId, rank: row.rank }] : [];
+  });
 }

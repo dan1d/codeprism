@@ -1,6 +1,8 @@
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Outlet, useLocation } from "react-router-dom";
+import { Toaster } from "sonner";
 import { useEffect, useState } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
 import { Overview } from "@/pages/Overview";
 import { Repositories } from "@/pages/Repositories";
 import { KnowledgeBase } from "@/pages/KnowledgeBase";
@@ -17,31 +19,32 @@ import { Benchmarks, BenchmarkDetail } from "@/pages/Benchmarks";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { api, type InstanceInfo } from "@/lib/api";
 
-function Layout({ children, companyName }: { children: React.ReactNode; companyName: string }) {
-  return (
-    <div className="flex min-h-screen bg-background">
-      <Sidebar companyName={companyName} />
-      <main className="ml-[220px] flex-1 min-w-0 p-6">{children}</main>
-    </div>
-  );
-}
-
-function DashboardRoutes() {
+function DashboardLayout() {
   const [instanceInfo, setInstanceInfo] = useState<InstanceInfo | null>(null);
   const location = useLocation();
-  const isDashboard = location.pathname.startsWith("/dashboard");
 
   useEffect(() => {
-    if (isDashboard) {
-      api.instanceInfo().then(setInstanceInfo).catch(() => {});
-    }
-  }, [isDashboard]);
+    api.instanceInfo().then(setInstanceInfo).catch(() => {});
+  }, [location.pathname]);
 
   const companyName = instanceInfo?.companyName ?? "";
 
   return (
+    <ProtectedRoute>
+      <div className="flex min-h-screen bg-background">
+        <Sidebar companyName={companyName} />
+        <main className="ml-[220px] flex-1 min-w-0 p-6">
+          <Outlet context={{ instanceInfo, setInstanceInfo }} />
+        </main>
+      </div>
+    </ProtectedRoute>
+  );
+}
+
+function DashboardRoutes() {
+  return (
     <Routes>
-      {/* Public pages (no sidebar) */}
+      {/* Public pages */}
       <Route path="/" element={<Landing />} />
       <Route path="/stats" element={<PublicStats />} />
       <Route path="/onboard" element={<Onboard />} />
@@ -51,16 +54,27 @@ function DashboardRoutes() {
       <Route path="/accept-invite" element={<AcceptInvite />} />
       <Route path="/auth/verify" element={<AcceptInvite />} />
 
-      {/* Dashboard pages (with sidebar) */}
-      <Route path="/dashboard" element={<Layout companyName={companyName}><Overview /></Layout>} />
-      <Route path="/dashboard/repos" element={<Layout companyName={companyName}><Repositories /></Layout>} />
-      <Route path="/dashboard/knowledge" element={<Layout companyName={companyName}><KnowledgeBase /></Layout>} />
-      <Route path="/dashboard/rules" element={<Layout companyName={companyName}><Rules /></Layout>} />
-      <Route path="/dashboard/team" element={<Layout companyName={companyName}><Team /></Layout>} />
-      <Route path="/dashboard/analytics" element={<Layout companyName={companyName}><Analytics /></Layout>} />
-      <Route path="/dashboard/settings" element={<Layout companyName={companyName}><SettingsPage instanceInfo={instanceInfo} onUpdate={setInstanceInfo} /></Layout>} />
+      {/* Protected dashboard pages — share one Layout via Outlet */}
+      <Route path="/dashboard" element={<DashboardLayout />}>
+        <Route index element={<Overview />} />
+        <Route path="repos" element={<Repositories />} />
+        <Route path="knowledge" element={<KnowledgeBase />} />
+        <Route path="rules" element={<Rules />} />
+        <Route path="team" element={<Team />} />
+        <Route path="analytics" element={<Analytics />} />
+        <Route path="settings" element={<SettingsOutlet />} />
+      </Route>
     </Routes>
   );
+}
+
+/** Reads instanceInfo from the outlet context for the Settings page. */
+function SettingsOutlet() {
+  const { instanceInfo, setInstanceInfo } = useOutletContext<{
+    instanceInfo: InstanceInfo | null;
+    setInstanceInfo: (info: InstanceInfo) => void;
+  }>();
+  return <SettingsPage instanceInfo={instanceInfo} onUpdate={setInstanceInfo} />;
 }
 
 export default function App() {
@@ -68,7 +82,21 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <DashboardRoutes />
+        <Toaster
+          position="bottom-right"
+          theme="dark"
+          toastOptions={{
+            style: {
+              background: "#1c2333",
+              border: "1px solid #30363d",
+              color: "#e1e4e8",
+            },
+          }}
+        />
       </AuthProvider>
     </BrowserRouter>
   );
 }
+
+// Local import to keep the file self-contained
+import { useOutletContext } from "react-router-dom";

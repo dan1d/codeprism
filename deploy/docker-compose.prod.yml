@@ -2,7 +2,7 @@ services:
   codeprism:
     # In CI: image is pre-built and pushed to ghcr.io, pulled here
     # Locally: falls back to building from source
-    image: ${CODEPRISM_IMAGE:-ghcr.io/codeprism/codeprism:latest}
+    image: ${CODEPRISM_IMAGE:-ghcr.io/dan1d/codeprism:latest}
     build:
       context: ..
       dockerfile: Dockerfile

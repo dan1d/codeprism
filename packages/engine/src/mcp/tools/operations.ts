@@ -8,14 +8,16 @@ import {
   setSearchConfigEntry,
 } from "../../services/instance.js";
 import { getWorkspaceStatus } from "../../services/repos.js";
-import { getStaleCardCount } from "../../services/reindex.js";
+import { getStaleCardCount, runIncrementalReindex, reindexState } from "../../services/reindex.js";
 
 export function registerOperationsTools(server: McpServer): void {
   server.registerTool(
     "codeprism_recent_queries",
     {
+      title: "View Recent Queries",
       description:
         "Returns recent search queries and which cards they matched.",
+      annotations: { readOnlyHint: true, idempotentHint: true },
       inputSchema: {
         limit: z.number().optional().describe("Max queries to return (default 10)"),
       },
@@ -48,7 +50,9 @@ export function registerOperationsTools(server: McpServer): void {
   server.registerTool(
     "codeprism_configure",
     {
+      title: "Configure Search Settings",
       description: "View or modify codeprism search configuration.",
+      annotations: { readOnlyHint: false, idempotentHint: true },
       inputSchema: {
         action: z.enum(["get", "set", "list"]).describe("Action to perform"),
         key: z.string().optional().describe("Config key"),
@@ -94,8 +98,10 @@ export function registerOperationsTools(server: McpServer): void {
   server.registerTool(
     "codeprism_workspace_status",
     {
+      title: "View Workspace Status",
       description:
         "Returns a real-time status of the codeprism knowledge base.",
+      annotations: { readOnlyHint: true, idempotentHint: true },
     },
     async () => {
       try {
@@ -131,27 +137,38 @@ export function registerOperationsTools(server: McpServer): void {
   server.registerTool(
     "codeprism_reindex",
     {
+      title: "Reindex Stale Cards",
       description: "Triggers incremental reindex of stale cards only.",
+      annotations: { readOnlyHint: false, idempotentHint: true },
       inputSchema: {
         repo: z.string().optional().describe("Limit reindex to a specific repo."),
       },
     },
     async ({ repo }) => {
       try {
+        if (reindexState.status === "running") {
+          return {
+            content: [{
+              type: "text" as const,
+              text: `Reindex already in progress (started ${reindexState.startedAt}). Check \`codeprism_workspace_status\` for progress.`,
+            }],
+          };
+        }
+
         const staleCount = getStaleCardCount(repo);
 
         if (staleCount === 0) {
           return { content: [{ type: "text" as const, text: "No stale cards found. Knowledge base is up to date." }] };
         }
 
+        runIncrementalReindex(repo);
+
         return {
           content: [{
             type: "text" as const,
             text:
-              `Found ${staleCount} stale card(s)${repo ? ` in ${repo}` : ""}.\n\n` +
-              `Trigger async reindex via the REST API:\n\`\`\`\n` +
-              `curl -X POST http://localhost:4000/api/reindex-stale${repo ? `?repo=${repo}` : ""}\n\`\`\`\n\n` +
-              `Or reindex manually:\n\`\`\`\npnpm index\n\`\`\``,
+              `Reindex started for ${staleCount} stale card(s)${repo ? ` in \`${repo}\`` : ""}.\n` +
+              `Use \`codeprism_workspace_status\` to check progress.`,
           }],
         };
       } catch (err) {

@@ -16,42 +16,42 @@ const FRAMEWORKS = [
 
 const HOW_IT_WORKS = [
   {
-    title: "Index",
+    title: "Parse",
     description:
-      "Tree-sitter parses your repos into a knowledge graph — models, flows, routes, dependencies — across Ruby, JS/TS, Python, Go and more.",
+      "Your repos are parsed into a living knowledge graph — models, routes, flows, and dependencies — across Ruby, JS/TS, Python, Go, and more. No config required.",
     icon: FileText,
   },
   {
     title: "Learn",
     description:
-      "Louvain community detection maps your team's real architectural flows. Cards get richer every time a developer verifies or corrects one.",
+      "codeprism maps your real architectural flows automatically. Every time a developer verifies or corrects a card, the knowledge base gets sharper for everyone.",
     icon: GitBranch,
   },
   {
     title: "Answer",
     description:
-      "Any AI tool calls codeprism_search() and gets a 300-token card with the right context — instead of hallucinating or re-reading 15 raw files.",
+      "Any AI tool calls codeprism via MCP and gets a focused ~350-token knowledge card instead of re-reading 15 raw files — faster answers, lower costs.",
     icon: Zap,
   },
 ];
 
 const TEAM_BENEFITS = [
   {
-    title: "Alice figured it out. Bob shouldn't have to.",
+    title: "One discovery. Zero re-discoveries.",
     description:
-      "When one developer discovers how the billing flow works in Cursor, that knowledge is instantly available to the teammate using Claude Code and the one using Windsurf.",
+      "When Alice figures out how the billing flow works in Cursor, that knowledge is immediately available to Bob in Claude Code and Charlie in Windsurf. Nobody starts from zero.",
     icon: Users,
   },
   {
-    title: "Every session starts senior, not junior",
+    title: "Every session starts with full context",
     description:
-      "AI tools forget everything between sessions. codeprism gives every new session the accumulated knowledge of your entire team — from day one.",
+      "AI tools forget everything the moment you close the tab. codeprism gives every new session the accumulated knowledge of your entire team — accumulated over months, not rebuilt from scratch each time.",
     icon: Brain,
   },
   {
-    title: "Knowledge compounds, not costs",
+    title: "Gets smarter the more you use it",
     description:
-      "Month 6 is dramatically smarter than month 1. Every card verified, every insight saved, every question asked makes the whole team's AI sharper.",
+      "Month 6 is dramatically better than month 1. Every verified card, every saved insight, every answered question makes the whole team's AI sharper — compounding over time.",
     icon: RefreshCw,
   },
 ];
@@ -247,13 +247,14 @@ export function Landing() {
         </div>
 
         <h1 className="mx-auto max-w-3xl text-4xl font-bold leading-tight text-[#e1e4e8] sm:text-5xl">
-          Your AI forgets what your team{" "}
-          <span className="text-accent">learned yesterday.</span>
+          Your AI forgets everything{" "}
+          <span className="text-accent">between sessions.</span>
         </h1>
         <p className="mx-auto mt-6 max-w-2xl text-lg text-[#8b949e]">
           codeprism is a{" "}
-          <span className="text-[#e1e4e8] font-medium">shared memory layer</span> for AI coding tools.
-          One knowledge graph, shared across your whole team — regardless of which AI tool each developer uses.
+          <span className="text-[#e1e4e8] font-medium">persistent knowledge layer</span> for AI coding tools.
+          Your team's architectural decisions, flows, and context — indexed once, available to every developer
+          in every AI tool, forever.
         </p>
 
         <div className="mt-10 flex flex-col items-center gap-4">
@@ -265,7 +266,7 @@ export function Landing() {
                 "hover:bg-[#79b8ff] transition-colors"
               )}
             >
-              Give your team a shared brain
+              Set up your team's shared memory
             </Link>
             <a
               href="https://github.com/codeprism/codeprism"
@@ -355,19 +356,22 @@ export function Landing() {
       {/* Token Savings Calculator */}
       <section className="mx-auto max-w-5xl px-6 py-20">
         <h2 className="mb-3 text-center text-2xl font-bold text-[#e1e4e8]">
-          The efficiency case, by the numbers
+          How much is your team spending on context?
         </h2>
         <p className="mb-10 text-center text-sm text-[#8b949e] max-w-xl mx-auto">
-          Token savings are the measurable side effect. Plug in your team size to see what it looks like on your bill.
+          Every AI query without codeprism dumps 4,500+ raw tokens. Plug in your numbers.
         </p>
         <SavingsCalculator />
       </section>
 
       {/* How it works */}
       <section className="border-t border-[#30363d] mx-auto max-w-5xl px-6 py-20">
-        <h2 className="mb-10 text-center text-2xl font-bold text-[#e1e4e8]">
+        <h2 className="mb-3 text-center text-2xl font-bold text-[#e1e4e8]">
           How it works
         </h2>
+        <p className="mb-10 text-center text-sm text-[#8b949e] max-w-xl mx-auto">
+          One pnpm command indexes your repos. After that, every AI tool in your team reads from the same graph.
+        </p>
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
           {HOW_IT_WORKS.map((step, i) => (
             <div
@@ -439,12 +443,12 @@ export function Landing() {
       <section className="border-t border-[#30363d]">
         <div className="mx-auto max-w-5xl px-6 py-20">
           <h2 className="mb-4 text-center text-2xl font-bold text-[#e1e4e8]">
-            AI tool fragmentation is real. This fixes it.
+            Built for teams that use multiple AI tools
           </h2>
           <p className="mb-12 text-center text-sm text-[#8b949e] max-w-2xl mx-auto">
-            Your team won't standardize on one AI tool — and they shouldn't have to.
-            Cursor, Claude Code, Windsurf, Lovable: all of them share the same knowledge graph.
-            One team, one memory.
+            Your developers won't all use the same AI tool — and they shouldn't have to.
+            Cursor, Claude Code, Windsurf, Lovable: every tool reads from the same knowledge graph.
+            One team. One shared context.
           </p>
           <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
             {TEAM_BENEFITS.map((benefit) => (
@@ -522,18 +526,56 @@ export function Landing() {
               <ul className="space-y-3 text-sm text-[#8b949e]">
                 <li className="flex items-start gap-2">
                   <span className="mt-0.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
-                  One-click setup, no server to manage
+                  One-click setup — ready in under 2 minutes
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="mt-0.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
-                  Invitations, analytics, seat tracking built-in
+                  Team invitations, analytics, and seat tracking built-in
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="mt-0.5 block h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
-                  First 100 teams: up to 10 devs free
+                  Founding teams: up to 10 devs free · no credit card
                 </li>
               </ul>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section className="border-t border-[#30363d]">
+        <div className="mx-auto max-w-3xl px-6 py-20">
+          <h2 className="mb-10 text-center text-2xl font-bold text-[#e1e4e8]">
+            Common questions
+          </h2>
+          <div className="space-y-6">
+            {[
+              {
+                q: "Does codeprism send my code to the cloud?",
+                a: "No. The engine runs entirely on your machine or your own server. Code is never sent to codeprism servers. The cloud plan hosts the engine on your own isolated tenant — your code stays inside that instance.",
+              },
+              {
+                q: "Do developers need to change how they work?",
+                a: "No. codeprism integrates as an MCP server — the same protocol Cursor, Claude Code, Windsurf, and Zed already support. Add a 10-line JSON snippet to your editor config and it's live.",
+              },
+              {
+                q: "What if my team uses different AI tools?",
+                a: "That's the whole point. codeprism is tool-agnostic. Every MCP-compatible editor reads from the same knowledge graph — no matter who uses Cursor and who uses Claude Code.",
+              },
+              {
+                q: "How long does the initial index take?",
+                a: "Typically 2–10 minutes for a mid-size codebase (~100k LOC). After that, codeprism watches for file changes and updates incrementally in the background.",
+              },
+              {
+                q: "What languages and frameworks are supported?",
+                a: "Ruby, JavaScript, TypeScript, Python, Go, Vue out of the box. Rails, React, Next.js, Django, FastAPI, Laravel, NestJS, Angular, Spring, and more are detected automatically from your stack.",
+              },
+            ].map(({ q, a }) => (
+              <div key={q} className="border-b border-[#21262d] pb-6 last:border-0">
+                <p className="text-sm font-semibold text-[#e1e4e8] mb-2">{q}</p>
+                <p className="text-sm leading-relaxed text-[#8b949e]">{a}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import { Users, UserPlus, Shield, Clock, Eye, XCircle } from "lucide-react";
 import { api, type TeamMember, type MembersResponse } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -27,7 +28,6 @@ export function Team() {
   const [loading, setLoading] = useState(true);
   const [inviteEmails, setInviteEmails] = useState("");
   const [inviting, setInviting] = useState(false);
-  const [inviteResult, setInviteResult] = useState<string | null>(null);
 
   const refresh = () => {
     api.members()
@@ -47,14 +47,13 @@ export function Team() {
     if (emails.length === 0) return;
 
     setInviting(true);
-    setInviteResult(null);
     try {
       const res = await api.inviteMembers(emails);
-      setInviteResult(`${res.invited} invited, ${res.skipped} already members`);
+      toast.success(`${res.invited} invited, ${res.skipped} already members`);
       setInviteEmails("");
       refresh();
     } catch (err) {
-      setInviteResult(err instanceof Error ? err.message : "Failed to invite");
+      toast.error(err instanceof Error ? err.message : "Failed to invite");
     } finally {
       setInviting(false);
     }
@@ -136,9 +135,6 @@ export function Team() {
               >
                 {inviting ? "Sending..." : "Send invitations"}
               </button>
-              {inviteResult && (
-                <span className="text-xs text-[#8b949e]">{inviteResult}</span>
-              )}
             </div>
           </form>
         </div>
