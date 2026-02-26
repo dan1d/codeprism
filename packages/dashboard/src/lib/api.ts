@@ -279,6 +279,15 @@ export const api = {
       body: JSON.stringify({ query, repo }),
     }),
 
+  benchmarkCatalog: () =>
+    fetchJSON<CatalogResponse>("/api/benchmarks/catalog"),
+
+  addCatalogPrompt: (repo: string, prompt: string) =>
+    fetchJSON<{ ok: boolean; id: number }>("/api/benchmarks/catalog/prompts", {
+      method: "POST",
+      body: JSON.stringify({ repo, prompt }),
+    }),
+
   publicStats: () =>
     fetchJSON<PublicStats>("/api/public-stats"),
 
@@ -467,4 +476,24 @@ export interface SandboxResponse {
   naiveFiles: number;
   naiveTokens: number;
   tokenReduction: number;
+}
+
+export interface CatalogPrompt {
+  id: number;
+  prompt: string;
+  isDefault: boolean;
+  createdAt: string;
+}
+
+export interface CatalogEntry {
+  repo: string;
+  name: string;
+  language: string;
+  description: string;
+  requiresKey: boolean;
+  prompts: CatalogPrompt[];
+}
+
+export interface CatalogResponse {
+  catalog: CatalogEntry[];
 }

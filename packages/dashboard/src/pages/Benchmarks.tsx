@@ -24,6 +24,9 @@ import {
   GitBranch,
   CheckCircle2,
   Circle,
+  Plus,
+  Send,
+  X,
 } from "lucide-react";
 import {
   api,
@@ -33,6 +36,8 @@ import {
   type BenchmarkStage,
   type SandboxCard,
   type SandboxResponse,
+  type CatalogEntry,
+  type CatalogPrompt,
 } from "@/lib/api";
 import { cn, formatTokens } from "@/lib/utils";
 
@@ -669,213 +674,7 @@ function LanguageBadge({ language }: { language: string }) {
   );
 }
 
-interface CatalogProject {
-  repo: string;
-  name: string;
-  language: string;
-  description: string;
-  prompts: string[];
-  requiresKey?: boolean;
-}
-
-const CATALOG: CatalogProject[] = [
-  // ── Free tier (< 2 000 files) ─────────────────────────────────────
-  {
-    repo: "caddyserver/caddy",
-    name: "Caddy",
-    language: "Go",
-    description: "Web server with automatic HTTPS — used by millions",
-    prompts: [
-      "How does Caddy provision and renew TLS certificates automatically?",
-      "How does the Caddyfile get parsed into a running server config?",
-      "How does Caddy's reverse proxy handle load balancing and health checks?",
-    ],
-  },
-  {
-    repo: "huginn/huginn",
-    name: "Huginn",
-    language: "Ruby",
-    description: "Build agents that monitor and act on your behalf — like IFTTT on your server",
-    prompts: [
-      "How does the agent event pipeline propagate data between agents?",
-      "How does Huginn schedule and run agents in the background?",
-      "How does a new agent type get registered and configured?",
-    ],
-  },
-  {
-    repo: "lobsters/lobsters",
-    name: "Lobsters",
-    language: "Ruby",
-    description: "Community link aggregation site — like Hacker News, open source",
-    prompts: [
-      "How does the story voting and ranking algorithm work?",
-      "How does the invitation tree and moderation system work?",
-      "How are comment threads threaded and rendered?",
-    ],
-  },
-  {
-    repo: "excalidraw/excalidraw",
-    name: "Excalidraw",
-    language: "TypeScript",
-    description: "Virtual collaborative whiteboard — 90k+ stars",
-    prompts: [
-      "How does real-time collaboration and conflict resolution work?",
-      "How does the canvas rendering and element selection work?",
-      "How does the undo/redo history system work?",
-    ],
-  },
-  {
-    repo: "basecamp/kamal",
-    name: "Kamal",
-    language: "Ruby",
-    description: "Deploy web apps anywhere — from Basecamp (DHH)",
-    prompts: [
-      "How does Kamal orchestrate a zero-downtime rolling deploy?",
-      "How does Kamal manage Traefik as the load balancer?",
-      "How does the remote Docker host connection and command execution work?",
-    ],
-  },
-  {
-    repo: "gogs/gogs",
-    name: "Gogs",
-    language: "Go",
-    description: "Painless self-hosted Git service — lightweight Gitea alternative",
-    prompts: [
-      "How does Gogs handle Git push/pull authentication and authorization?",
-      "How does the repository creation and hook system work?",
-      "How does Gogs render diffs and manage merge operations?",
-    ],
-  },
-  {
-    repo: "maybe-finance/maybe",
-    name: "Maybe",
-    language: "Ruby",
-    description: "Personal finance OS — open-sourced after $1M+ investment",
-    prompts: [
-      "How does Maybe sync bank accounts and transactions?",
-      "How does the net worth calculation and portfolio tracking work?",
-      "How does the multi-currency support work?",
-    ],
-  },
-  {
-    repo: "ghostfolio/ghostfolio",
-    name: "Ghostfolio",
-    language: "TypeScript",
-    description: "Open source wealth management — tracks stocks, ETFs, crypto",
-    prompts: [
-      "How does Ghostfolio fetch and cache market data from providers?",
-      "How does the portfolio performance calculation work?",
-      "How does the asset allocation and rebalancing analysis work?",
-    ],
-  },
-  // ── JavaScript / Node.js ──────────────────────────────────────────
-  {
-    repo: "expressjs/express",
-    name: "Express",
-    language: "JavaScript",
-    description: "Fast, minimalist web framework for Node.js — the most popular JS server",
-    prompts: [
-      "How does Express route matching and middleware chaining work?",
-      "How does Express handle error middleware and error propagation?",
-      "How does the request and response object get extended?",
-    ],
-  },
-  {
-    repo: "fastify/fastify",
-    name: "Fastify",
-    language: "JavaScript",
-    description: "High-performance web framework for Node.js — plugin-based architecture",
-    prompts: [
-      "How does the Fastify plugin system and encapsulation work?",
-      "How does Fastify validate request/response schemas with JSON Schema?",
-      "How does the Fastify hook lifecycle work?",
-    ],
-  },
-  {
-    repo: "socketio/socket.io",
-    name: "Socket.IO",
-    language: "TypeScript",
-    description: "Bidirectional event-based communication for Node.js",
-    prompts: [
-      "How does Socket.IO handle room-based broadcasting?",
-      "How does Socket.IO manage reconnection and connection state?",
-      "How does the namespace isolation system work?",
-    ],
-  },
-  // ── PHP / Laravel ─────────────────────────────────────────────────
-  {
-    repo: "monicahq/monica",
-    name: "Monica",
-    language: "PHP",
-    description: "Personal CRM — manage relationships, reminders, notes",
-    prompts: [
-      "How does Monica track contact activities and relationship data?",
-      "How does the reminder and notification system work?",
-      "How does Monica manage journal entries and life events?",
-    ],
-  },
-  {
-    repo: "BookStackApp/BookStack",
-    name: "BookStack",
-    language: "PHP",
-    description: "Open source wiki and documentation platform — Laravel-powered",
-    prompts: [
-      "How does BookStack organize books, chapters, and pages?",
-      "How does the WYSIWYG editor integrate with the backend?",
-      "How does BookStack handle permissions and role-based access?",
-    ],
-    requiresKey: true,
-  },
-  // ── Svelte / Vue ──────────────────────────────────────────────────
-  {
-    repo: "sveltejs/svelte",
-    name: "Svelte",
-    language: "TypeScript",
-    description: "Cybernetically enhanced web apps — compile-time framework",
-    prompts: [
-      "How does Svelte's compiler transform components to vanilla JS?",
-      "How does Svelte's reactive statement system work?",
-      "How does the Svelte store contract and subscription model work?",
-    ],
-  },
-  // ── Requires API key (> 2 000 files) ──────────────────────────────
-  {
-    repo: "mastodon/mastodon",
-    name: "Mastodon",
-    language: "Ruby",
-    description: "Decentralized social network — 50k+ stars, ActivityPub federation",
-    prompts: [
-      "How does ActivityPub federation deliver posts to remote instances?",
-      "How does the home timeline get assembled from followed accounts?",
-      "How does Mastodon handle media attachments and content warnings?",
-    ],
-    requiresKey: true,
-  },
-  {
-    repo: "chatwoot/chatwoot",
-    name: "Chatwoot",
-    language: "Ruby",
-    description: "Open source customer engagement — omnichannel inbox",
-    prompts: [
-      "How does the omnichannel inbox route messages from different platforms?",
-      "How does the real-time agent assignment and notification work?",
-      "How does Chatwoot integrate with WhatsApp and Slack?",
-    ],
-    requiresKey: true,
-  },
-  {
-    repo: "pixelfed/pixelfed",
-    name: "Pixelfed",
-    language: "PHP",
-    description: "Federated image sharing — ActivityPub Instagram alternative",
-    prompts: [
-      "How does Pixelfed federate posts and interactions via ActivityPub?",
-      "How does media storage and processing work?",
-      "How does the timeline aggregation and federation discovery work?",
-    ],
-    requiresKey: true,
-  },
-];
+// CatalogProject type is now CatalogEntry from api.ts (fetched from the server)
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -898,19 +697,166 @@ function CopyButton({ text }: { text: string }) {
 
 const CATALOG_PAGE_SIZE = 6;
 
+// ── Per-card component with persistent prompt saving ──────────────────────────
+
+function CatalogCard({
+  project,
+  onSelect,
+  onPromptAdded,
+}: {
+  project: CatalogEntry;
+  onSelect: (url: string) => void;
+  onPromptAdded: (repo: string, prompt: CatalogPrompt) => void;
+}) {
+  const [showInput, setShowInput] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const handleAddPrompt = async () => {
+    if (draft.trim().length < 10) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const res = await api.addCatalogPrompt(project.repo, draft.trim());
+      onPromptAdded(project.repo, {
+        id: res.id,
+        prompt: draft.trim(),
+        isDefault: false,
+        createdAt: new Date().toISOString(),
+      });
+      setDraft("");
+      setShowInput(false);
+    } catch {
+      setSaveError("Failed to save — try again");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="rounded-lg border border-[#21262d] bg-[#0d1117] p-5 hover:border-[#30363d] transition-colors flex flex-col">
+      {/* Header */}
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <LanguageBadge language={project.language} />
+          <span className="text-sm font-semibold text-[#e1e4e8]">{project.name}</span>
+          {project.requiresKey && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#d29922]/10 border border-[#d29922]/30 text-[#d29922]">
+              key needed
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0 ml-2">
+          <CopyButton text={`https://github.com/${project.repo}`} />
+          <button
+            onClick={() => onSelect(`https://github.com/${project.repo}`)}
+            className="text-xs text-accent hover:text-[#79b8ff] transition-colors font-semibold px-2 py-0.5 rounded border border-accent/30 hover:border-accent/60 bg-accent/5"
+          >
+            Use →
+          </button>
+        </div>
+      </div>
+
+      {/* Description */}
+      <p className="text-xs text-[#8b949e] leading-relaxed mb-4">{project.description}</p>
+
+      {/* Prompts — default + user-added */}
+      <div className="space-y-2 flex-1">
+        {project.prompts.map((p) => (
+          <div key={p.id} className="flex items-start gap-2 group">
+            <CopyButton text={p.prompt} />
+            <span className="text-xs text-[#8b949e] group-hover:text-[#c9d1d9] transition-colors leading-snug flex-1">
+              {p.prompt}
+            </span>
+            {!p.isDefault && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#1f6feb]/20 border border-[#1f6feb]/30 text-[#58a6ff] shrink-0 self-start mt-0.5">
+                new
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Add-prompt section */}
+      {showInput ? (
+        <div className="mt-3 pt-3 border-t border-[#21262d]">
+          <div className="flex gap-2">
+            <input
+              autoFocus
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleAddPrompt();
+                if (e.key === "Escape") { setShowInput(false); setDraft(""); }
+              }}
+              placeholder="Ask something specific about this repo…"
+              className="flex-1 text-xs bg-[#161b22] border border-[#30363d] rounded px-2 py-1.5 text-[#e1e4e8] placeholder-[#484f58] outline-none focus:border-accent"
+            />
+            <button
+              onClick={handleAddPrompt}
+              disabled={saving || draft.trim().length < 10}
+              className="px-2 py-1.5 rounded bg-accent/10 border border-accent/30 text-accent hover:bg-accent/20 transition-colors disabled:opacity-40"
+              title="Save prompt"
+            >
+              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+            </button>
+            <button
+              onClick={() => { setShowInput(false); setDraft(""); setSaveError(null); }}
+              className="px-2 py-1.5 rounded border border-[#30363d] text-[#484f58] hover:text-[#8b949e] transition-colors"
+              title="Cancel"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          {saveError && <p className="text-[10px] text-[#f85149] mt-1">{saveError}</p>}
+          <p className="text-[10px] text-[#484f58] mt-1">
+            Saved for everyone · appears after the project is indexed
+          </p>
+        </div>
+      ) : (
+        <button
+          onClick={() => setShowInput(true)}
+          className="mt-3 pt-3 border-t border-[#21262d] w-full text-left text-[10px] text-[#484f58] hover:text-[#8b949e] flex items-center gap-1 transition-colors"
+        >
+          <Plus className="h-3 w-3" /> Add your own question
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── Catalog container — fetches from API ──────────────────────────────────────
+
 function ProjectCatalog({ onSelect }: { onSelect: (url: string) => void }) {
+  const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string | null>(null);
   const [page, setPage] = useState(0);
-  const languages = [...new Set(CATALOG.map((p) => p.language))];
 
-  const filtered = filter ? CATALOG.filter((p) => p.language === filter) : CATALOG;
+  useEffect(() => {
+    api
+      .benchmarkCatalog()
+      .then((res) => setCatalog(res.catalog))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const languages = [...new Set(catalog.map((p) => p.language))].sort();
+  const filtered = filter ? catalog.filter((p) => p.language === filter) : catalog;
   const totalPages = Math.ceil(filtered.length / CATALOG_PAGE_SIZE);
-  const clampedPage = Math.min(page, totalPages - 1);
+  const clampedPage = Math.min(page, Math.max(0, totalPages - 1));
   const visible = filtered.slice(clampedPage * CATALOG_PAGE_SIZE, (clampedPage + 1) * CATALOG_PAGE_SIZE);
 
   const handleFilterChange = (lang: string | null) => {
     setFilter(lang);
     setPage(0);
+  };
+
+  const handlePromptAdded = (repo: string, newPrompt: CatalogPrompt) => {
+    setCatalog((prev) =>
+      prev.map((p) => (p.repo === repo ? { ...p, prompts: [...p.prompts, newPrompt] } : p))
+    );
   };
 
   return (
@@ -949,91 +895,64 @@ function ProjectCatalog({ onSelect }: { onSelect: (url: string) => void }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {visible.map((project) => (
-          <div
-            key={project.repo}
-            className="rounded-lg border border-[#21262d] bg-[#0d1117] p-5 hover:border-[#30363d] transition-colors flex flex-col"
-          >
-            {/* Card header */}
-            <div className="flex items-start justify-between mb-3">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <LanguageBadge language={project.language} />
-                <span className="text-sm font-semibold text-[#e1e4e8]">{project.name}</span>
-                {project.requiresKey && (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#d29922]/10 border border-[#d29922]/30 text-[#d29922]">
-                    key needed
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                <CopyButton text={`https://github.com/${project.repo}`} />
-                <button
-                  onClick={() => onSelect(`https://github.com/${project.repo}`)}
-                  className="text-xs text-accent hover:text-[#79b8ff] transition-colors font-semibold px-2 py-0.5 rounded border border-accent/30 hover:border-accent/60 bg-accent/5"
-                >
-                  Use →
-                </button>
-              </div>
-            </div>
-
-            {/* Description */}
-            <p className="text-xs text-[#8b949e] leading-relaxed mb-4">{project.description}</p>
-
-            {/* Example prompts */}
-            <div className="space-y-2 flex-1">
-              {project.prompts.map((prompt, i) => (
-                <div key={i} className="flex items-start gap-2 group">
-                  <CopyButton text={prompt} />
-                  <span className="text-xs text-[#8b949e] group-hover:text-[#c9d1d9] transition-colors leading-snug">
-                    {prompt}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-5 pt-4 border-t border-[#21262d]">
-          <p className="text-xs text-[#484f58]">
-            {clampedPage * CATALOG_PAGE_SIZE + 1}–{Math.min((clampedPage + 1) * CATALOG_PAGE_SIZE, filtered.length)} of {filtered.length} projects
-          </p>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              disabled={clampedPage === 0}
-              className="flex items-center gap-1 px-3 py-1.5 rounded border border-[#30363d] text-xs text-[#8b949e] hover:text-[#e1e4e8] hover:border-[#484f58] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            >
-              <ChevronLeft className="h-3.5 w-3.5" /> Previous
-            </button>
-            <div className="flex gap-1">
-              {Array.from({ length: totalPages }).map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => setPage(i)}
-                  className={cn(
-                    "w-7 h-7 rounded text-xs font-mono transition-colors",
-                    i === clampedPage
-                      ? "bg-accent text-black font-bold"
-                      : "text-[#484f58] hover:text-[#e1e4e8] hover:bg-[#21262d]"
-                  )}
-                >
-                  {i + 1}
-                </button>
-              ))}
-            </div>
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-              disabled={clampedPage >= totalPages - 1}
-              className="flex items-center gap-1 px-3 py-1.5 rounded border border-[#30363d] text-xs text-[#8b949e] hover:text-[#e1e4e8] hover:border-[#484f58] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            >
-              Next <ChevronRight className="h-3.5 w-3.5" />
-            </button>
-          </div>
+      {loading ? (
+        <div className="flex items-center gap-2 py-8 text-sm text-[#484f58]">
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading catalog…
         </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {visible.map((project) => (
+              <CatalogCard
+                key={project.repo}
+                project={project}
+                onSelect={onSelect}
+                onPromptAdded={handlePromptAdded}
+              />
+            ))}
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-5 pt-4 border-t border-[#21262d]">
+              <p className="text-xs text-[#484f58]">
+                {clampedPage * CATALOG_PAGE_SIZE + 1}–{Math.min((clampedPage + 1) * CATALOG_PAGE_SIZE, filtered.length)} of {filtered.length} projects
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  disabled={clampedPage === 0}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded border border-[#30363d] text-xs text-[#8b949e] hover:text-[#e1e4e8] hover:border-[#484f58] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" /> Previous
+                </button>
+                <div className="flex gap-1">
+                  {Array.from({ length: totalPages }).map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setPage(i)}
+                      className={cn(
+                        "w-7 h-7 rounded text-xs font-mono transition-colors",
+                        i === clampedPage
+                          ? "bg-accent text-black font-bold"
+                          : "text-[#484f58] hover:text-[#e1e4e8] hover:bg-[#21262d]"
+                      )}
+                    >
+                      {i + 1}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                  disabled={clampedPage >= totalPages - 1}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded border border-[#30363d] text-xs text-[#8b949e] hover:text-[#e1e4e8] hover:border-[#484f58] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                  Next <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

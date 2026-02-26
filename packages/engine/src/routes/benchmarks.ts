@@ -10,6 +10,7 @@ import {
   openBenchmarkDb,
   type LLMConfig,
 } from "../services/benchmark-worker.js";
+import { getCatalog, addCatalogPrompt } from "../services/catalog.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -144,4 +145,37 @@ export async function registerBenchmarkRoutes(app: FastifyInstance): Promise<voi
     } catch { /* no benchmark file yet */ }
     return reply.send({ benchmarks: benchData });
   });
+
+  /** Catalog: list all projects with their prompts (default + user-added). */
+  app.get("/api/benchmarks/catalog", async (_request, reply) => {
+    try {
+      const catalog = getCatalog();
+      return reply.send({ catalog });
+    } catch (err) {
+      app.log.error(err, "Failed to load benchmark catalog");
+      return reply.code(500).send({ error: "Failed to load catalog" });
+    }
+  });
+
+  /** Catalog: persist a user-submitted prompt for a repo. */
+  app.post<{ Body: { repo: string; prompt: string } }>(
+    "/api/benchmarks/catalog/prompts",
+    { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const { repo, prompt } = request.body ?? {};
+      if (!repo || typeof repo !== "string" || !repo.includes("/")) {
+        return reply.code(400).send({ error: "repo must be a valid 'owner/name' string" });
+      }
+      if (!prompt || typeof prompt !== "string" || prompt.trim().length < 10) {
+        return reply.code(400).send({ error: "prompt must be at least 10 characters" });
+      }
+      try {
+        const id = addCatalogPrompt(repo, prompt);
+        return reply.code(201).send({ ok: true, id });
+      } catch (err) {
+        app.log.error(err, "Failed to save catalog prompt");
+        return reply.code(500).send({ error: "Failed to save prompt" });
+      }
+    },
+  );
 }
