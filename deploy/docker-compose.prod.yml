@@ -31,6 +31,9 @@ services:
       context: .
       dockerfile: Dockerfile.caddy
     restart: unless-stopped
+    environment:
+      # Required for wildcard TLS via Cloudflare DNS challenge (see deploy/Caddyfile)
+      - CF_API_TOKEN=${CF_API_TOKEN:-}
     ports:
       - "80:80"
       - "443:443"
