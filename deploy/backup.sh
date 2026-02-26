@@ -15,23 +15,55 @@ mkdir -p "$BACKUP_DIR"
 
 echo "Backing up codeprism databases..."
 
-# Use docker compose cp to safely extract DB files from the running container
-CONTAINER_DATA="/data"
-TEMP_DIR=$(mktemp -d)
-trap 'rm -rf "$TEMP_DIR"' EXIT
+# We do NOT require sqlite3 on the host. Instead, we create consistent snapshots
+# inside the running container using SQLite's online backup via "VACUUM INTO",
+# then copy those snapshot files out to BACKUP_DIR.
 
+CONTAINER_DATA="/data"
 cd "$SCRIPT_DIR"
 
-docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" \
-  sh -c "find $CONTAINER_DATA -name '*.db' -print0" | \
-  xargs -0 -I{} docker compose -f "$COMPOSE_FILE" cp \
-    "$SERVICE_NAME:{}" "$TEMP_DIR/"
+CONTAINER_TMP="/tmp/codeprism-backup-$TIMESTAMP-$$"
+trap 'docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" sh -c "rm -rf '\'''"$CONTAINER_TMP"''\''" >/dev/null 2>&1 || true' EXIT
 
-for db in "$TEMP_DIR"/*.db; do
-  [ -f "$db" ] || continue
-  BASENAME=$(basename "$db")
-  sqlite3 "$db" ".backup '$BACKUP_DIR/${BASENAME%.db}-$TIMESTAMP.db'"
-done
+docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" sh -c "mkdir -p '$CONTAINER_TMP'"
+
+DB_LIST="$(
+  docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" sh -c "find '$CONTAINER_DATA' -type f -name '*.db' -print" \
+  | tr -d '\r'
+)"
+
+if [ -z "$DB_LIST" ]; then
+  echo "No .db files found under $CONTAINER_DATA"
+  exit 0
+fi
+
+while IFS= read -r dbPath; do
+  [ -n "$dbPath" ] || continue
+
+  # Make a stable filename that preserves the original path structure.
+  safeName="${dbPath#/}"           # drop leading /
+  safeName="${safeName//\//__}"    # replace / with __
+  outPath="$CONTAINER_TMP/${safeName}.db"
+
+  echo " - snapshot $dbPath"
+  docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" node -e '
+    const Database = require("better-sqlite3");
+    const dbPath = process.argv[1];
+    const outPath = process.argv[2];
+    const db = new Database(dbPath);
+    try {
+      // Ensure WAL contents are included in the snapshot.
+      db.pragma("wal_checkpoint(FULL)");
+      const escaped = outPath.replaceAll("'"'"'", "'"'"''"'"'");
+      db.exec(`VACUUM INTO '\''${escaped}'\''`);
+    } finally {
+      db.close();
+    }
+  ' "$dbPath" "$outPath"
+
+  docker compose -f "$COMPOSE_FILE" cp \
+    "$SERVICE_NAME:$outPath" "$BACKUP_DIR/${safeName}-${TIMESTAMP}.db"
+done <<<"$DB_LIST"
 
 # Keep last 7 days of backups
 find "$BACKUP_DIR" -name "*.db" -mtime +7 -delete

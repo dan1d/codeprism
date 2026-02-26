@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   FileText, GitBranch, Zap, Users, RefreshCw, Brain,
   TrendingDown, Target, Cpu, ChevronDown, AlertTriangle, Github, MessageCircle, Check,
+  ArrowRight, Menu, X,
 } from "lucide-react";
 import { api, type PublicStats, type FoundingStatus, type BenchmarkResponse } from "@/lib/api";
 import { formatTokens, stackColor, cn } from "@/lib/utils";
