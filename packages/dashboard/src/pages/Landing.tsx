@@ -405,33 +405,33 @@ export function Landing() {
 
       {/* Hero */}
       <section
-        className="relative px-6 pt-36 pb-24 text-center"
+        className="relative px-6 pt-40 pb-32 text-center"
         style={{ background: "linear-gradient(180deg, #0f1117 0%, #161b22 100%)" }}
       >
         {/* Badge */}
-        <div className="inline-flex items-center gap-2 rounded-full border border-[#30363d] bg-[#161b22] px-3 py-1 text-xs text-[#8b949e] mb-6">
-          <span className="h-1.5 w-1.5 rounded-full bg-[#3fb950] animate-pulse" />
+        <div className="inline-flex items-center gap-2 rounded-full border border-[#30363d] bg-[#161b22] px-4 py-1.5 text-sm text-[#8b949e] mb-8">
+          <span className="h-2 w-2 rounded-full bg-[#3fb950] animate-pulse" />
           <span>Open source · Cross-repo · Cursor · Claude Code · Windsurf · Lovable · Zed</span>
         </div>
 
-        <h1 className="mx-auto max-w-3xl text-4xl font-bold leading-tight text-[#e1e4e8] sm:text-5xl">
+        <h1 className="mx-auto max-w-4xl text-5xl font-bold leading-tight text-[#e1e4e8] sm:text-6xl lg:text-7xl">
           Your AI forgets everything{" "}
           <span className="text-accent">between sessions.</span>
         </h1>
-        <p className="mx-auto mt-6 max-w-2xl text-lg text-[#8b949e]">
+        <p className="mx-auto mt-8 max-w-2xl text-xl text-[#8b949e] leading-relaxed">
           codeprism is a{" "}
-          <span className="text-[#e1e4e8] font-medium">persistent knowledge layer</span> for AI coding tools.
+          <span className="text-[#e1e4e8] font-semibold">persistent knowledge layer</span> for AI coding tools.
           Your team's architectural decisions, flows, and context — indexed once, available to every developer
           in every AI tool, forever.
         </p>
 
-        <div className="mt-10 flex flex-col items-center gap-4">
+        <div className="mt-12 flex flex-col items-center gap-5">
           <div className="flex flex-wrap items-center justify-center gap-4">
             <Link
               to="/onboard"
               className={cn(
-                "rounded-lg bg-accent px-6 py-3 text-sm font-semibold text-black",
-                "hover:bg-[#79b8ff] transition-colors"
+                "rounded-lg bg-accent px-8 py-4 text-base font-semibold text-black",
+                "hover:bg-[#79b8ff] transition-colors shadow-lg shadow-accent/20"
               )}
             >
               Set up your team's shared memory
@@ -441,7 +441,7 @@ export function Landing() {
               target="_blank"
               rel="noopener noreferrer"
               className={cn(
-                "rounded-lg border border-[#30363d] bg-[#161b22] px-6 py-3 text-sm font-semibold text-[#e1e4e8]",
+                "rounded-lg border border-[#30363d] bg-[#161b22] px-8 py-4 text-base font-semibold text-[#e1e4e8]",
                 "hover:border-[#8b949e] transition-colors"
               )}
             >
@@ -449,60 +449,60 @@ export function Landing() {
             </a>
           </div>
           {founding?.founding && (
-            <p className="text-sm text-[#3fb950] font-medium">
+            <p className="text-base text-[#3fb950] font-medium">
               First 100 teams: up to 10 devs free — {founding.remaining} spots remaining
             </p>
           )}
         </div>
 
         {/* Pain → Solution visual */}
-        <div className="mx-auto mt-16 max-w-3xl grid grid-cols-1 sm:grid-cols-2 gap-5 text-left">
+        <div className="mx-auto mt-20 max-w-4xl grid grid-cols-1 sm:grid-cols-2 gap-6 text-left">
           {/* Without */}
           <div className="rounded-xl border border-[#f85149]/30 bg-[#0d1117] overflow-hidden">
-            <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-[#21262d] bg-[#161b22]">
-              <AlertTriangle className="h-4 w-4 text-[#f85149]" />
-              <span className="text-sm font-semibold text-[#f85149]">Without codeprism</span>
+            <div className="flex items-center gap-3 px-6 py-4 border-b border-[#21262d] bg-[#161b22]">
+              <AlertTriangle className="h-5 w-5 text-[#f85149]" />
+              <span className="text-base font-semibold text-[#f85149]">Without codeprism</span>
             </div>
-            <ul className="px-5 py-5 space-y-4 text-sm text-[#8b949e] leading-relaxed">
+            <ul className="px-6 py-6 space-y-5 text-base text-[#8b949e] leading-relaxed">
               <li className="flex items-start gap-3">
-                <span className="mt-0.5 text-[#f85149] text-base font-bold shrink-0">✗</span>
+                <span className="mt-0.5 text-[#f85149] text-lg font-bold shrink-0">✗</span>
                 Alice figures out the billing flow. Bob re-discovers it tomorrow.
               </li>
               <li className="flex items-start gap-3">
-                <span className="mt-0.5 text-[#f85149] text-base font-bold shrink-0">✗</span>
+                <span className="mt-0.5 text-[#f85149] text-lg font-bold shrink-0">✗</span>
                 Cursor and Claude give different architectural answers.
               </li>
               <li className="flex items-start gap-3">
-                <span className="mt-0.5 text-[#f85149] text-base font-bold shrink-0">✗</span>
+                <span className="mt-0.5 text-[#f85149] text-lg font-bold shrink-0">✗</span>
                 New devs ask AI and get wrong answers — context is missing.
               </li>
               <li className="flex items-start gap-3">
-                <span className="mt-0.5 text-[#f85149] text-base font-bold shrink-0">✗</span>
+                <span className="mt-0.5 text-[#f85149] text-lg font-bold shrink-0">✗</span>
                 4,500 tokens of raw files dumped into every query.
               </li>
             </ul>
           </div>
           {/* With */}
           <div className="rounded-xl border border-[#3fb950]/30 bg-[#0d1117] overflow-hidden">
-            <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-[#21262d] bg-[#161b22]">
-              <Brain className="h-4 w-4 text-[#3fb950]" />
-              <span className="text-sm font-semibold text-[#3fb950]">With codeprism</span>
+            <div className="flex items-center gap-3 px-6 py-4 border-b border-[#21262d] bg-[#161b22]">
+              <Brain className="h-5 w-5 text-[#3fb950]" />
+              <span className="text-base font-semibold text-[#3fb950]">With codeprism</span>
             </div>
-            <ul className="px-5 py-5 space-y-4 text-sm text-[#c9d1d9] leading-relaxed">
+            <ul className="px-6 py-6 space-y-5 text-base text-[#c9d1d9] leading-relaxed">
               <li className="flex items-start gap-3">
-                <span className="mt-0.5 text-[#3fb950] text-base font-bold shrink-0">✓</span>
+                <span className="mt-0.5 text-[#3fb950] text-lg font-bold shrink-0">✓</span>
                 One shared knowledge graph — visible to every tool, every dev.
               </li>
               <li className="flex items-start gap-3">
-                <span className="mt-0.5 text-[#3fb950] text-base font-bold shrink-0">✓</span>
+                <span className="mt-0.5 text-[#3fb950] text-lg font-bold shrink-0">✓</span>
                 Consistent architectural answers across Cursor, Claude, Windsurf.
               </li>
               <li className="flex items-start gap-3">
-                <span className="mt-0.5 text-[#3fb950] text-base font-bold shrink-0">✓</span>
+                <span className="mt-0.5 text-[#3fb950] text-lg font-bold shrink-0">✓</span>
                 New devs get the team's accumulated knowledge from day one.
               </li>
               <li className="flex items-start gap-3">
-                <span className="mt-0.5 text-[#3fb950] text-base font-bold shrink-0">✓</span>
+                <span className="mt-0.5 text-[#3fb950] text-lg font-bold shrink-0">✓</span>
                 ~{REDUCTION_PCT}% fewer tokens — same answer, fraction of the cost.
               </li>
             </ul>
@@ -524,15 +524,12 @@ export function Landing() {
       )}
 
       {/* Token Savings Calculator */}
-      <section className="mx-auto max-w-5xl px-6 py-24">
-        <h2 className="mb-3 text-center text-3xl font-bold text-[#e1e4e8]">
+      <section id="calculator" className="mx-auto max-w-5xl px-6 py-32">
+        <h2 className="mb-4 text-center text-4xl font-bold text-[#e1e4e8]">
           The efficiency case, by the numbers
         </h2>
-        <p className="mb-2 text-center text-base text-[#8b949e] max-w-2xl mx-auto">
-          Token savings are the measurable side effect.
-        </p>
-        <p className="mb-10 text-center text-base text-[#8b949e] max-w-2xl mx-auto">
-          Plug in your team size to see what it looks like on your bill.
+        <p className="mb-10 text-center text-lg text-[#8b949e] max-w-2xl mx-auto leading-relaxed">
+          Token savings are the measurable side effect. Plug in your team size to see what it looks like on your bill.
         </p>
         <SavingsCalculator />
       </section>

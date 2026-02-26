@@ -3,7 +3,7 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 WORKDIR /app
 
 FROM base AS deps
-RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y python3 make g++ git && rm -rf /var/lib/apt/lists/*
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* .npmrc* ./
 COPY packages/engine/package.json ./packages/engine/
 COPY packages/dashboard/package.json ./packages/dashboard/
@@ -20,6 +20,7 @@ RUN pnpm --filter @codeprism/engine build
 RUN pnpm --filter @codeprism/dashboard build
 
 FROM base AS runtime
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/packages/engine/node_modules ./packages/engine/node_modules
 COPY --from=build /app/packages/engine/dist ./packages/engine/dist
