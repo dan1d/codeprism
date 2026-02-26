@@ -42,9 +42,7 @@ export function stackColor(stack: string): string {
   if (lower.includes("svelte")) return "text-orange-400 bg-orange-900/30 border-orange-800/50";
   if (lower.includes("angular")) return "text-red-500 bg-red-900/20 border-red-800/40";
   if (lower.includes("nestjs") || lower.includes("nest")) return "text-red-300 bg-red-900/20 border-red-800/30";
-  if (lower.includes("go") || lower.includes("gin")) return "text-cyan-400 bg-cyan-900/30 border-cyan-800/50";
-  if (lower.includes("python") || lower.includes("fastapi") || lower.includes("django")) return "text-yellow-400 bg-yellow-900/30 border-yellow-800/50";
-  // Check Python/Django BEFORE Go — "django" contains substring "go"
+  // Python/Django checked BEFORE Go — "django" contains the substring "go"
   if (lower.includes("python") || lower.includes("fastapi") || lower.includes("django")) return "text-yellow-400 bg-yellow-900/30 border-yellow-800/50";
   if (lower === "go" || lower.includes("gin")) return "text-cyan-400 bg-cyan-900/30 border-cyan-800/50";
   if (lower.includes("laravel") || lower.includes("symfony") || lower.includes("php")) return "text-purple-400 bg-purple-900/30 border-purple-800/50";

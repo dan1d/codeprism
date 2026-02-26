@@ -13,26 +13,19 @@ const GITHUB_URL = "https://github.com/dan1d/codeprism";
 const DISCORD_URL = "https://discord.gg/nsWERSde";
 
 function PrismLogo({ className }: { className?: string }) {
+  const uid = useId();
+  const gradId = `prismFill-${uid}`;
   return (
     <svg viewBox="0 0 36 36" fill="none" className={className} aria-hidden="true">
-      {/* Prism body */}
-      <polygon
-        points="18,3 33,30 3,30"
-        fill="url(#prismFill)"
-        stroke="#58a6ff"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-      />
-      {/* Inner facet line — creates depth */}
+      <polygon points="18,3 33,30 3,30" fill={`url(#${gradId})`} stroke="#58a6ff" strokeWidth="1.8" strokeLinejoin="round" />
       <line x1="18" y1="3" x2="10" y2="30" stroke="#58a6ff" strokeWidth="0.8" strokeOpacity="0.35" />
-      {/* Spectrum dots at base — light dispersion */}
       <circle cx="6" cy="30" r="1.8" fill="#f85149" />
       <circle cx="10" cy="30" r="1.8" fill="#d29922" />
       <circle cx="14" cy="30" r="1.8" fill="#3fb950" />
       <circle cx="18" cy="30" r="1.8" fill="#58a6ff" />
       <circle cx="22" cy="30" r="1.8" fill="#a371f7" />
       <defs>
-        <linearGradient id="prismFill" x1="3" y1="30" x2="33" y2="3" gradientUnits="userSpaceOnUse">
+        <linearGradient id={gradId} x1="3" y1="30" x2="33" y2="3" gradientUnits="userSpaceOnUse">
           <stop offset="0%" stopColor="#58a6ff" stopOpacity="0.08" />
           <stop offset="100%" stopColor="#58a6ff" stopOpacity="0.22" />
         </linearGradient>
@@ -41,8 +34,18 @@ function PrismLogo({ className }: { className?: string }) {
   );
 }
 
+const NAV_LINKS = [
+  { label: "Pricing", anchor: "pricing" },
+  { label: "FAQ", anchor: "faq" },
+] as const;
+
+function scrollTo(id: string) {
+  document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
+}
+
 function Navbar() {
   const [scrolled, setScrolled] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
     const handler = () => setScrolled(window.scrollY > 10);
@@ -50,44 +53,45 @@ function Navbar() {
     return () => window.removeEventListener("scroll", handler);
   }, []);
 
+  // Close mobile menu on route change / outside click via Escape
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setMobileOpen(false); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [mobileOpen]);
+
   return (
     <header
       className={cn(
         "fixed top-0 inset-x-0 z-50 transition-all duration-200",
-        scrolled
-          ? "bg-[#0d1117]/90 backdrop-blur-md border-b border-[#21262d] shadow-lg shadow-black/20"
+        scrolled || mobileOpen
+          ? "bg-[#0d1117]/95 backdrop-blur-md border-b border-[#21262d] shadow-lg shadow-black/20"
           : "bg-transparent"
       )}
     >
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 h-16">
         {/* Logo */}
-        <Link to="/" className="flex items-center gap-2.5 group">
+        <Link to="/" className="flex items-center gap-2.5 group" onClick={() => setMobileOpen(false)}>
           <PrismLogo className="h-8 w-8 flex-shrink-0" />
           <span className="text-lg font-bold tracking-tight text-[#e1e4e8] group-hover:text-white transition-colors">
             code<span className="text-accent">prism</span>
           </span>
         </Link>
 
-        {/* Center nav */}
+        {/* Center nav — desktop only */}
         <nav className="hidden md:flex items-center gap-1">
-          <a
-            href="#pricing"
-            onClick={(e) => { e.preventDefault(); document.getElementById("pricing")?.scrollIntoView({ behavior: "smooth" }); }}
-            className="px-3 py-2 text-sm text-[#8b949e] hover:text-[#e1e4e8] transition-colors rounded-md hover:bg-[#21262d]"
-          >
-            Pricing
-          </a>
-          <a
-            href="#faq"
-            onClick={(e) => { e.preventDefault(); document.getElementById("faq")?.scrollIntoView({ behavior: "smooth" }); }}
-            className="px-3 py-2 text-sm text-[#8b949e] hover:text-[#e1e4e8] transition-colors rounded-md hover:bg-[#21262d]"
-          >
-            FAQ
-          </a>
-          <Link
-            to="/terms"
-            className="px-3 py-2 text-sm text-[#8b949e] hover:text-[#e1e4e8] transition-colors rounded-md hover:bg-[#21262d]"
-          >
+          {NAV_LINKS.map(({ label, anchor }) => (
+            <a
+              key={anchor}
+              href={`#${anchor}`}
+              onClick={(e) => { e.preventDefault(); scrollTo(anchor); }}
+              className="px-3 py-2 text-sm text-[#8b949e] hover:text-[#e1e4e8] transition-colors rounded-md hover:bg-[#21262d]"
+            >
+              {label}
+            </a>
+          ))}
+          <Link to="/terms" className="px-3 py-2 text-sm text-[#8b949e] hover:text-[#e1e4e8] transition-colors rounded-md hover:bg-[#21262d]">
             Terms
           </Link>
           <a
@@ -103,20 +107,59 @@ function Navbar() {
 
         {/* Right CTAs */}
         <div className="flex items-center gap-2">
-          <Link
-            to="/login"
-            className="hidden sm:block px-4 py-2 text-sm text-[#8b949e] hover:text-[#e1e4e8] transition-colors"
-          >
+          {/* Log in is intentionally low-contrast — primary action is Get started */}
+          <Link to="/login" className="hidden sm:block px-4 py-2 text-sm text-[#484f58] hover:text-[#8b949e] transition-colors">
             Log in
           </Link>
-          <Link
-            to="/onboard"
-            className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-black hover:bg-[#79b8ff] transition-colors"
-          >
+          <Link to="/onboard" className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-black hover:bg-[#79b8ff] transition-colors">
             Get started →
           </Link>
+          {/* Mobile hamburger */}
+          <button
+            onClick={() => setMobileOpen((v) => !v)}
+            className="md:hidden ml-1 p-2 rounded-md text-[#8b949e] hover:text-[#e1e4e8] hover:bg-[#21262d] transition-colors"
+            aria-label={mobileOpen ? "Close menu" : "Open menu"}
+          >
+            {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
         </div>
       </div>
+
+      {/* Mobile menu */}
+      {mobileOpen && (
+        <nav className="md:hidden border-t border-[#21262d] px-6 py-4 flex flex-col gap-1">
+          {NAV_LINKS.map(({ label, anchor }) => (
+            <a
+              key={anchor}
+              href={`#${anchor}`}
+              onClick={(e) => { e.preventDefault(); scrollTo(anchor); setMobileOpen(false); }}
+              className="px-3 py-2.5 text-sm text-[#8b949e] hover:text-[#e1e4e8] transition-colors rounded-md hover:bg-[#21262d]"
+            >
+              {label}
+            </a>
+          ))}
+          <Link to="/terms" onClick={() => setMobileOpen(false)} className="px-3 py-2.5 text-sm text-[#8b949e] hover:text-[#e1e4e8] transition-colors rounded-md hover:bg-[#21262d]">
+            Terms
+          </Link>
+          <a
+            href={GITHUB_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setMobileOpen(false)}
+            className="flex items-center gap-1.5 px-3 py-2.5 text-sm text-[#8b949e] hover:text-[#e1e4e8] transition-colors rounded-md hover:bg-[#21262d]"
+          >
+            <Github className="h-3.5 w-3.5" /> Open source
+          </a>
+          <div className="border-t border-[#21262d] mt-2 pt-2">
+            <Link to="/login" onClick={() => setMobileOpen(false)} className="block px-3 py-2.5 text-sm text-[#484f58] hover:text-[#8b949e] transition-colors rounded-md">
+              Log in
+            </Link>
+            <Link to="/onboard" onClick={() => setMobileOpen(false)} className="mt-1 block rounded-lg bg-accent px-4 py-2.5 text-center text-sm font-semibold text-black hover:bg-[#79b8ff] transition-colors">
+              Get started →
+            </Link>
+          </div>
+        </nav>
+      )}
     </header>
   );
 }
@@ -195,6 +238,16 @@ function SavingsCalculator() {
   const [teamSize, setTeamSize] = useState(5);
   const [modelIdx, setModelIdx] = useState(0);
   const [open, setOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (!dropdownRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
 
   const model = LLM_MODELS[modelIdx];
   const tokensWithout = queries * teamSize * 30 * AVG_TOKENS_WITHOUT;
@@ -255,7 +308,7 @@ function SavingsCalculator() {
           {/* Model picker */}
           <div>
             <label className="text-xs text-[#8b949e] mb-2 block">LLM model</label>
-            <div className="relative">
+            <div className="relative" ref={dropdownRef}>
               <button
                 onClick={() => setOpen(!open)}
                 className={cn(
@@ -373,7 +426,7 @@ export function Landing() {
         </p>
 
         <div className="mt-10 flex flex-col items-center gap-4">
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center justify-center gap-4">
             <Link
               to="/onboard"
               className={cn(
@@ -613,7 +666,7 @@ export function Landing() {
               applications — Mastodon, Caddy, Excalidraw, and more.{" "}
               {bench.benchmarks.aggregate.total_queries} real questions about how they work.
             </p>
-            <div className="grid grid-cols-3 gap-4 mb-6">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
               <div className="rounded-lg border border-[#30363d] bg-[#161b22] p-5 text-center">
                 <TrendingDown className="h-5 w-5 text-accent mx-auto mb-2" />
                 <p className="text-3xl font-bold text-accent">
@@ -878,14 +931,15 @@ export function Landing() {
             {/* Team — highlighted */}
             <div className="rounded-xl border border-accent/60 bg-[#161b22] p-8 flex flex-col relative">
               <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-accent px-3 py-0.5 text-[11px] font-semibold text-black">
-                Most popular
+                Recommended
               </div>
               <h3 className="text-lg font-semibold text-[#e1e4e8] mb-1">Team Cloud</h3>
               <p className="text-xs text-[#484f58] mb-6">AI-native startups</p>
-              <div className="mb-6">
+              <div className="mb-1">
                 <span className="text-4xl font-bold text-accent">Free</span>
-                <span className="text-sm text-[#8b949e] ml-1">founding offer</span>
+                <span className="text-sm text-[#8b949e] ml-1">for founding teams</span>
               </div>
+              <p className="text-xs text-[#484f58] mb-5">First 100 teams · pricing announced at launch</p>
               <ul className="space-y-3 text-sm text-[#8b949e] flex-1">
                 {[
                   "Cloud-hosted, zero infra",

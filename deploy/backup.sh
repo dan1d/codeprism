@@ -46,20 +46,19 @@ while IFS= read -r dbPath; do
   outPath="$CONTAINER_TMP/${safeName}.db"
 
   echo " - snapshot $dbPath"
-  docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" node -e '
-    const Database = require("better-sqlite3");
+  docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" sh -lc "cd /app/packages/engine && node -e '
+    const Database = require(\"better-sqlite3\");
     const dbPath = process.argv[1];
     const outPath = process.argv[2];
     const db = new Database(dbPath);
     try {
-      // Ensure WAL contents are included in the snapshot.
-      db.pragma("wal_checkpoint(FULL)");
-      const escaped = outPath.replaceAll("'"'"'", "'"'"''"'"'");
-      db.exec(`VACUUM INTO '\''${escaped}'\''`);
+      db.pragma(\"wal_checkpoint(FULL)\");
+      const escaped = outPath.replaceAll(\"'\", \"''\");
+      db.exec(`VACUUM INTO '\\''${escaped}'\\''`);
     } finally {
       db.close();
     }
-  ' "$dbPath" "$outPath"
+  ' \"$dbPath\" \"$outPath\""
 
   docker compose -f "$COMPOSE_FILE" cp \
     "$SERVICE_NAME:$outPath" "$BACKUP_DIR/${safeName}-${TIMESTAMP}.db"
