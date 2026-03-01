@@ -1,8 +1,92 @@
-import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync, unlinkSync } from "node:fs";
+import { resolve, join } from "node:path";
 import { getDb } from "../db/connection.js";
 import { getAllRepoSignalRecords } from "../search/repo-signals.js";
 import { safeParseJsonArray } from "./utils.js";
+
+/* ------------------------------------------------------------------ */
+/*  Git hook installation                                               */
+/* ------------------------------------------------------------------ */
+
+const HOOK_MARKER = "# codeprism-managed";
+
+/**
+ * Generates the hook script body. Uses the env-provided port with fallback to 4000.
+ * The hook fires on merge into main/master — it calls the codeprism reindex API
+ * in the background (fire-and-forget) so it never blocks git operations.
+ */
+function hookScript(): string {
+  const port = process.env["CODEPRISM_PORT"] ?? "4000";
+  return `#!/bin/sh
+${HOOK_MARKER}
+# Automatically triggers codeprism re-index when a branch is merged into main/master.
+# Installed by codeprism — safe to delete if you prefer to manage re-indexing manually.
+BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
+  curl -s -X POST "http://localhost:${port}/api/reindex-stale" \\
+    -H "Content-Type: application/json" \\
+    --max-time 5 >/dev/null 2>&1 &
+fi
+`;
+}
+
+/**
+ * Installs (or updates) the codeprism post-merge git hook in a repo.
+ * - If no hook exists: creates it.
+ * - If a codeprism-managed hook exists: overwrites (idempotent / port update).
+ * - If a custom (non-codeprism) hook exists: appends a call to a sidecar script
+ *   so the user's existing hook is preserved.
+ */
+export function installGitHook(repoPath: string): void {
+  const hooksDir = join(repoPath, ".git", "hooks");
+  if (!existsSync(hooksDir)) return; // not a git repo
+
+  mkdirSync(hooksDir, { recursive: true });
+
+  const hookPath = join(hooksDir, "post-merge");
+  const script = hookScript();
+
+  if (!existsSync(hookPath)) {
+    writeFileSync(hookPath, script, "utf-8");
+    chmodSync(hookPath, 0o755);
+    return;
+  }
+
+  const existing = readFileSync(hookPath, "utf-8");
+  if (existing.includes(HOOK_MARKER)) {
+    // Overwrite our own managed hook (e.g. port changed)
+    writeFileSync(hookPath, script, "utf-8");
+    chmodSync(hookPath, 0o755);
+    return;
+  }
+
+  // Custom hook present — append a sourced sidecar rather than overwriting
+  const sidecarPath = join(hooksDir, "post-merge.codeprism");
+  writeFileSync(sidecarPath, script, "utf-8");
+  chmodSync(sidecarPath, 0o755);
+  if (!existing.includes("post-merge.codeprism")) {
+    const appended = existing.trimEnd() + "\n\n# codeprism hook\n\"$(dirname \"$0\")/post-merge.codeprism\"\n";
+    writeFileSync(hookPath, appended, "utf-8");
+  }
+}
+
+/**
+ * Removes the codeprism-managed hook (or sidecar) from a repo on unregister.
+ */
+export function removeGitHook(repoPath: string): void {
+  const hooksDir = join(repoPath, ".git", "hooks");
+  const hookPath = join(hooksDir, "post-merge");
+  const sidecarPath = join(hooksDir, "post-merge.codeprism");
+
+  try { if (existsSync(sidecarPath)) unlinkSync(sidecarPath); } catch { /* ignore */ }
+
+  if (existsSync(hookPath)) {
+    try {
+      const content = readFileSync(hookPath, "utf-8");
+      if (content.includes(HOOK_MARKER)) unlinkSync(hookPath);
+    } catch { /* ignore */ }
+  }
+}
 
 export interface RepoSummary {
   repo: string;

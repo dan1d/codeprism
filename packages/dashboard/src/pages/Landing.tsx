@@ -993,13 +993,13 @@ export function Landing() {
             {/* Open Source */}
             <div className="rounded-xl border border-[#30363d] bg-[#161b22] p-8 flex flex-col">
               <h3 className="text-lg font-semibold text-[#e1e4e8] mb-1">Open Source</h3>
-              <p className="text-xs text-[#484f58] mb-6">Solo devs &amp; tinkerers</p>
+              <p className="text-xs text-[#484f58] mb-6">Teams who own their infra</p>
               <div className="mb-6">
                 <span className="text-4xl font-bold text-[#e1e4e8]">$0</span>
                 <span className="text-sm text-[#8b949e] ml-1">forever</span>
               </div>
               <ul className="space-y-3 text-sm text-[#8b949e] flex-1">
-                {["Self-host with Docker", "Full engine, no limits", "1 developer", "Community support (Discord)"].map((f) => (
+                {["Self-host with Docker (~$10/mo server)", "Full engine, no feature limits", "Unlimited developers", "Community support (Discord)"].map((f) => (
                   <li key={f} className="flex items-center gap-2">
                     <Check className="h-3.5 w-3.5 shrink-0 text-[#3fb950]" />
                     {f}
@@ -1007,7 +1007,7 @@ export function Landing() {
                 ))}
               </ul>
               <p className="mt-4 text-[11px] text-[#484f58] leading-5">
-                AGPL because codeprism is infrastructure — if you build on it or improve it, those improvements flow back to every team using it.
+                AGPL — if you improve the engine, those improvements flow back to every team using it.
               </p>
               <a
                 href={GITHUB_URL}
@@ -1022,21 +1022,22 @@ export function Landing() {
             {/* Team — highlighted */}
             <div className="rounded-xl border border-accent/60 bg-[#161b22] p-8 flex flex-col relative">
               <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-accent px-3 py-0.5 text-[11px] font-semibold text-black">
-                Recommended
+                Most popular
               </div>
               <h3 className="text-lg font-semibold text-[#e1e4e8] mb-1">Team Cloud</h3>
-              <p className="text-xs text-[#484f58] mb-6">AI-native startups</p>
-              <div className="mb-1">
+              <p className="text-xs text-[#484f58] mb-4">AI-native startups · 1–30 devs</p>
+              <div className="mb-1 flex items-baseline gap-2">
                 <span className="text-4xl font-bold text-accent">Free</span>
-                <span className="text-sm text-[#8b949e] ml-1">for founding teams</span>
+                <span className="text-sm text-[#484f58] line-through">$20/dev/mo</span>
               </div>
-              <p className="text-xs text-[#484f58] mb-5">First 100 teams · free forever · we'll tell you before anything changes</p>
+              <p className="text-xs text-[#484f58] mb-5">Founding teams only · first 100 spots · locked in forever</p>
               <ul className="space-y-3 text-sm text-[#8b949e] flex-1">
                 {[
-                  "Cloud-hosted, zero infra",
+                  "Zero infra — ready in 2 minutes",
                   "Up to 10 developers",
-                  "First 100 teams",
-                  "Invitations & analytics",
+                  "Shared knowledge graph across all your repos",
+                  "Works with any AI tool your team uses",
+                  "Team analytics — see what your team's AI is discovering",
                   "Priority Discord support",
                 ].map((f) => (
                   <li key={f} className="flex items-center gap-2">
@@ -1112,6 +1113,10 @@ export function Landing() {
               {
                 q: "How long does the initial index take?",
                 a: "Typically 2–10 minutes for a mid-size codebase (~100k LOC). After that, codeprism watches for file changes and updates incrementally in the background.",
+              },
+              {
+                q: "What happens after the founding team period ends?",
+                a: "Founding teams are locked in free forever — that's the deal, not a trial. After the first 100 spots are claimed, Team Cloud will be $20/dev/month for new teams. You'll always get 30+ days notice before anything changes for your account, but founding teams will never be charged.",
               },
               {
                 q: "What languages and frameworks are supported?",

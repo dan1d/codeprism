@@ -170,6 +170,32 @@ export interface CardInteraction {
   session_id: string | null;
 }
 
+export interface PrImport {
+  id: string;
+  github_repo: string;   // "gobiobridge/biobridge-backend"
+  local_repo: string;    // "biobridge-backend"
+  pr_number: number;
+  pr_title: string;
+  pr_body: string;
+  pr_url: string;
+  branch: string;
+  merged_at: string;
+  card_id: string | null;
+  imported_at: string;
+}
+
+export interface GeneratedDoc {
+  id: string;
+  flow: string;
+  audience: "user" | "dev";
+  title: string;
+  content: string;       // markdown
+  source_repos: string;  // JSON string array
+  card_count: number;
+  generated_at: string;
+  updated_at: string;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Schema creation                                                    */
 /* ------------------------------------------------------------------ */

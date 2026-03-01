@@ -349,6 +349,24 @@ export const api = {
 
   deactivateMember: (userId: string) =>
     fetchJSON<{ deactivated: string }>(`/api/members/${encodeURIComponent(userId)}`, { method: "DELETE" }),
+
+  // ---- Generated Docs ----
+  generatedDocs: (params?: { audience?: "user" | "dev"; flow?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.audience) qs.set("audience", params.audience);
+    if (params?.flow) qs.set("flow", params.flow);
+    const q = qs.toString();
+    return fetchJSON<GeneratedDoc[]>(`/api/generated-docs${q ? `?${q}` : ""}`);
+  },
+
+  generateDocs: (body: { flow?: string; audience?: "user" | "dev" | "both"; force?: boolean }) =>
+    fetchJSON<{ ok: boolean; message: string }>("/api/generated-docs/generate", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  docsStatus: () =>
+    fetchJSON<DocsGenerationState>("/api/generated-docs/status"),
 };
 
 // ---- Auth types ----
@@ -551,4 +569,27 @@ export interface CatalogEntry {
 
 export interface CatalogResponse {
   catalog: CatalogEntry[];
+}
+
+// ---- Generated Docs types ----
+
+export interface GeneratedDoc {
+  id: string;
+  flow: string;
+  audience: "user" | "dev";
+  title: string;
+  content: string;       // markdown
+  source_repos: string;  // JSON string array
+  card_count: number;
+  generated_at: string;
+  updated_at: string;
+}
+
+export interface DocsGenerationState {
+  status: "idle" | "running" | "done" | "error";
+  generated: number;
+  total: number;
+  error: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
 }

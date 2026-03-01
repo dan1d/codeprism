@@ -30,6 +30,9 @@ import { buildGitSignals, buildWorkspaceBranchSignal, type BranchDiffContext } f
 import type { BranchContext } from "../indexer/doc-prompts.js";
 import { writeDocsToFilesystem, type DocToWrite } from "../indexer/doc-writer.js";
 import type { ParsedFile } from "../indexer/types.js";
+import { generateFlowDocs } from "../services/doc-generator.js";
+import { getLLMFromDb } from "../services/instance.js";
+import { importNewPRs } from "../services/pr-importer.js";
 
 export interface IndexOptions {
   /** Reindex all repos regardless of git changes */
@@ -657,6 +660,52 @@ export async function indexRepos(repos: RepoConfig[], workspaceRoot: string, opt
   console.log(`    - Hub cards: ${hubCards}`);
   console.log(`  Edges: ${edges.length}`);
   console.log(`  Files indexed: ${allParsed.length}`);
+
+  // Auto-regenerate docs for flows whose card count changed since the last generation.
+  // Skips stable flows (same card count) — zero LLM cost for unchanged flows.
+  // Respects --skip-docs so a fast re-index won't trigger doc generation.
+  if (!skipDocs && getLLMFromDb()) {
+    const changedFlows = flows
+      .map((f) => f.name)
+      .filter((flowName) => {
+        const currentCount = cards.filter((c) => c.flow === flowName).length;
+        const existing = db
+          .prepare(
+            "SELECT card_count FROM generated_docs WHERE flow = ? AND audience = 'user'",
+          )
+          .get(flowName) as { card_count: number } | undefined;
+        return !existing || existing.card_count !== currentCount;
+      });
+
+    if (changedFlows.length > 0) {
+      console.log(
+        `\nAuto-generating docs for ${changedFlows.length} new/changed flow(s)...`,
+      );
+      for (const flowName of changedFlows) {
+        await generateFlowDocs({ flowFilter: flowName, audience: "both", force: true });
+        process.stdout.write(".");
+      }
+      console.log(` done`);
+    } else {
+      console.log(`\nDocs up to date — no flow changes detected`);
+    }
+  }
+
+  // Auto-import merged PRs via `gh` CLI (requires gh to be installed and authenticated).
+  // Skipped when LLM is not configured or --skip-docs is set.
+  if (!skipDocs && getLLMFromDb()) {
+    console.log(`\nImporting merged PRs…`);
+    const prResult = await importNewPRs({
+      repoPaths: repos.map((r) => ({ name: r.name, path: r.path })),
+    });
+    if (prResult.imported > 0) {
+      console.log(`  -> ${prResult.imported} PR(s) imported as dev_insight cards`);
+    }
+    if (prResult.errors.length > 0) {
+      for (const e of prResult.errors) console.warn(`  [pr-import] ${e}`);
+    }
+  }
+
   console.log(`\nServer ready at http://localhost:${process.env["CODEPRISM_PORT"] ?? 4000}`);
 
   closeDb();

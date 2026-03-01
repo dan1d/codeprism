@@ -41,6 +41,55 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    // Add generated_docs table for auto-generated user/developer documentation
+    // derived from knowledge cards. Separate from project_docs (per-repo LLM docs).
+    version: 3,
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS generated_docs (
+          id           TEXT PRIMARY KEY,
+          flow         TEXT NOT NULL,
+          audience     TEXT NOT NULL CHECK(audience IN ('user', 'dev')),
+          title        TEXT NOT NULL,
+          content      TEXT NOT NULL,
+          source_repos TEXT NOT NULL DEFAULT '[]',
+          card_count   INTEGER NOT NULL DEFAULT 0,
+          generated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_generated_docs_flow_audience
+          ON generated_docs(flow, audience);
+        CREATE INDEX IF NOT EXISTS idx_generated_docs_flow
+          ON generated_docs(flow);
+      `);
+    },
+  },
+  {
+    // Track merged PRs imported via `gh` CLI. Each row links a GitHub PR to the
+    // dev_insight card generated from its description + diff.
+    version: 4,
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS pr_imports (
+          id          TEXT PRIMARY KEY,
+          github_repo TEXT NOT NULL,
+          local_repo  TEXT NOT NULL,
+          pr_number   INTEGER NOT NULL,
+          pr_title    TEXT NOT NULL,
+          pr_body     TEXT NOT NULL DEFAULT '',
+          pr_url      TEXT NOT NULL DEFAULT '',
+          branch      TEXT NOT NULL DEFAULT '',
+          merged_at   TEXT NOT NULL,
+          card_id     TEXT,
+          imported_at TEXT NOT NULL DEFAULT (datetime('now')),
+          UNIQUE(github_repo, pr_number)
+        );
+        CREATE INDEX IF NOT EXISTS idx_pr_imports_repo_merged
+          ON pr_imports(github_repo, merged_at DESC);
+      `);
+    },
+  },
 ];
 
 /**

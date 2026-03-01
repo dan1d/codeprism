@@ -20,6 +20,7 @@ import { tenantMiddleware } from "./tenant/middleware.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerTenantRoutes } from "./routes/tenants.js";
 import { registerBenchmarkRoutes } from "./routes/benchmarks.js";
+import { registerGeneratedDocsRoutes } from "./routes/generated-docs.js";
 import { closeCatalogDb } from "./services/catalog.js";
 import { registerMiscRoutes } from "./routes/misc.js";
 
@@ -84,6 +85,7 @@ async function main(): Promise<void> {
   // ── Feature routes ────────────────────────────────────────────────────
   await app.register(registerMiscRoutes);
   await app.register(registerBenchmarkRoutes);
+  await app.register(registerGeneratedDocsRoutes);
   await registerDashboardRoutes(app);
 
   // ── MCP server ────────────────────────────────────────────────────────

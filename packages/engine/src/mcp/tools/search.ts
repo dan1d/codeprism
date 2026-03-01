@@ -3,7 +3,6 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Card } from "../../db/schema.js";
 import { hybridSearch } from "../../search/hybrid.js";
-import { rerankResults as crossEncoderRerank } from "../../search/reranker.js";
 import {
   searchAndTrack,
   buildHydeQuery,
@@ -145,8 +144,10 @@ export function registerSearchTools(server: McpServer): void {
           return { content: [{ type: "text" as const, text: "No relevant context found for this task." }] };
         }
 
-        const reranked = await crossEncoderRerank(hydeQuery, allSearchResults, 8);
-        const capped = reranked.map((r) => r.card) as CardSummary[];
+        // Pure RRF ordering — eval shows cross-encoder reranker consistently
+        // hurts P@1 by ~6pp on architectural code queries (trained on web search data).
+        // hybridSearch already produces well-ranked results via FTS+semantic RRF.
+        const capped = allSearchResults.slice(0, 8).map((r) => r.card) as CardSummary[];
 
         const flows = [...new Set(capped.map((c) => c.flow))];
         const allFiles = new Set<string>();

@@ -18,6 +18,7 @@ import { Team } from "@/pages/Team";
 import { Benchmarks, BenchmarkDetail } from "@/pages/Benchmarks";
 import { Terms } from "@/pages/Terms";
 import { ForgotWorkspace } from "@/pages/ForgotWorkspace";
+import { Docs } from "@/pages/Docs";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { api, type InstanceInfo } from "@/lib/api";
 
@@ -63,6 +64,7 @@ function DashboardRoutes() {
         <Route index element={<Overview />} />
         <Route path="repos" element={<Repositories />} />
         <Route path="knowledge" element={<KnowledgeBase />} />
+        <Route path="docs" element={<Docs />} />
         <Route path="rules" element={<Rules />} />
         <Route path="team" element={<Team />} />
         <Route path="analytics" element={<Analytics />} />
