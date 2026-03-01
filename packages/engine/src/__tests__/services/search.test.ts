@@ -42,7 +42,7 @@ describe("search service — pure utilities", () => {
   describe("formatCards", () => {
     it("formats cards with titles and content", () => {
       const cards: CardSummary[] = [
-        { id: "1", flow: "auth", title: "Auth Flow", content: "Login flow", source_files: "[]", card_type: "flow", specificity_score: 0.5, usage_count: 0 },
+        { id: "1", flow: "auth", title: "Auth Flow", content: "Login flow", source_files: "[]", card_type: "flow", specificity_score: 0.5, usage_count: 0, identifiers: "" },
       ];
       const result = formatCards(cards);
       expect(result).toContain("Auth Flow");
@@ -52,7 +52,7 @@ describe("search service — pure utilities", () => {
 
     it("shows stale warning for stale cards", () => {
       const cards: CardSummary[] = [
-        { id: "1", flow: "auth", title: "Old", content: "stale", source_files: "[]", card_type: "flow", specificity_score: 0.5, usage_count: 0, stale: 1 },
+        { id: "1", flow: "auth", title: "Old", content: "stale", source_files: "[]", card_type: "flow", specificity_score: 0.5, usage_count: 0, identifiers: "", stale: 1 },
       ];
       const result = formatCards(cards);
       expect(result).toContain("needs verification");
@@ -60,7 +60,7 @@ describe("search service — pure utilities", () => {
 
     it("shows verified indicator", () => {
       const cards: CardSummary[] = [
-        { id: "1", flow: "auth", title: "Verified", content: "v", source_files: "[]", card_type: "flow", specificity_score: 0.5, usage_count: 0, verified_at: "2025-01-01", verification_count: 3 },
+        { id: "1", flow: "auth", title: "Verified", content: "v", source_files: "[]", card_type: "flow", specificity_score: 0.5, usage_count: 0, identifiers: "", verified_at: "2025-01-01", verification_count: 3 },
       ];
       const result = formatCards(cards);
       expect(result).toContain("verified (3x)");
@@ -69,7 +69,7 @@ describe("search service — pure utilities", () => {
     it("truncates when exceeding line budget", () => {
       const longContent = Array.from({ length: 100 }, (_, i) => `line ${i}`).join("\n");
       const cards: CardSummary[] = Array.from({ length: 10 }, (_, i) => ({
-        id: String(i), flow: "f", title: `Card ${i}`, content: longContent, source_files: "[]", card_type: "flow", specificity_score: 0.5, usage_count: 0,
+        id: String(i), flow: "f", title: `Card ${i}`, content: longContent, source_files: "[]", card_type: "flow", specificity_score: 0.5, usage_count: 0, identifiers: "",
       }));
       const result = formatCards(cards, 50);
       expect(result).toContain("omitted for brevity");
@@ -110,9 +110,9 @@ describe("search service — pure utilities", () => {
   describe("prioritizeCards", () => {
     it("sorts model cards before flow, flow before hub", () => {
       const cards: CardSummary[] = [
-        { id: "1", flow: "f", title: "Hub", content: "", source_files: "[]", card_type: "hub", specificity_score: 0.5, usage_count: 0 },
-        { id: "2", flow: "f", title: "Model", content: "", source_files: "[]", card_type: "model", specificity_score: 0.5, usage_count: 0 },
-        { id: "3", flow: "f", title: "Flow", content: "", source_files: "[]", card_type: "flow", specificity_score: 0.5, usage_count: 0 },
+        { id: "1", flow: "f", title: "Hub", content: "", source_files: "[]", card_type: "hub", specificity_score: 0.5, usage_count: 0, identifiers: "" },
+        { id: "2", flow: "f", title: "Model", content: "", source_files: "[]", card_type: "model", specificity_score: 0.5, usage_count: 0, identifiers: "" },
+        { id: "3", flow: "f", title: "Flow", content: "", source_files: "[]", card_type: "flow", specificity_score: 0.5, usage_count: 0, identifiers: "" },
       ];
       const sorted = prioritizeCards(cards);
       expect(sorted[0]!.card_type).toBe("model");

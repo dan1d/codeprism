@@ -65,7 +65,7 @@ export function cardTier(heat: number): "premium" | "standard" | "structural" {
 const TIER_TOKENS: Record<"premium" | "standard" | "structural", number> = {
   premium: 1500,
   standard: 800,
-  structural: 0,
+  structural: 350, // Brief LLM summary even for cold flows — gives them semantic identity
 };
 
 export interface GeneratedCard {
@@ -97,17 +97,33 @@ export function computeContentHash(title: string, content: string): string {
  * Builds a plain-text identifiers string from class names and route signatures.
  * Stored in the dedicated `identifiers` DB column (not appended to content),
  * so the semantic embedding vector stays uncontaminated by noisy identifier tokens.
- * FTS5 indexes this column with the highest BM25 weight (4.0) so exact
- * class-name / route queries get maximum keyword credit.
+ * FTS5 indexes this column so class-name / route queries get keyword credit.
+ *
+ * Class names are stored in two forms so the FTS5 Porter stemmer can apply
+ * to individual words:
+ *   original: "useAlertGeneratedEvent"  (one FTS token — for any exact-match paths)
+ *   split:    "use Alert Generated Event" (four tokens — Porter-stemmed per word)
+ * Without pre-splitting, the entire camelCase name is one token in the FTS
+ * inverted index and query-time splitting (in sanitizeFts5Query) can only match
+ * individual split words, which never appear in the index.
  */
 export function buildIdentifiers(files: ParsedFile[]): string {
-  const names = [...new Set(files.flatMap((f) => f.classes.map((c) => c.name)))];
+  const rawNames = [...new Set(files.flatMap((f) => f.classes.map((c) => c.name)))];
   const routes = files.flatMap((f) =>
     f.routes.map((r) => `${r.method} ${r.path}`),
   ).slice(0, 10);
   // Preserve the historical contract: if there are no explicit identifiers,
   // don't add path tokens (avoids noisy identifiers for empty/unknown files).
-  if (names.length === 0 && routes.length === 0) return "";
+  if (rawNames.length === 0 && routes.length === 0) return "";
+
+  // For each class name, emit both the original token and a space-separated
+  // CamelCase split form. The split form lets FTS5's Porter stemmer tokenise
+  // each word independently, so "useAlertGeneratedEvent" → "use alert generat event"
+  // in the index, which matches query tokens produced by sanitizeFts5Query.
+  const names = rawNames.flatMap((name) => {
+    const split = name.replace(/([a-z])([A-Z])/g, "$1 $2");
+    return split !== name ? [name, split] : [name];
+  });
 
   // Add light path-derived tokens to improve recall for namespaced identifiers,
   // especially in languages where namespaces map to directories (e.g. Ruby).
@@ -337,11 +353,11 @@ async function generateFlowCards(
 
     let content: string;
 
-    if (llm && tier !== "structural") {
+    if (llm) {
       try {
         const maxTokens = TIER_TOKENS[tier];
         const prompt = buildFlowCardPrompt(flow, flowFiles, flowEdges, projectContext);
-        content = await callLlm(llm, prompt, `flow "${flow.name}"`, maxTokens);
+        content = await callLlm(llm, prompt, `flow "${flow.name}" [${tier}]`, maxTokens);
       } catch (err) {
         console.warn(
           `[card-gen] LLM failed for flow "${flow.name}", using structural fallback:`,

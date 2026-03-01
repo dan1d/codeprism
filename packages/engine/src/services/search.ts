@@ -47,7 +47,7 @@ export function invalidateSearchConfig(): void {
 // Card formatting
 // ---------------------------------------------------------------------------
 
-export type CardSummary = Pick<Card, "id" | "flow" | "title" | "content" | "source_files" | "card_type" | "specificity_score" | "usage_count"> & {
+export type CardSummary = Pick<Card, "id" | "flow" | "title" | "content" | "source_files" | "card_type" | "specificity_score" | "usage_count" | "identifiers"> & {
   stale?: number;
   verified_at?: string | null;
   verification_count?: number;
@@ -139,10 +139,20 @@ export function formatCards(cards: CardSummary[], totalLinesBudget = MAX_TOTAL_L
     if (r.stale) confidence = "\u26a0 needs verification";
     else if (r.verified_at) confidence = `\u2713 verified (${r.verification_count ?? 0}x)`;
 
+    // Show key class names and hooks so developers (and Claude) can see
+    // exactly which identifiers this card covers (e.g. "where is X defined?").
+    const classNames = (r.identifiers ?? "")
+      .split(/\s+/)
+      .filter((t) => /^[A-Z][a-zA-Z0-9]{1,}/.test(t) || /^use[A-Z]/.test(t))
+      .slice(0, 12)
+      .join(", ");
+    const idLine = classNames ? `**Identifiers:** ${classNames}\n` : "";
+
     const block =
       `### ${i + 1}. ${r.title}\n` +
       `**Flow:** ${r.flow} | **Type:** ${r.card_type} | **Confidence:** ${confidence}\n` +
-      `**Files:** ${fileList}${moreFiles}\n\n${trimmed}`;
+      `**Files:** ${fileList}${moreFiles}\n` +
+      `${idLine}\n${trimmed}`;
 
     const blockLines = block.split("\n").length;
     if (linesUsed + blockLines > totalLinesBudget && parts.length > 0) {

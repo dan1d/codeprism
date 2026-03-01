@@ -23,8 +23,9 @@ export function registerSearchTools(server: McpServer): void {
     {
       title: "Search Knowledge Cards",
       description:
-        "Search codeprism knowledge cards by query. Returns matching cards with " +
-        "content, flow, and source files. Uses hybrid FTS + semantic vector search.",
+        "Search your team's shared knowledge base. Returns architectural knowledge cards " +
+        "— flows, models, cross-service patterns — discovered by your team and available " +
+        "to every AI tool. Uses hybrid keyword + semantic vector search.",
       annotations: { readOnlyHint: true, idempotentHint: false },
       inputSchema: {
         query: z.string().describe("The search query string"),
@@ -74,10 +75,11 @@ export function registerSearchTools(server: McpServer): void {
     {
       title: "Get Codebase Context for Task",
       description:
-        "Get codebase context for a ticket or task. Runs a primary semantic " +
-        "search on the full description, then supplements with entity-specific " +
-        "keyword lookups. ALWAYS call this first when starting work on any ticket. " +
-        "If description is omitted, the active branch context set by the last git checkout is used automatically.",
+        "Get your team's accumulated architectural knowledge for a ticket or task. " +
+        "Pulls the most relevant knowledge cards from the shared team brain — flows, models, " +
+        "and patterns your colleagues have already mapped, so you don't re-discover what's known. " +
+        "ALWAYS call this first when starting work on any ticket. " +
+        "If description is omitted, uses the active branch context from the last git checkout.",
       annotations: { readOnlyHint: true, idempotentHint: false },
       inputSchema: {
         description: z.string().optional().describe(

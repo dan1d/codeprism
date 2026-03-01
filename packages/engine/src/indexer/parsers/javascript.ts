@@ -65,7 +65,9 @@ function stringValue(
   if (node.type === "string" || node.type === "string_fragment")
     return stripQuotes(node.text);
   if (node.type === "template_string")
-    return node.text.replace(/^`|`$/g, "");
+    // Normalize template expressions to :param so route matching works.
+    // e.g. `/cycles/${cycleId}/pre-authorizations/batch` → `/cycles/:param/pre-authorizations/batch`
+    return node.text.replace(/^`|`$/g, "").replace(/\$\{[^}]+\}/g, ":param");
   return undefined;
 }
 

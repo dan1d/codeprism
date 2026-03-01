@@ -25,25 +25,30 @@ function buildServer(): McpServer {
     { name: "codeprism", version: "0.1.0" },
     {
       instructions:
-        "codeprism is a code context engine. Use codeprism_search to find knowledge cards about the codebase, " +
-        "codeprism_save_insight to capture new insights, and codeprism_list_flows to discover documented topics.\n\n" +
+        "codeprism is your team's shared architectural memory — a persistent knowledge base that " +
+        "works across every AI tool your team uses (Cursor, Claude Code, Windsurf, Zed, and any " +
+        "MCP-compatible client). When one developer discovers how a flow works, that knowledge is " +
+        "instantly available to every other developer, in every tool, forever.\n\n" +
         "PROACTIVE USAGE GUIDELINES:\n" +
-        "1. ALWAYS call codeprism_context or codeprism_search FIRST when starting work on any ticket or task.\n" +
-        "2. Call codeprism_list_flows to understand the app's structure before diving into implementation.\n" +
+        "1. ALWAYS call codeprism_context or codeprism_search FIRST when starting work on any ticket or task. " +
+        "Another team member may have already mapped this exact area — don't re-discover what's already known.\n" +
+        "2. Call codeprism_list_flows to get a map of what the team has documented before diving into implementation.\n" +
         "3. After discovering a non-obvious pattern, architectural decision, or business rule, " +
-        "PROACTIVELY call codeprism_save_insight to persist it — do NOT wait for the user to ask.\n" +
+        "PROACTIVELY call codeprism_save_insight to persist it for the whole team — do NOT wait for the user to ask. " +
+        "Every insight you save makes every developer's AI session smarter going forward.\n" +
         "4. After using a card's information and confirming it's accurate, call codeprism_verify_card " +
-        "to build confidence scores.\n" +
-        "5. Call codeprism_recent_queries to avoid re-asking the same questions and to see what " +
-        "context was previously retrieved.\n" +
+        "to build the team's confidence in that knowledge over time.\n" +
+        "5. Call codeprism_recent_queries to see what context other team members have already retrieved — " +
+        "avoid re-asking questions your colleagues have already answered.\n" +
         "6. When a card's information contradicts what you find in the code, note this — the card " +
         "may be stale and needs re-indexing.\n\n" +
-        "INSIGHT CATEGORIES — save insights for:\n" +
+        "SAVE INSIGHTS FOR (these compound in value over time):\n" +
         "- Cross-service data flows you discover\n" +
         "- Business rules embedded in code\n" +
         "- Non-obvious gotchas or edge cases\n" +
         "- Architecture decisions and their rationale\n" +
-        "- Bug root causes and their fixes",
+        "- Bug root causes and their fixes\n" +
+        "- Patterns that differ from what the code name suggests",
     },
   );
 

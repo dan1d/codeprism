@@ -4,18 +4,43 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 
 /**
- * nomic-embed-text-v1.5 uses Matryoshka Representation Learning and requires
- * task-type prefix injection for best performance:
- *   Documents: "search_document: " + content
- *   Queries:   "search_query: "   + query
+ * Embedding model configuration. Supported models and their prefixes:
  *
- * Without prefixes the model still works but underperforms its MTEB benchmarks.
- * Dimension: 768 (vs 384 for all-MiniLM-L6-v2).
+ *  nomic-ai/nomic-embed-text-v1.5 (default, 768-d)
+ *    Documents: "search_document: " + content
+ *    Queries:   "search_query: "   + query
  *
- * Fallback: set CODEPRISM_EMBEDDING_MODEL=Xenova/all-MiniLM-L6-v2 and
- * CODEPRISM_EMBEDDING_DIM=384 to revert to the smaller model.
+ *  mixedbread-ai/mxbai-embed-large-v1 (1024-d, MTEB ~64.5, best for RAG)
+ *  BAAI/bge-large-en-v1.5 (1024-d, MTEB ~64.2)
+ *    Queries: "Represent this sentence for searching relevant passages: " + query
+ *    Documents: no prefix
+ *
+ *  Xenova/all-MiniLM-L6-v2 (384-d, tiny fallback)
+ *    No prefix needed.
+ *
+ * Override via env:
+ *   CODEPRISM_EMBEDDING_MODEL=mixedbread-ai/mxbai-embed-large-v1
+ *   CODEPRISM_EMBEDDING_DIM=1024
  */
 const MODEL_ID = process.env["CODEPRISM_EMBEDDING_MODEL"] ?? "nomic-ai/nomic-embed-text-v1.5";
+
+/** Returns the task-type prefix for the active model. Empty string = no prefix. */
+function getTaskPrefix(taskType: EmbedTaskType): string {
+  if (MODEL_ID.includes("nomic")) {
+    return taskType === "query" ? "search_query: " : "search_document: ";
+  }
+  if (
+    MODEL_ID.includes("mxbai-embed-large") ||
+    MODEL_ID.includes("bge-large") ||
+    MODEL_ID.includes("bge-m3")
+  ) {
+    // These models use the same retrieval instruction for queries; docs need no prefix.
+    return taskType === "query"
+      ? "Represent this sentence for searching relevant passages: "
+      : "";
+  }
+  return ""; // all-MiniLM and unknown models: no prefix
+}
 
 const _rawDim = Number(process.env["CODEPRISM_EMBEDDING_DIM"] ?? "768");
 if (!Number.isInteger(_rawDim) || _rawDim < 64) {
@@ -43,7 +68,9 @@ export class LocalEmbedder {
   private ready: Promise<void>;
 
   constructor() {
-    env.cacheDir = join(homedir(), ".cache", "codeprism", "models");
+    // CODEPRISM_MODELS_PATH overrides the cache directory.
+    // In Docker, set to /data/models so models survive container restarts.
+    env.cacheDir = process.env["CODEPRISM_MODELS_PATH"] ?? join(homedir(), ".cache", "codeprism", "models");
     this.ready = this.init();
   }
 
@@ -57,10 +84,8 @@ export class LocalEmbedder {
     if (!this.pipeline) throw new Error("Embedder pipeline failed to initialize");
     if (!text.trim()) return new Float32Array(EMBEDDING_DIM);
 
-    const prefixed =
-      taskType === "query"    ? `search_query: ${text}`
-      : taskType === "document" ? `search_document: ${text}`
-      : text;
+    const prefix = taskType ? getTaskPrefix(taskType) : "";
+    const prefixed = prefix ? `${prefix}${text}` : text;
 
     const output = await this.pipeline(prefixed, {
       pooling: "mean",

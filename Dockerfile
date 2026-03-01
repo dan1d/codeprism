@@ -32,6 +32,16 @@ COPY --from=build /app/package.json ./
 ENV NODE_ENV=production
 ENV CODEPRISM_PORT=4000
 ENV CODEPRISM_DB_PATH=/data/codeprism.db
+
+# Model configuration for Linux/Docker (no macOS ONNX constraints)
+# Embedding: mxbai-embed-large-v1 (1024-d, MTEB ~64.5 vs nomic's ~62.4)
+ENV CODEPRISM_EMBEDDING_MODEL=mixedbread-ai/mxbai-embed-large-v1
+ENV CODEPRISM_EMBEDDING_DIM=1024
+# Reranker: bge-reranker-v2-m3 (best cross-encoder quality, Linux-only — crashes macOS ONNX)
+ENV CODEPRISM_RERANKER_MODEL=BAAI/bge-reranker-v2-m3
+# Persist model weights in /data so they survive container restarts
+ENV CODEPRISM_MODELS_PATH=/data/models
+
 VOLUME /data
 EXPOSE 4000
 

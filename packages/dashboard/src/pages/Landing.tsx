@@ -188,7 +188,7 @@ const HOW_IT_WORKS = [
   {
     title: "Answer",
     description:
-      "Any AI tool calls codeprism via MCP and gets a focused ~350-token knowledge card instead of re-reading 15 raw files — faster answers, lower costs.",
+      "Any AI tool — Cursor, Claude Code, Windsurf, Zed — calls codeprism via MCP and gets the team's accumulated knowledge instantly. Faster answers, consistent architecture, and no re-reading raw files.",
     icon: Zap,
   },
 ];

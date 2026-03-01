@@ -4,8 +4,8 @@ import { getEmbedder } from "../embeddings/local-embedder.js";
 import { semanticSearch } from "./semantic.js";
 import { keywordSearch } from "./keyword.js";
 import { classifyQueryEmbedding } from "./query-classifier.js";
-import { rerankResults } from "./reranker.js";
 import { loadRepoSignals } from "./repo-signals.js";
+import { hydeEmbed } from "./hyde.js";
 
 export interface SearchResult {
   card: Card;
@@ -75,6 +75,9 @@ const TYPE_BOOST: Record<string, number> = {
   cross_service: 0.95,
   hub: 0.4,
   dev_insight: 1.1,
+  // RAPTOR cluster summaries surface for vague/cross-cutting queries;
+  // 0.85x keeps them below specific cards when specifics are available.
+  raptor_cluster: 0.85,
 };
 
 /**
@@ -157,17 +160,32 @@ function detectTextRepoAffinity(query: string): Map<string, number> {
  */
 export async function hybridSearch(
   query: string,
-  options?: { branch?: string; limit?: number; semanticQuery?: string },
+  options?: { branch?: string; limit?: number; semanticQuery?: string; skipUsageUpdate?: boolean },
 ): Promise<SearchResult[]> {
   const limit = options?.limit ?? 5;
   const branch = options?.branch;
   const semanticQuery = options?.semanticQuery ?? query;
+  const skipUsageUpdate = options?.skipUsageUpdate ?? false;
 
   const fetchLimit = limit * 4;
-  const [semanticResults, keywordResults] = await Promise.all([
-    semanticSearch(semanticQuery, fetchLimit, branch),
+
+  // Run HyDE and keyword search in parallel — both are independent of each other.
+  // HyDE asks the LLM to write a hypothetical card for the query, then embeds
+  // THAT instead of the raw query. The resulting vector sits much closer to real
+  // card vectors, dramatically improving recall for natural-language questions
+  // like "how does auth work?" that don't share vocabulary with the card text.
+  // Falls back to null (direct embedding) if LLM is unavailable or times out.
+  const [hydeEmbedding, keywordResults] = await Promise.all([
+    hydeEmbed(query),
     Promise.resolve(keywordSearch(query, fetchLimit)),
   ]);
+
+  const semanticResults = await semanticSearch(
+    semanticQuery,
+    fetchLimit,
+    branch,
+    hydeEmbedding ?? undefined,
+  );
 
   // Build rank maps for RRF (position 0 = best match in each list)
   const semanticRankMap = new Map<string, number>();
@@ -189,10 +207,10 @@ export async function hybridSearch(
   for (let i = 0; i < keywordResults.length; i++) {
     const r = keywordResults[i]!;
     keywordRankMap.set(r.cardId, i);
-    // Lower (more negative) rank = better. Invert so 1.0 = best.
-    // When kwRange === 0, all scores are identical — use neutral 0.5 rather than 1
-  // so uniform keyword results don't artificially over-weight the keyword list.
-  keywordScoreMap.set(r.cardId, kwRange !== 0 ? (r.rank - kwMax) / kwRange : 0.5);
+    // Lower (more negative) rank = better. Invert so 1.0 = best, 0.0 = worst.
+    // Formula: (kwMax - r.rank) / kwRange maps best (kwMin) → 1.0 and worst (kwMax) → 0.0.
+    // When kwRange === 0, all scores are identical — use neutral 0.5.
+    keywordScoreMap.set(r.cardId, kwRange !== 0 ? (kwMax - r.rank) / kwRange : 0.5);
   }
 
   // Union of all candidate IDs from both retrieval lists
@@ -323,10 +341,11 @@ export async function hybridSearch(
   const parsedHubCap = hubCapRow ? parseInt(hubCapRow.value, 10) : NaN;
   const MAX_HUB_CARDS = Number.isNaN(parsedHubCap) ? 2 : parsedHubCap;
 
-  // Build SearchResult[] from top candidates (up to 20) for optional reranking
-  const RERANK_LIMIT = 20;
+  // Build SearchResult[] from top candidates (return up to limit*3 for callers
+  // that want to apply their own reranking — e.g. codeprism_context).
+  const FETCH_LIMIT = Math.max(limit * 3, 15);
   const candidateResults: SearchResult[] = [];
-  for (const entry of combined.slice(0, RERANK_LIMIT)) {
+  for (const entry of combined.slice(0, FETCH_LIMIT)) {
     const card = cardMap.get(entry.cardId);
     if (card) {
       candidateResults.push({ card, score: entry.score, source: entry.source });
@@ -335,19 +354,25 @@ export async function hybridSearch(
 
   if (candidateResults.length === 0) return [];
 
-  // Optional neural reranking — graceful: if model unavailable, keep RRF order
-  let orderedResults = candidateResults;
-  try {
-    orderedResults = await rerankResults(query, candidateResults, limit * 2);
-  } catch { /* Reranker unavailable, continue with RRF ordering */ }
+  // Reranking is intentionally NOT done inside hybridSearch.
+  // codeprism_search returns fast RRF results; codeprism_context applies
+  // the cross-encoder reranker on top. This avoids double-reranking and
+  // keeps the base search path low-latency for all MCP clients.
+  const orderedResults = candidateResults;
 
-  // Apply hub cap + limit on final ordered results
+  // Apply hub cap + limit on final ordered results.
+  // RAPTOR clusters are capped at 1 (they cover broad topics; one is enough).
   const cappedResults: SearchResult[] = [];
   let hubCount = 0;
+  let raptorCount = 0;
   for (const result of orderedResults) {
     if (result.card.card_type === "hub") {
       if (hubCount >= MAX_HUB_CARDS) continue;
       hubCount++;
+    }
+    if (result.card.card_type === "raptor_cluster") {
+      if (raptorCount >= 1) continue;
+      raptorCount++;
     }
     cappedResults.push(result);
     if (cappedResults.length >= limit) break;
@@ -355,17 +380,19 @@ export async function hybridSearch(
 
   if (cappedResults.length === 0) return [];
 
-  const resultCardIds = cappedResults.map((r) => r.card.id);
-  const updateStmt = db.prepare(
-    "UPDATE cards SET usage_count = usage_count + 1 WHERE id = ?",
-  );
-  const incrementUsage = db.transaction((cids: string[]) => {
-    for (const id of cids) updateStmt.run(id);
-  });
-  incrementUsage(resultCardIds);
+  if (!skipUsageUpdate) {
+    const resultCardIds = cappedResults.map((r) => r.card.id);
+    const updateStmt = db.prepare(
+      "UPDATE cards SET usage_count = usage_count + 1 WHERE id = ?",
+    );
+    const incrementUsage = db.transaction((cids: string[]) => {
+      for (const id of cids) updateStmt.run(id);
+    });
+    incrementUsage(resultCardIds);
+  }
 
   return cappedResults.map((r) => ({
     ...r,
-    card: { ...r.card, usage_count: r.card.usage_count + 1 },
+    card: skipUsageUpdate ? r.card : { ...r.card, usage_count: r.card.usage_count + 1 },
   }));
 }

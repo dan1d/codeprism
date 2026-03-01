@@ -53,11 +53,14 @@ export function keywordSearch(query: string, limit = 10): KeywordResult[] {
 
   const db = getDb();
 
-  // Column order: title(3.0), content(1.0), flow(2.0), source_repos(2.0), tags(1.5), identifiers(4.0)
-  // identifiers gets the highest weight — exact class/route names deserve maximum BM25 credit
+  // Column order: title(3.0), content(1.0), flow(2.0), source_repos(2.0), tags(1.5), identifiers(2.0)
+  // identifiers weight reduced from 4.0 → 2.0: long identifier lists on cross-cutting cards
+  // (e.g. feature_flag flow, render_json flow) were matching too broadly and stealing P@1
+  // from cards that are genuinely more specific to the query. title(3.0) > identifiers(2.0)
+  // ensures the card name is more discriminative than a large bag of all class/method names.
   const rows = db
     .prepare(
-      "SELECT rowid, bm25(cards_fts, 3.0, 1.0, 2.0, 2.0, 1.5, 4.0) as rank FROM cards_fts WHERE cards_fts MATCH ? ORDER BY rank LIMIT ?",
+      "SELECT rowid, bm25(cards_fts, 3.0, 1.0, 2.0, 2.0, 1.5, 2.0) as rank FROM cards_fts WHERE cards_fts MATCH ? ORDER BY rank LIMIT ?",
     )
     .all(ftsQuery, limit) as { rowid: number; rank: number }[];
 

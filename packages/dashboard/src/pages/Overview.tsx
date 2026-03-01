@@ -113,7 +113,7 @@ export function Overview() {
     <div>
       <PageHeader
         title="Overview"
-        subtitle="Knowledge base health at a glance"
+        subtitle="Team brain activity at a glance"
         action={
           summary.staleCards > 0 ? (
             <button
@@ -147,9 +147,23 @@ export function Overview() {
           {/* Stat cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <StatCard
+              label="AI Queries Answered"
+              value={String(summary.totalQueries)}
+              subtext="total across all tools"
+              icon={<MessageSquare size={16} />}
+              color="default"
+            />
+            <StatCard
+              label="Knowledge Reuse"
+              value={formatPercent(summary.cacheHitRate)}
+              subtext={summary.cacheHitRate >= 0.6 ? "Team brain working" : "Keep using it"}
+              icon={<TrendingUp size={16} />}
+              color={summary.cacheHitRate >= 0.6 ? "green" : summary.cacheHitRate >= 0.3 ? "warning" : "danger"}
+            />
+            <StatCard
               label="Tokens Saved"
               value={formatTokens(summary.estimatedTokensSaved)}
-              subtext={`${summary.cacheHits} cache hits`}
+              subtext={`${summary.cacheHits} reuses`}
               icon={<Zap size={16} />}
               color="green"
             />
@@ -159,19 +173,6 @@ export function Overview() {
               subtext="estimated this period"
               icon={<DollarSign size={16} />}
               color="green"
-            />
-            <StatCard
-              label="Queries Served"
-              value={String(summary.totalQueries)}
-              subtext="total queries"
-              icon={<MessageSquare size={16} />}
-            />
-            <StatCard
-              label="Cache Hit Rate"
-              value={formatPercent(summary.cacheHitRate)}
-              subtext={summary.cacheHitRate >= 0.6 ? "On track" : "Below target"}
-              icon={<TrendingUp size={16} />}
-              color={summary.cacheHitRate >= 0.6 ? "green" : summary.cacheHitRate >= 0.3 ? "warning" : "danger"}
             />
           </div>
 

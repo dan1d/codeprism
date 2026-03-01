@@ -182,36 +182,46 @@ function addCrossRepoApiEdges(
   for (const other of parsedFiles) {
     if (other.repo === pf.repo) continue;
 
-    // Match against controller filenames
-    if (
-      other.language === "ruby" &&
-      other.path.endsWith(`${snakeName}_controller.rb`)
-    ) {
-      addEdge({
-        sourceFile: pf.path,
-        targetFile: other.path,
-        relation: "api_endpoint",
-        metadata: { feResource: basename, beController: snakeName },
-        repo: pf.repo,
-      });
-      continue;
-    }
+    // Match against controller filenames — three patterns, most to least specific:
+    //
+    // 1. Exact: pre_authorizations.js → pre_authorizations_controller.rb
+    // 2. Nested: pre_authorizations.js → controllers/pre_authorizations/reports/batches_controller.rb
+    //    Catches sub-resource controllers (downloads, reports, etc.) that belong to the
+    //    same resource but have a different leaf filename.
+    // 3. Route path fallback: match parsed routes from routes.rb if available
+    if (other.language === "ruby") {
+      const otherLower = other.path.toLowerCase();
 
-    // Fall back to route path matching
-    const matchingRoute = other.routes.find(
-      (r) => r.controller === snakeName || r.path.includes(`/${snakeName}`),
-    );
-    if (matchingRoute) {
-      addEdge({
-        sourceFile: pf.path,
-        targetFile: other.path,
-        relation: "api_endpoint",
-        metadata: {
-          feResource: basename,
-          routePath: matchingRoute.path,
-        },
-        repo: pf.repo,
-      });
+      if (
+        otherLower.endsWith(`${snakeName}_controller.rb`) ||
+        otherLower.includes(`/controllers/${snakeName}/`)
+      ) {
+        addEdge({
+          sourceFile: pf.path,
+          targetFile: other.path,
+          relation: "api_endpoint",
+          metadata: { feResource: basename, beController: snakeName },
+          repo: pf.repo,
+        });
+        continue;
+      }
+
+      // Route path fallback
+      const matchingRoute = other.routes.find(
+        (r) => r.controller === snakeName || r.path.includes(`/${snakeName}`),
+      );
+      if (matchingRoute) {
+        addEdge({
+          sourceFile: pf.path,
+          targetFile: other.path,
+          relation: "api_endpoint",
+          metadata: {
+            feResource: basename,
+            routePath: matchingRoute.path,
+          },
+          repo: pf.repo,
+        });
+      }
     }
   }
 }

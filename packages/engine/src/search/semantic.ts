@@ -19,8 +19,9 @@ export async function semanticSearch(
   query: string,
   limit = 10,
   branch?: string,
+  precomputedEmbedding?: Float32Array,
 ): Promise<SemanticResult[]> {
-  const embedding = await getEmbedder().embed(query, "query");
+  const embedding = precomputedEmbedding ?? await getEmbedder().embed(query, "query");
   const db = getDb();
 
   const embeddingBuf = Buffer.from(

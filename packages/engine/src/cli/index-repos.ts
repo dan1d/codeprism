@@ -497,6 +497,32 @@ export async function indexRepos(repos: RepoConfig[], workspaceRoot: string, opt
   const wsPrefix = workspaceRoot.endsWith("/") ? workspaceRoot : `${workspaceRoot}/`;
   for (const card of cards) {
     card.content = card.content.replaceAll(wsPrefix, "");
+
+    // Append a "Code identifiers" section so LLMs and users can see which
+    // classes, hooks, and routes this card covers — not just the business prose.
+    // (The identifiers column retains 4.0x BM25 weight for keyword search.)
+    if (card.identifiers && !card.content.includes("## Code identifiers")) {
+      const classNames = card.identifiers
+        .split(/\s+/)
+        .filter((t) => /^[A-Z][a-zA-Z0-9]{1,}/.test(t) || /^use[A-Z]/.test(t))
+        .slice(0, 20);
+      const routes = card.identifiers
+        .split(/\s+/)
+        .reduce<string[]>((acc, token, i, arr) => {
+          if (/^(GET|POST|PUT|PATCH|DELETE|HEAD)$/.test(token)) {
+            const path = arr[i + 1];
+            if (path) acc.push(`${token} ${path}`);
+          }
+          return acc;
+        }, [])
+        .slice(0, 5);
+      if (classNames.length > 0 || routes.length > 0) {
+        const lines = ["", "## Code identifiers"];
+        if (classNames.length > 0) lines.push(`**Classes & hooks:** ${classNames.join(", ")}`);
+        if (routes.length > 0) lines.push(`**Routes:** ${routes.join(", ")}`);
+        card.content += lines.join("\n");
+      }
+    }
   }
 
   if (llm) {

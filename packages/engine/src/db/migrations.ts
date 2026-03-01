@@ -18,6 +18,29 @@ const migrations: Migration[] = [
       initSchema(db);
     },
   },
+  {
+    // Upgrade embedding tables to match CODEPRISM_EMBEDDING_DIM (default 768).
+    // Required when switching embedding models that use a different dimension
+    // (e.g. mxbai-embed-large-v1 or bge-large-en-v1.5 which output 1024-d).
+    // vec0 virtual tables cannot be ALTER TABLE'd — they must be dropped and recreated.
+    // Run `pnpm reembed` after applying this migration.
+    version: 2,
+    up: (db) => {
+      const dim = Number(process.env["CODEPRISM_EMBEDDING_DIM"] ?? "768");
+      try { db.exec("DROP TABLE IF EXISTS card_embeddings"); } catch { /* ignore */ }
+      try { db.exec("DROP TABLE IF EXISTS card_title_embeddings"); } catch { /* ignore */ }
+      db.exec(`
+        CREATE VIRTUAL TABLE IF NOT EXISTS card_embeddings USING vec0(
+          card_id   TEXT,
+          embedding FLOAT[${dim}]
+        );
+        CREATE VIRTUAL TABLE IF NOT EXISTS card_title_embeddings USING vec0(
+          card_id   TEXT,
+          embedding FLOAT[${dim}]
+        );
+      `);
+    },
+  },
 ];
 
 /**
